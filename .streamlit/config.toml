@@ -1,0 +1,18 @@
+# Streamlit — ERP (port 80 external or 8501 local)
+[server]
+port = 8501
+address = "127.0.0.1"
+headless = true
+# Behind reverse proxy — browser Origin is https://erp.ifschemicals.com;
+# enableCORS=true rejects that WS and leaves the skeleton loader.
+enableCORS = false
+enableXsrfProtection = false
+maxUploadSize = 50
+enableWebsocketCompression = false
+
+[browser]
+gatherUsageStats = false
+
+[client]
+# Better toolbar on small screens
+toolbarMode = "minimal"

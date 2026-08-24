@@ -1,0 +1,14 @@
+live exists: True size=16171008
+backups: ['ifs_erp_before_idle_item_delete_20260808_173900.db', 'ifs_erp_before_idle_item_delete_20260808_173900.db']
+live CLY239: {'id': 401, 'code': 'CLY239', 'name': 'TOWER DETEREGENT 3KG', 'is_active': 1}
+live product count: 1889
+live CLY23x: [(393, 'CLY231', 'TOWER DETERGENT RS#10'), (398, 'CLY236', 'TOWER DETEREGENT RS#50'), (399, 'CLY237', 'TOWER DETEREGENT RS#100'), (400, 'CLY238', 'TOWER DETEREGENT 5KG'), (401, 'CLY239', 'TOWER DETEREGENT 3KG')]
+in deleted csv: []
+deleted CLY23x count=5 sample=[{'id': '392', 'code': 'CLY230', 'name': 'NAFEESA PLASTIC LUNCH BOX 2', 'product_type': 'finished', 'warehouse_qty': '0.0'}, {'id': '394', 'code': 'CLY232', 'name': 'GOLF STAR PEDISTAL MOTER BODY (SMALL)', 'product_type': 'finished', 'warehouse_qty': '0.0'}, {'id': '395', 'code': 'CLY233', 'name': 'GOLF STAR PEDISTAL MOTER BODY (LARGE)', 'product_type': 'finished', 'warehouse_qty': '0.0'}, {'id': '396', 'code': 'CLY234', 'name': 'LASHKARA SPECIAL QUALITY SOAP', 'product_type': 'finished', 'warehouse_qty': '0.0'}, {'id': '397', 'code': 'CLY235', 'name': 'LASHKARA SOAP', 'product_type': 'finished', 'warehouse_qty': '0.0'}]
+backup ifs_erp_before_idle_item_delete_20260808_173900.db CLY239: {'id': 401, 'code': 'CLY239', 'name': 'TOWER DETEREGENT 3KG', 'is_active': 1}
+  activity: sales=1, purchases=0, movements=1, stock=-1.0
+backup ifs_erp_before_idle_item_delete_20260808_173900.db CLY239: {'id': 401, 'code': 'CLY239', 'name': 'TOWER DETEREGENT 3KG', 'is_active': 1}
+  activity: sales=1, purchases=0, movements=1, stock=-1.0
+deleted codes to recheck: 3713
+deleted-but-had-2026-activity-in-backup: 0
+sample: []

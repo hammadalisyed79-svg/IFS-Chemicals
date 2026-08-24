@@ -1,0 +1,200 @@
+"""
+Delete idle product masters:
+- DELETE when warehouse qty is NIL (0) AND no 2026 transactions
+- KEEP when warehouse qty > 0 (even with no 2026 txn)
+- KEEP when any 2026 activity exists
+Uses database.delete_item() which blocks FK-referenced products.
+"""
+from __future__ import annotations
+
+import csv
+import shutil
+from datetime import datetime
+from pathlib import Path
+
+import database as db
+from database import get_connection, rows_to_list, delete_item
+
+YEAR = "2026"
+REPORT = Path("reports") / f"idle_items_deleted_{YEAR}.csv"
+SKIP_REPORT = Path("reports") / f"idle_items_delete_skipped_{YEAR}.csv"
+
+
+def _activity_sql(tables_info):
+    parts = []
+    # inventory movements in year (non-opening)
+    parts.append(
+        f"""EXISTS (
+            SELECT 1 FROM inventory_movements im
+            WHERE im.product_id=p.id
+              AND substr(COALESCE(im.movement_date,''),1,4)='{YEAR}'
+        )"""
+    )
+    for li_t, h_t, fk, dcol in tables_info:
+        parts.append(
+            f"""EXISTS (
+                SELECT 1 FROM {li_t} li
+                JOIN {h_t} h ON h.id=li.{fk}
+                WHERE li.product_id=p.id
+                  AND substr(COALESCE(h.{dcol},''),1,4)='{YEAR}'
+            )"""
+        )
+    # weight slips
+    parts.append(
+        f"""EXISTS (
+            SELECT 1 FROM weight_slips ws
+            WHERE ws.product_id=p.id
+              AND substr(COALESCE(ws.slip_date,''),1,4)='{YEAR}'
+        )"""
+    )
+    # production
+    parts.append(
+        f"""EXISTS (
+            SELECT 1 FROM production_orders po
+            WHERE po.finished_product_id=p.id
+              AND substr(COALESCE(po.order_date,''),1,4)='{YEAR}'
+        )"""
+    )
+    parts.append(
+        f"""EXISTS (
+            SELECT 1 FROM production_material_issues pmi
+            JOIN production_orders po ON po.id=pmi.production_order_id
+            WHERE pmi.product_id=p.id
+              AND substr(COALESCE(po.order_date, pmi.issued_at,''),1,4)='{YEAR}'
+        )"""
+    )
+    parts.append(
+        f"""EXISTS (
+            SELECT 1 FROM production_finished_receipts pfr
+            WHERE pfr.product_id=p.id
+              AND substr(COALESCE(pfr.received_at,''),1,4)='{YEAR}'
+        )"""
+    )
+    return " OR ".join(f"({x})" for x in parts)
+
+
+def main():
+    db.init_db()
+    db_path = Path(db.DB_PATH)
+    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    backup = db_path.with_name(f"ifs_erp_before_idle_item_delete_{stamp}.db")
+    shutil.copy2(db_path, backup)
+    print(f"Backup: {backup}")
+
+    line_checks = [
+        ("sales_invoice_items", "sales_invoices", "invoice_id", "invoice_date"),
+        ("purchase_invoice_items", "purchase_invoices", "invoice_id", "invoice_date"),
+        ("sales_return_items", "sales_returns", "return_id", "return_date"),
+        ("purchase_return_items", "purchase_returns", "return_id", "return_date"),
+        ("delivery_note_items", "delivery_notes", "dn_id", "dn_date"),
+        ("grn_items", "goods_receipt_notes", "grn_id", "grn_date"),
+        ("sales_order_items", "sales_orders", "order_id", "order_date"),
+        ("purchase_order_items", "purchase_orders", "order_id", "order_date"),
+        ("quotation_items", "quotations", "quotation_id", "quotation_date"),
+    ]
+
+    with get_connection() as conn:
+        tables = {
+            r[0]
+            for r in conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table'"
+            ).fetchall()
+        }
+        usable = []
+        for li_t, h_t, fk, dcol in line_checks:
+            if li_t not in tables or h_t not in tables:
+                continue
+            hc = {r[1] for r in conn.execute(f"PRAGMA table_info({h_t})").fetchall()}
+            if dcol not in hc:
+                dcol = next(
+                    (
+                        c
+                        for c in (
+                            "invoice_date",
+                            "return_date",
+                            "dn_date",
+                            "grn_date",
+                            "order_date",
+                            "quotation_date",
+                            "document_date",
+                            "created_at",
+                        )
+                        if c in hc
+                    ),
+                    None,
+                )
+            if dcol:
+                usable.append((li_t, h_t, fk, dcol))
+
+        has_txn = _activity_sql(usable)
+        q = f"""
+        SELECT p.id, p.code, p.name, COALESCE(p.product_type,'') AS product_type,
+               COALESCE((
+                   SELECT SUM(ws.quantity) FROM warehouse_stock ws WHERE ws.product_id=p.id
+               ), 0) AS warehouse_qty,
+               CASE WHEN ({has_txn}) THEN 1 ELSE 0 END AS has_2026_txn
+        FROM products p
+        ORDER BY p.code
+        """
+        rows = rows_to_list(conn.execute(q).fetchall())
+
+    total = len(rows)
+    keep_stock = [
+        r for r in rows if abs(float(r["warehouse_qty"] or 0)) > 0.0005
+    ]
+    keep_txn = [
+        r
+        for r in rows
+        if abs(float(r["warehouse_qty"] or 0)) <= 0.0005 and r["has_2026_txn"]
+    ]
+    candidates = [
+        r
+        for r in rows
+        if abs(float(r["warehouse_qty"] or 0)) <= 0.0005 and not r["has_2026_txn"]
+    ]
+
+    print(f"Total products: {total}")
+    print(f"Keep (have balance): {len(keep_stock)}")
+    print(f"Keep (NIL balance but 2026 txn): {len(keep_txn)}")
+    print(f"Delete candidates (NIL balance + no 2026 txn): {len(candidates)}")
+
+    deleted = []
+    skipped = []
+    for r in candidates:
+        try:
+            delete_item(r["id"])
+            deleted.append(r)
+        except Exception as e:
+            skipped.append({**r, "reason": str(e)})
+
+    REPORT.parent.mkdir(parents=True, exist_ok=True)
+    fields = ["id", "code", "name", "product_type", "warehouse_qty"]
+    with REPORT.open("w", newline="", encoding="utf-8") as f:
+        w = csv.DictWriter(f, fieldnames=fields, extrasaction="ignore")
+        w.writeheader()
+        for r in deleted:
+            w.writerow(r)
+    with SKIP_REPORT.open("w", newline="", encoding="utf-8") as f:
+        w = csv.DictWriter(
+            f, fieldnames=fields + ["reason"], extrasaction="ignore"
+        )
+        w.writeheader()
+        for r in skipped:
+            w.writerow(r)
+
+    with get_connection() as conn:
+        remaining = conn.execute("SELECT COUNT(*) FROM products").fetchone()[0]
+
+    print(f"Deleted: {len(deleted)}")
+    print(f"Skipped (referenced / error): {len(skipped)}")
+    print(f"Products remaining: {remaining}")
+    print(f"Deleted CSV: {REPORT}")
+    print(f"Skipped CSV: {SKIP_REPORT}")
+    if skipped[:5]:
+        print("Skip samples:")
+        for s in skipped[:5]:
+            print(f"  {s['code']}: {s['reason'][:120]}")
+
+
+if __name__ == "__main__":
+    main()

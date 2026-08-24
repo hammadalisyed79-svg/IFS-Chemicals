@@ -1,0 +1,22 @@
+# systemd unit — IFS Internal ERP (localhost only)
+# /etc/systemd/system/ifs-erp.service
+
+[Unit]
+Description=IFS Industrial ERP (Streamlit)
+After=network.target
+
+[Service]
+Type=simple
+User=ifs
+Group=ifs
+WorkingDirectory=/opt/ifs-erp
+Environment=PATH=/opt/ifs-erp/venv/bin
+ExecStart=/opt/ifs-erp/venv/bin/streamlit run app.py --server.port=8501 --server.address=127.0.0.1 --server.headless=true
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+
+# Portal service (optional second unit: ifs-erp-portal.service)
+# ExecStart=/opt/ifs-erp/venv/bin/streamlit run portal_app.py --server.port=8502 --server.address=127.0.0.1 --server.baseUrlPath=portal --server.headless=true

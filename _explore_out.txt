@@ -1,0 +1,26 @@
+﻿start
+True
+
+
+    Directory: C:\IFS
+
+
+Mode                 LastWriteTime         Length Name                                                                 
+----                 -------------         ------ ----                                                                 
+d-----         4/13/2026   1:15 PM                _Getintopc.com_Microsoft_Office_Professional_Plus_Build_17928.20148  
+
+
+
+
+    Directory: C:\IFS\DataBase
+
+
+Mode                 LastWriteTime         Length Name                                                                 
+----                 -------------         ------ ----                                                                 
+d-----          4/5/2026   9:00 AM                Backup                                                               
+d-----         7/25/2026   9:23 AM                Temp                                                                 
+-a----          4/5/2026   9:01 AM       28653491 Backup.rar                                                           
+-a----          8/6/2026   2:38 PM       60882944 FMYE11New.log                                                        
+
+
+done

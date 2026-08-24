@@ -1,0 +1,74 @@
+IFS chemicals ERP — Saturday go-live cutover (from FMYE)
+========================================================
+
+Goal
+----
+- Import masters + all data from 01.01.2026 to Friday close
+- Friday = holiday (no new live FMYE entries after close)
+- Saturday = launch IFS ERP
+- Later corrections: we will do with you when needed
+
+IMPORTANT — current status on this server
+----------------------------------------
+- FMYE11.db (live SQL Anywhere file) is NOT on this PC right now
+- Existing export in import\fmye\full\ is OLD (about 01-Jun-2026)
+- Sales in that export end ~01-Jun-2026 — missing June–August data
+- We MUST refresh the export before Saturday launch
+
+What you must share / copy (pick ONE)
+------------------------------------
+
+OPTION A — Best: full dbunload export (Friday evening)
+
+1. On the PC that has live FMYE11.db, open Command Prompt
+2. Find dbunload.exe (SQL Anywhere 11), e.g.:
+     C:\Program Files\SQL Anywhere 11\Bin32\dbunload.exe
+3. Run:
+
+     mkdir C:\FMYE_EXPORT\full
+     cd /d C:\FMYE_EXPORT\full
+     "C:\Program Files\SQL Anywhere 11\Bin32\dbunload.exe" -c "DBF=FULL_PATH_TO\FMYE11.db;UID=DBA;PWD=sql" .
+
+   (Change DBF path and password if yours differ.)
+
+4. Copy the whole C:\FMYE_EXPORT\full folder over this export:
+     C:\MY ERPS\import\fmye\full\
+   (replace old files)
+
+OPTION B — Copy the database file here
+
+1. Copy FMYE11.db to:
+     C:\MY ERPS\import\fmye\FMYE11.db
+2. Tell me the exact path / password
+3. I will unload + import from here (needs SQL Anywhere on this server)
+
+Then tell me: "export ready" — I will run the import.
+
+Import commands (after fresh export)
+------------------------------------
+
+  cd /d C:\MY ERPS
+  call venv\Scripts\activate.bat
+  python migrate_fmye.py --reset
+  python migrate_fmye.py --step masters
+  python migrate_fmye.py --phase 2026
+
+Or double-click:  run_cutover_import.bat
+
+What gets imported
+------------------
+- Customers, suppliers, products, chart of accounts
+- Opening balances as of 01.01.2026
+- Sales / purchases / returns / vouchers for year 2026 only
+- Stock + BOM + party balance recalculation
+
+Saturday launch
+---------------
+1. Confirm Friday FMYE closed (no more vouchers after cut-off)
+2. Fresh export copied into import\fmye\full\
+3. Run cutover import (above)
+4. Reset admin password: reset_admin_password.bat
+5. Start ERP: IFS_ERP.exe  OR  restart_external.bat (port 80)
+6. Spot-check: sample sale, purchase, customer balance, stock
+
+Further updates after Saturday: message me when needed.

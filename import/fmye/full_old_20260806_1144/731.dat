@@ -1,0 +1,41 @@
+'ADVANCES','Advance Payments',2025-03-03 00:00,'HAMMAD','1','U',
+'BS001','Land & Building',2002-04-15 00:00,'admin','1','S','BS'
+'BS002','Plant & Machinery',2002-04-15 00:00,'admin','1','S','BS'
+'BS003','Furniture & Fixture',2002-04-15 00:00,'admin','1','S','BS'
+'BS004','Vehicles',2002-04-15 00:00,'admin','1','S','BS'
+'BS005','Accounts Receivable',2002-04-15 00:00,'admin','1','S','BS'
+'BS006','Advances & Prepayments',2002-04-15 00:00,'admin','1','S','BS'
+'BS007','Securities & Deposits',2002-04-15 00:00,'admin','1','S','BS'
+'BS008','Cash & Bank Balances',2002-04-15 00:00,'admin','1','S','BS'
+'BS009','Stock In Trade',2002-04-15 00:00,'admin','1','S','BS'
+'BS010','Investments',2002-04-15 00:00,'admin','1','S','BS'
+'BS011','Owner''s Capital',2002-04-15 00:00,'admin','1','S','BS'
+'BS012','Net Income / (Loss)',2002-04-15 00:00,'admin','1','S','BS'
+'BS013','Drawings',2002-04-15 00:00,'admin','1','S','BS'
+'BS014','Accounts Payable',2002-04-15 00:00,'admin','1','S','BS'
+'BS015','Tax Payable',2002-04-15 00:00,'admin','1','S','BS'
+'BS016','Accrued Expenses',2002-04-15 00:00,'admin','1','S','BS'
+'BS017','Bank Loan',2002-04-15 00:00,'admin','1','S','BS'
+'BS018','Mortgages',2002-04-15 00:00,'admin','1','S','BS'
+'CASHBANK','Cash & Bank',2024-11-04 00:00,'HAMMAD','1','U',
+'CHARITY','Charity A/c',2025-02-09 00:00,'HAMMAD','1','U',
+'CUSTOMER','customer',2025-10-27 00:00,'temp','1','U',
+'EXPENSE','Expenses',2024-11-04 00:00,'HAMMAD','1','U',
+'INCOME','Income',2024-11-04 00:00,'HAMMAD','1','U',
+'MACHINERY','Machinery',2024-11-04 00:00,'HAMMAD','1','U',
+'MR.TAYYAB ','MR.TAYYAB ',2026-03-14 00:00,'HAMMAD','1','U',
+'PL001','Gross Sales',2002-04-15 00:00,'admin','1','S','PL'
+'PL002','Sales Returns',2002-04-15 00:00,'admin','1','S','PL'
+'PL003','Opening Inventories',2002-04-15 00:00,'admin','1','S','PL'
+'PL004','Purchases',2002-04-15 00:00,'admin','1','S','PL'
+'PL005','Purchase Returns',2002-04-15 00:00,'admin','1','S','PL'
+'PL006','Direct Labour',2002-04-15 00:00,'admin','1','S','PL'
+'PL007','Factory Overheads',2002-04-15 00:00,'admin','1','S','PL'
+'PL008','Closing Inventories',2002-04-15 00:00,'admin','1','S','PL'
+'PL009','Administrative Expenses',2002-04-15 00:00,'admin','1','S','PL'
+'PL010','Selling Expenses',2002-04-15 00:00,'admin','1','S','PL'
+'PL011','Other Income',2002-04-15 00:00,'admin','1','S','PL'
+'PL012','Other Expenses',2002-04-15 00:00,'admin','1','S','PL'
+'VEHICLES','Vehicles',2024-11-04 00:00,'HAMMAD','1','U',
+'ZAHID','MR. ZAHID',2024-11-04 00:00,'HAMMAD','1','U',
+'ZAIDI SB',,2026-06-01 00:00,'HAMMAD','1','U',

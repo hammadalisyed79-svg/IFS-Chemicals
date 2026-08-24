@@ -1,0 +1,25 @@
+﻿=== saller.ItemInformation sample ===
+ItemCode=AB001 | Name=Awaisa Small Bottle 13.5 Gram (SMALL) | Unit=PCS | PackQty=0.0000 | PackSize=
+ItemCode=AB002 | Name=Awaisa Large Bottle 21 Gram (MEDIUM) | Unit=PCS | PackQty=0.0000 | PackSize=
+ItemCode=AB003 | Name=AWAISA BOTTLE 33 GRAM (LARGE) | Unit=PCS | PackQty=0.0000 | PackSize=PCS
+ItemCode=BAG001 | Name=ROTI RITE PREMIUM MAIDA 1KG BAG | Unit=PCS | PackQty=0.0000 | PackSize=
+ItemCode=BAG002 | Name=ROTI RITE SUPER FINE ATTA 1KG BAG | Unit=PCS | PackQty=0.0000 | PackSize=
+ItemCode=BAG003 | Name=ROTI RITE CHAKI ATA 1KG | Unit=PCS | PackQty=0.0000 | PackSize=
+ItemCode=BB001 | Name=BACHAT PP BAGS EMPTY | Unit=PCS | PackQty=0.0000 | PackSize=
+ItemCode=BGS001 | Name=BETA GOL SOAP C1 P3 LN | Unit=PCS | PackQty=0.0000 | PackSize=24*29
+ItemCode=BGS002 | Name=BETA GOL JAR 20 TIKI C1 P3 LN | Unit=PCS | PackQty=0.0000 | PackSize=16*33
+ItemCode=BOP001 | Name=BOPP MAT 825MM 20 MICRON | Unit=KG | PackQty=0.0000 | PackSize=825MM
+
+=== Match Sales ProductID -> FMYE ItemCode ===
+MATCH CC0001 => CC FRUITY ORANGE (50/72) 3.6KG
+MATCH DT0001 => BRILLO DETERGENT 320/12
+MATCH DW1015 => TRAIN DISHWASH JUMBO 200/24
+MATCH DT2013 => TRAIN DETERGENT 5 KG 7A.D
+MATCH DT1029 => LASHKARA 4KG 7A.D+2TIKKI TRAIN
+MATCH DW1002 => TRAIN DISHWASH 80/36
+MATCH DT1080 => LASHKARA DETERGENT 150/48
+MATCH DT0002 => BRILLO DETERGENT 200/24
+MATCH DT1036 => LASHKARA DETERGENT 15 KG 13A.D
+FMYE item count: 5597
+
+=== InwardDetail weights ===

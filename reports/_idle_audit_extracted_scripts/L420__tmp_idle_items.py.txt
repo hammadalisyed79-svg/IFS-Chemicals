@@ -1,0 +1,270 @@
+"""Idle items: NIL opening stock + no 2026 activity (read-only)."""
+from __future__ import annotations
+
+import csv
+import json
+from collections import Counter
+from pathlib import Path
+
+import database as db
+from database import get_connection, rows_to_list
+
+YEAR = "2026"
+OUT_CSV = Path("reports") / f"idle_items_{YEAR}.csv"
+OUT_JSON = Path("reports") / f"idle_items_{YEAR}_summary.json"
+
+
+def main():
+    db.init_db()
+    with get_connection() as conn:
+        tables = {
+            r[0]
+            for r in conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table'"
+            ).fetchall()
+        }
+
+        # Opening stock = inventory_movements opening (not a products column)
+        opening_sql = """
+            SELECT product_id,
+                   COALESCE(SUM(quantity),0) AS opening_qty,
+                   COUNT(*) AS opening_moves
+            FROM inventory_movements
+            WHERE LOWER(COALESCE(movement_type,'')) IN ('opening','open','op')
+               OR LOWER(COALESCE(reference_type,'')) IN ('opening','open','op')
+               OR LOWER(COALESCE(reason,'')) LIKE '%opening%'
+            GROUP BY product_id
+        """
+
+        # 2026 activity across commercial + inventory + production
+        activity_parts = []
+
+        def add_exists(sql_frag):
+            activity_parts.append(sql_frag)
+
+        add_exists(
+            f"""EXISTS (
+                SELECT 1 FROM inventory_movements im
+                WHERE im.product_id=p.id
+                  AND substr(COALESCE(im.movement_date,''),1,4)='{YEAR}'
+                  AND NOT (
+                        LOWER(COALESCE(im.movement_type,'')) IN ('opening','open','op')
+                     OR LOWER(COALESCE(im.reference_type,'')) IN ('opening','open','op')
+                     OR LOWER(COALESCE(im.reason,'')) LIKE '%opening%'
+                  )
+            )"""
+        )
+
+        line_checks = [
+            ("sales_invoice_items", "sales_invoices", "invoice_id", "invoice_date"),
+            ("purchase_invoice_items", "purchase_invoices", "invoice_id", "invoice_date"),
+            ("sales_return_items", "sales_returns", "return_id", "return_date"),
+            ("purchase_return_items", "purchase_returns", "return_id", "return_date"),
+            ("delivery_note_items", "delivery_notes", "dn_id", "dn_date"),
+            ("grn_items", "goods_receipt_notes", "grn_id", "grn_date"),
+            ("sales_order_items", "sales_orders", "order_id", "order_date"),
+            ("purchase_order_items", "purchase_orders", "order_id", "order_date"),
+            ("quotation_items", "quotations", "quotation_id", "quotation_date"),
+            ("purchase_requisition_items", "purchase_requisitions", "requisition_id", "requisition_date"),
+        ]
+        for li_t, h_t, fk, dcol in line_checks:
+            if li_t not in tables or h_t not in tables:
+                continue
+            hc = {r[1] for r in conn.execute(f"PRAGMA table_info({h_t})").fetchall()}
+            if dcol not in hc:
+                dcol = next(
+                    (
+                        c
+                        for c in (
+                            "invoice_date",
+                            "return_date",
+                            "dn_date",
+                            "grn_date",
+                            "order_date",
+                            "quotation_date",
+                            "requisition_date",
+                            "document_date",
+                            "date",
+                            "created_at",
+                        )
+                        if c in hc
+                    ),
+                    None,
+                )
+            if not dcol:
+                continue
+            add_exists(
+                f"""EXISTS (
+                    SELECT 1 FROM {li_t} li
+                    JOIN {h_t} h ON h.id=li.{fk}
+                    WHERE li.product_id=p.id
+                      AND substr(COALESCE(h.{dcol},''),1,4)='{YEAR}'
+                )"""
+            )
+
+        if "weight_slips" in tables:
+            add_exists(
+                f"""EXISTS (
+                    SELECT 1 FROM weight_slips ws
+                    WHERE ws.product_id=p.id
+                      AND substr(COALESCE(ws.slip_date,''),1,4)='{YEAR}'
+                )"""
+            )
+
+        if "production_orders" in tables:
+            add_exists(
+                f"""EXISTS (
+                    SELECT 1 FROM production_orders po
+                    WHERE po.finished_product_id=p.id
+                      AND substr(COALESCE(po.order_date,''),1,4)='{YEAR}'
+                )"""
+            )
+        if "production_material_issues" in tables:
+            add_exists(
+                f"""EXISTS (
+                    SELECT 1 FROM production_material_issues pmi
+                    JOIN production_orders po ON po.id=pmi.production_order_id
+                    WHERE pmi.product_id=p.id
+                      AND substr(COALESCE(po.order_date, pmi.issued_at,''),1,4)='{YEAR}'
+                )"""
+            )
+        if "production_finished_receipts" in tables:
+            add_exists(
+                f"""EXISTS (
+                    SELECT 1 FROM production_finished_receipts pfr
+                    WHERE pfr.product_id=p.id
+                      AND substr(COALESCE(pfr.received_at,''),1,4)='{YEAR}'
+                )"""
+            )
+        if "stock_revaluation_lines" in tables and "stock_revaluations" in tables:
+            add_exists(
+                f"""EXISTS (
+                    SELECT 1 FROM stock_revaluation_lines srl
+                    JOIN stock_revaluations sr ON sr.id=srl.reval_id
+                    WHERE srl.product_id=p.id
+                      AND substr(COALESCE(sr.reval_date,''),1,4)='{YEAR}'
+                )"""
+            )
+
+        has_txn = " OR ".join(f"({p})" for p in activity_parts)
+
+        q = f"""
+        SELECT
+            p.id,
+            p.code,
+            p.name,
+            COALESCE(p.product_type,'') AS product_type,
+            COALESCE(p.is_active,1) AS is_active,
+            COALESCE(cat.name,'') AS category,
+            COALESCE(g.name,'') AS item_group,
+            COALESCE(op.opening_qty, 0) AS opening_qty,
+            COALESCE(op.opening_moves, 0) AS opening_moves,
+            COALESCE((
+                SELECT SUM(ws.quantity) FROM warehouse_stock ws WHERE ws.product_id=p.id
+            ), 0) AS warehouse_qty,
+            CASE WHEN ({has_txn}) THEN 1 ELSE 0 END AS has_2026_txn
+        FROM products p
+        LEFT JOIN product_categories cat ON cat.id=p.category_id
+        LEFT JOIN master_groups g ON g.id=p.group_id AND g.entity_type='item'
+        LEFT JOIN ({opening_sql}) op ON op.product_id=p.id
+        ORDER BY p.code
+        """
+        try:
+            rows = rows_to_list(conn.execute(q).fetchall())
+        except Exception:
+            # master_groups may not exist / different name
+            q2 = q.replace(
+                "LEFT JOIN master_groups g ON g.id=p.group_id AND g.entity_type='item'",
+                "LEFT JOIN (SELECT id, name FROM product_categories WHERE 0) g ON 0",
+            ).replace("COALESCE(g.name,'') AS item_group,", "'' AS item_group,")
+            rows = rows_to_list(conn.execute(q2).fetchall())
+
+        total = len(rows)
+        # Opening NIL: no opening qty (abs < 0.0005)
+        nil_open = [r for r in rows if abs(float(r["opening_qty"] or 0)) <= 0.0005]
+        idle_all = [r for r in nil_open if not r["has_2026_txn"]]
+        idle_zero_stock = [
+            r for r in idle_all if abs(float(r["warehouse_qty"] or 0)) <= 0.0005
+        ]
+        idle_with_stock = [
+            r for r in idle_all if abs(float(r["warehouse_qty"] or 0)) > 0.0005
+        ]
+
+        # Primary list for user: NIL opening + no 2026 txn + NIL warehouse (true idle)
+        # Also export the wider set (NIL open + no txn) with a flag
+        for r in idle_all:
+            r["strict_idle"] = 1 if abs(float(r["warehouse_qty"] or 0)) <= 0.0005 else 0
+
+        by_type = Counter((r.get("product_type") or "(blank)") for r in idle_zero_stock)
+        by_active = Counter(int(r.get("is_active") or 0) for r in idle_zero_stock)
+        by_cat = Counter((r.get("category") or "(none)") for r in idle_zero_stock)
+
+        OUT_CSV.parent.mkdir(parents=True, exist_ok=True)
+        fields = [
+            "id",
+            "code",
+            "name",
+            "product_type",
+            "category",
+            "item_group",
+            "is_active",
+            "opening_qty",
+            "opening_moves",
+            "warehouse_qty",
+            "has_2026_txn",
+            "strict_idle",
+        ]
+        with OUT_CSV.open("w", newline="", encoding="utf-8") as f:
+            w = csv.DictWriter(f, fieldnames=fields, extrasaction="ignore")
+            w.writeheader()
+            for r in idle_all:
+                w.writerow(r)
+
+        summary = {
+            "year": YEAR,
+            "total_products": total,
+            "nil_opening": len(nil_open),
+            "idle_nil_open_no_2026": len(idle_all),
+            "strict_idle_zero_stock": len(idle_zero_stock),
+            "idle_but_warehouse_qty": len(idle_with_stock),
+            "active_strict": by_active.get(1, 0),
+            "inactive_strict": by_active.get(0, 0),
+            "by_product_type": dict(by_type.most_common(20)),
+            "by_category_top": dict(by_cat.most_common(15)),
+            "csv": str(OUT_CSV),
+            "preview_strict": [
+                {
+                    "code": r["code"],
+                    "name": r["name"],
+                    "type": r.get("product_type") or "",
+                    "category": r.get("category") or "",
+                    "active": int(r.get("is_active") or 0),
+                }
+                for r in idle_zero_stock[:80]
+            ],
+            "preview_with_stock": [
+                {
+                    "code": r["code"],
+                    "name": r["name"],
+                    "warehouse_qty": float(r["warehouse_qty"] or 0),
+                    "active": int(r.get("is_active") or 0),
+                }
+                for r in sorted(
+                    idle_with_stock,
+                    key=lambda x: -abs(float(x["warehouse_qty"] or 0)),
+                )[:40]
+            ],
+        }
+        OUT_JSON.write_text(json.dumps(summary, indent=2), encoding="utf-8")
+
+        print(json.dumps({k: summary[k] for k in summary if k not in ("preview_strict", "preview_with_stock", "by_category_top")}, indent=2))
+        print("by_product_type:", summary["by_product_type"])
+        print("top categories:", summary["by_category_top"])
+        print(f"CSV: {OUT_CSV}")
+        print(f"strict idle sample ({min(15, len(idle_zero_stock))}):")
+        for r in idle_zero_stock[:15]:
+            print(f"  {r['code']} | {r['name'][:50]}")
+
+
+if __name__ == "__main__":
+    main()

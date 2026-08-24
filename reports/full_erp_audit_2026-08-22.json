@@ -1,0 +1,247 @@
+{
+  "when": "2026-08-22T09:32:50",
+  "checks": [
+    {
+      "category": "Infra",
+      "name": "Database file",
+      "status": "pass",
+      "detail": "c:\\MY ERPS\\ifs_erp.db (17.49 MB)"
+    },
+    {
+      "category": "Imports",
+      "name": "Core database",
+      "status": "pass",
+      "detail": ""
+    },
+    {
+      "category": "Imports",
+      "name": "Finance/GL v3",
+      "status": "pass",
+      "detail": ""
+    },
+    {
+      "category": "Imports",
+      "name": "HR/Payroll",
+      "status": "pass",
+      "detail": ""
+    },
+    {
+      "category": "Imports",
+      "name": "Commercial",
+      "status": "pass",
+      "detail": ""
+    },
+    {
+      "category": "Imports",
+      "name": "Invoice workflow",
+      "status": "pass",
+      "detail": ""
+    },
+    {
+      "category": "Imports",
+      "name": "Cash day control",
+      "status": "pass",
+      "detail": ""
+    },
+    {
+      "category": "Imports",
+      "name": "Reports",
+      "status": "pass",
+      "detail": ""
+    },
+    {
+      "category": "Imports",
+      "name": "Stock costing",
+      "status": "pass",
+      "detail": ""
+    },
+    {
+      "category": "Database",
+      "name": "Connect",
+      "status": "pass",
+      "detail": ""
+    },
+    {
+      "category": "Database",
+      "name": "Foreign keys ON",
+      "status": "pass",
+      "detail": "1"
+    },
+    {
+      "category": "Database",
+      "name": "Integrity check",
+      "status": "pass",
+      "detail": "ok"
+    },
+    {
+      "category": "Database",
+      "name": "Tables present",
+      "status": "pass",
+      "detail": "179 tables"
+    },
+    {
+      "category": "Schema",
+      "name": "Critical tables",
+      "status": "pass",
+      "detail": "all present"
+    },
+    {
+      "category": "GL",
+      "name": "Ledger balanced (all-time)",
+      "status": "fail",
+      "detail": "net -2232300.0"
+    },
+    {
+      "category": "Sales",
+      "name": "Partial SO in invoice picker",
+      "status": "pass",
+      "detail": "SO-0018 visible; open/partial pickable=21"
+    },
+    {
+      "category": "Finance",
+      "name": "Cash Advance module",
+      "status": "pass",
+      "detail": "open=0 outstanding=0"
+    },
+    {
+      "category": "Security",
+      "name": "Active users",
+      "status": "pass",
+      "detail": "17 active"
+    },
+    {
+      "category": "Masters",
+      "name": "Active customers",
+      "status": "pass",
+      "detail": "323"
+    },
+    {
+      "category": "Masters",
+      "name": "Active suppliers",
+      "status": "pass",
+      "detail": "239"
+    },
+    {
+      "category": "Activity",
+      "name": "Sales invoices last 7d",
+      "status": "pass",
+      "detail": "144"
+    },
+    {
+      "category": "Activity",
+      "name": "Purchase invoices last 7d",
+      "status": "pass",
+      "detail": "25"
+    },
+    {
+      "category": "Activity",
+      "name": "Cash vouchers last 7d",
+      "status": "pass",
+      "detail": "168"
+    },
+    {
+      "category": "Activity",
+      "name": "GL lines last 7d",
+      "status": "pass",
+      "detail": "768"
+    },
+    {
+      "category": "Finance",
+      "name": "Advance Payments GL",
+      "status": "pass",
+      "detail": "[{'code': '100180', 'name': 'ADVANCE PAYMENTS'}, {'code': '400045', 'name': 'W.H.TAX EXPORT ADVANCE PAYMENTS'}]"
+    },
+    {
+      "category": "Runtime",
+      "name": "Streamlit health",
+      "status": "pass",
+      "detail": "200 b'ok'"
+    },
+    {
+      "category": "Runtime",
+      "name": "HTTPS proxy",
+      "status": "pass",
+      "detail": "200 b'ok'"
+    },
+    {
+      "category": "UI",
+      "name": "Registered pages",
+      "status": "pass",
+      "detail": "110 pages"
+    },
+    {
+      "category": "UI",
+      "name": "Page: Cash Book",
+      "status": "pass",
+      "detail": "mapped"
+    },
+    {
+      "category": "UI",
+      "name": "Page: Sales Invoices",
+      "status": "pass",
+      "detail": "mapped"
+    },
+    {
+      "category": "UI",
+      "name": "Page: Cash Advance",
+      "status": "pass",
+      "detail": "mapped"
+    },
+    {
+      "category": "UI",
+      "name": "Page: Sales Orders",
+      "status": "pass",
+      "detail": "mapped"
+    },
+    {
+      "category": "UI",
+      "name": "Page: Expense Bill",
+      "status": "pass",
+      "detail": "mapped"
+    }
+  ],
+  "modules": {
+    "Core database": "ok",
+    "Finance/GL v3": "ok",
+    "HR/Payroll": "ok",
+    "Commercial": "ok",
+    "Invoice workflow": "ok",
+    "Cash day control": "ok",
+    "Reports": "ok",
+    "Stock costing": "ok"
+  },
+  "stats": {
+    "tables": 179,
+    "customers": 323,
+    "suppliers": 239,
+    "products": 2769,
+    "chart_of_accounts": 1445,
+    "general_ledger": 25461,
+    "sales_invoices": 5008,
+    "purchase_invoices": 748,
+    "sales_orders": 36,
+    "users": 17,
+    "employees": 507,
+    "cash_advances": 0,
+    "cash_payments": 2544,
+    "cash_receipts": 2532,
+    "journal_vouchers": 5692,
+    "Sales invoices last 7d": 144,
+    "Purchase invoices last 7d": 25,
+    "Cash vouchers last 7d": 168,
+    "GL lines last 7d": 768,
+    "registered_pages": 110
+  },
+  "issues": [
+    "GL: Ledger balanced (all-time) \u2014 net -2232300.0"
+  ],
+  "db_path": "c:\\MY ERPS\\ifs_erp.db",
+  "db_mb": 17.49,
+  "summary": {
+    "total": 33,
+    "pass": 32,
+    "fail": 1,
+    "warn": 0,
+    "score": 97.0
+  }
+}

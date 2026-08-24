@@ -1,0 +1,8 @@
+def _is_unknown(code, name) -> bool:
+    c = str(code or "").strip().upper()
+    n = str(name or "").strip().upper()
+    if c == "UNKNOWN":
+        return True
+    if n in ("UNKNOWN", "UNKNOWN PARTY") or n.startswith("UNKNOWN "):
+        return True
+    return False

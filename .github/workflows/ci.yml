@@ -1,0 +1,45 @@
+name: IFS ERP CI
+
+on:
+  push:
+    branches: [main, master, develop]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      - name: Migration verification
+        run: python -c "from infrastructure.migrations.engine import verify_graph; ok,e=verify_graph(); assert ok, e"
+      - name: Init database
+        run: python -c "import database as db; db.init_db()"
+      - name: Run tests
+        run: |
+          python tests/test_nav_wiring.py
+          python tests/test_v16_platform.py
+          python tests/test_v17_platform.py
+          python tests/test_api_v1.py
+          python tests/test_portal_security.py
+      - name: Generate V17 reports
+        run: python tools/generate_v17_reports.py
+      - name: Debt scanner
+        run: python tools/debt_scanner.py > /dev/null
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Syntax check
+        run: python -m compileall -q application api domain infrastructure plugins services tools

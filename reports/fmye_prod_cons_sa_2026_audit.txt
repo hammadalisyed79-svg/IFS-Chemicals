@@ -1,0 +1,89 @@
+FMYE export: C:\MY ERPS\import\fmye\full
+Tables available: 68
+FMYE DPRHeader: n=3893 cols=['DPRCode', 'DPRDate', 'ShiftCode', 'ShiftDesc', 'Status', 'UserCode', 'Doc', 'DEPTID', 'AccountCode', 'AccountName']
+FMYE DPRDetail: n=30729 cols=['DPRCode', 'SeqNo', 'ItemCode', 'ItemType', 'ItemName', 'Quantity', 'RATE', 'AMOUNT']
+FMYE ConsumptionNoteHeader: n=3888 cols=['ConsNoteCode', 'ConsNoteDate', 'CompCode', 'DPRCode', 'UserCode', 'Doc', 'Status', 'DEPTID']
+FMYE ConsumptionNoteDetail: n=75468 cols=['ConsNoteCode', 'SeqNo', 'ItemCode', 'ItemName', 'Quantity', 'WastageRate', 'WastageQuantity', 'UserCode', 'finishcode']
+FMYE SAHeader: n=1365 cols=['SaCode', 'Remarks', 'SaDate', 'Status', 'Usercode', 'Doc', 'DEPTID']
+FMYE SADetail: n=25388 cols=['SaCode', 'SeqNo', 'ItemCode', 'ItemName', 'Quantity', 'MeasuringUnit', 'UserCode', 'Rate', 'Amount']
+FMYE MaterialIssueNoteHeader: n=1179 cols=['MINcode', 'MINDesc', 'MINDate', 'Status', 'Usercode', 'Doc', 'DEPTID', 'DEPTID_TO']
+FMYE MaterIssueNoteDetail: n=5572 cols=['MINCode', 'SeqNo', 'ItemCode', 'ItemName', 'ItemType', 'Quantity', 'MeasuringUnit', 'UserCode']
+
+=== FMYE 2026 document counts ===
+DPR headers 2026: 173 status={'1': 173}
+Consumption headers 2026: 173 status={'1': 173}
+Stock Adj headers 2026: 19 status={'1': 19}
+Material Issue headers 2026: 0 status={}
+
+=== FMYE 2026 pending / not Status=1 ===
+DPR pending: 0
+Consumption pending: 0
+Stock Adj pending: 0
+MIR pending: 0
+DPRHeader cols: ['DPRCode', 'DPRDate', 'ShiftCode', 'ShiftDesc', 'Status', 'UserCode', 'Doc', 'DEPTID', 'AccountCode', 'AccountName']
+DPRDetail cols: ['DPRCode', 'SeqNo', 'ItemCode', 'ItemType', 'ItemName', 'Quantity', 'RATE', 'AMOUNT']
+
+=== ERP tables present ===
+  bom_formula_lines: 330
+  bom_formulas: 32
+  erp_import_batches: 0
+  erp_job_queue: 0
+  ifs_batch_reservations: 0
+  ifs_batch_tickets: 0
+  ifs_batch_trace: 0
+  ifs_formula_history: 0
+  ifs_formula_lines: 0
+  ifs_formula_master: 0
+  ifs_production_downtime: 0
+  ifs_reactor_batches: 0
+  ifs_spray_dryer_batches: 0
+  ifs_toll_production: 0
+  inventory_movements: 14953
+  job_card_consumable_lines: 0
+  job_card_reel_lines: 0
+  job_cards: 0
+  product_batches: 0
+  product_categories: 6
+  production_finished_receipts: 0
+  production_material_issues: 8
+  production_orders: 1
+  products: 2752
+  warehouse_product_avg_cost: 1799
+
+=== ERP 2026 stock / production / movements ===
+ERP production_orders 2026 (order_date): 1
+ERP job_cards 2026 (job_date): 0
+ERP inventory_movements 2026 by reference_type:
+  sales_invoice: n=12971 qty=4226321.75
+  purchase_invoice: n=1883 qty=8557834.79
+  sales_return: n=72 qty=16632.25
+  purchase_return: n=19 qty=30118.3
+  production: n=8 qty=10087.2
+
+FMYE SA 2026 docs: 19
+ERP SA 2026 docs: 0
+FMYE SA missing in ERP (by code): 19
+FMYE DPR 2026 docs: 173 key=DPRCode
+FMYE Consumption 2026 docs: 173
+
+=== Import coverage ===
+import_fmye_from_dat.py imports: Chart/Items/Sales/Purchases/Vouchers only — NO DPR, Consumption, or Stock Adjustment import path found.
+
+=== FMYE 2026 line totals ===
+DPR lines=1940 qty=7,504,631.935 distinct_items=487
+Consumption lines=13959 qty=7,718,268.000 wastage_qty=0.000 distinct_items=46
+Stock Adj lines=563 qty=-3,836,288.190 distinct_items=462
+
+=== Pending approval (Status != 1) ===
+DPR pending 2026=0 other_years=5
+Consumption pending 2026=0 other_years=0
+Stock Adj pending 2026=0 other_years=201
+
+=== ERP inventory adjustment storage ===
+stock_adjustments table present: False
+inventory_movements 2026 looking like adjustments: n=0 qty=0
+inventory_movements mentioning FMYE SaCodes: 0
+inventory_movements mentioning sample DPR codes (first 50): 0
+inventory_movements mentioning sample Cons codes (first 50): 960
+ERP production_orders all: [(1, 'PRO-0001', '2026-08-10', 'issued', 8000.0, 0.0, 'Daily production')]
+get_inventory_adjustments total=0 in_2026=0

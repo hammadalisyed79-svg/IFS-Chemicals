@@ -1,0 +1,30 @@
+id,code,name,product_type,warehouse_qty,reason
+944,DT3008,DETERGENT 13 AD,finished,0.0,Cannot delete this product because it is used in: BOM formulas (1). Deactivate it instead to hide from new transactions.
+946,DT3010,Humber 15 A.D,finished,0.0,Cannot delete this product because it is used in: BOM formulas (1). Deactivate it instead to hide from new transactions.
+947,DT3011,DETERGENT 19A.D,finished,0.0,Cannot delete this product because it is used in: BOM formulas (1). Deactivate it instead to hide from new transactions.
+948,DT3012,DETERGENT 10A.D STANDRED,finished,0.0,"Cannot delete this product because it is used in: BOM formulas (1), BOM raw materials (1). Deactivate it instead to hide from new transactions."
+949,DT3013,UNIMED LOOSE DETERGENT 11 AD,finished,0.0,Cannot delete this product because it is used in: BOM formulas (1). Deactivate it instead to hide from new transactions.
+950,DT3014,BACHAT LOOSE DETERGENT 13 AD,finished,0.0,Cannot delete this product because it is used in: BOM formulas (1). Deactivate it instead to hide from new transactions.
+951,DT3015,BOXER LOOSE DETERGENT 18 AD,finished,0.0,Cannot delete this product because it is used in: BOM formulas (1). Deactivate it instead to hide from new transactions.
+952,DT3016,BAHAR MANUAL DETERGEN 10 AD,finished,0.0,Cannot delete this product because it is used in: BOM formulas (1). Deactivate it instead to hide from new transactions.
+953,DT3017,DISH LIQUID 10 AD,finished,0.0,Cannot delete this product because it is used in: BOM formulas (1). Deactivate it instead to hide from new transactions.
+954,DT3018,DISH LIQUID 14 AD,finished,0.0,Cannot delete this product because it is used in: BOM formulas (1). Deactivate it instead to hide from new transactions.
+955,DT3019,HAPPY DETERGENT POWDER,finished,0.0,Cannot delete this product because it is used in: BOM formulas (1). Deactivate it instead to hide from new transactions.
+956,DT3020,DETERGENT 20A.D,finished,0.0,Cannot delete this product because it is used in: BOM formulas (1). Deactivate it instead to hide from new transactions.
+960,DT3024,CLEAN DAY 19-A.D,finished,0.0,Cannot delete this product because it is used in: BOM formulas (1). Deactivate it instead to hide from new transactions.
+4937,RAP343,HAPPY REFINED IODIZED SALT 1KG BAG,finished,0.0,Cannot delete this product because it is used in: BOM raw materials (1). Deactivate it instead to hide from new transactions.
+5166,RM0012,COCO BUTANE,raw,0.0,Cannot delete this product because it is used in: BOM raw materials (2). Deactivate it instead to hide from new transactions.
+5185,RM0024,FORMULINE,raw,0.0,Cannot delete this product because it is used in: BOM raw materials (2). Deactivate it instead to hide from new transactions.
+5189,RM0028,PROPOLINE GLYCOL (PG),raw,0.0,Cannot delete this product because it is used in: BOM raw materials (2). Deactivate it instead to hide from new transactions.
+5201,RM0040,FRAGNANCE ADVENTURE (512),raw,0.0,Cannot delete this product because it is used in: BOM raw materials (8). Deactivate it instead to hide from new transactions.
+5215,RM0053,SODIUM PER CARBONATE,raw,0.0,Cannot delete this product because it is used in: BOM raw materials (2). Deactivate it instead to hide from new transactions.
+5219,RM0057,FRAGNANCE UNI-MED,raw,0.0,Cannot delete this product because it is used in: BOM raw materials (1). Deactivate it instead to hide from new transactions.
+5233,RM0071,CSD,raw,0.0,Cannot delete this product because it is used in: BOM raw materials (2). Deactivate it instead to hide from new transactions.
+5303,RM139,EDTA,raw,0.0,Cannot delete this product because it is used in: BOM raw materials (2). Deactivate it instead to hide from new transactions.
+5393,RM229,FRAGNANCE MAX 02,raw,0.0,Cannot delete this product because it is used in: BOM raw materials (7). Deactivate it instead to hide from new transactions.
+5456,RM292,CALCIUM CARBONATE 900,raw,0.0,Cannot delete this product because it is used in: BOM raw materials (1). Deactivate it instead to hide from new transactions.
+5501,SF0003,DISHWASH BAR GOLA QUALITY,finished,0.0,Cannot delete this product because it is used in: BOM formulas (1). Deactivate it instead to hide from new transactions.
+5502,SF0004,DISHWASH BAR RING QUALITY,finished,0.0,Cannot delete this product because it is used in: BOM formulas (1). Deactivate it instead to hide from new transactions.
+5503,SF0005,DISHWASH BAR TRAIN QUALITY,finished,0.0,Cannot delete this product because it is used in: BOM formulas (1). Deactivate it instead to hide from new transactions.
+5505,SF0007,DISHWASH BAR 12 AD,finished,0.0,Cannot delete this product because it is used in: BOM formulas (1). Deactivate it instead to hide from new transactions.
+5521,SF0023,HAPPY LAUNDARY BAR,finished,0.0,Cannot delete this product because it is used in: BOM formulas (1). Deactivate it instead to hide from new transactions.

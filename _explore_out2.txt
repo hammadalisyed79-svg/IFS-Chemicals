@@ -1,0 +1,227 @@
+﻿=== Search Sales Software under C:\IFS ===
+
+
+FullName      : C:\IFS\IFS Software
+Length        : 
+Mode          : d--h--
+LastWriteTime : 4/27/2026 2:49:32 PM
+
+FullName      : C:\IFS\IFS Software.rar
+Length        : 29513663
+Mode          : -a-h--
+LastWriteTime : 10/10/2024 12:41:23 PM
+
+FullName      : C:\IFS\DataBase\Sales Software
+Length        : 
+Mode          : d--h--
+LastWriteTime : 8/6/2026 9:26:39 AM
+
+FullName      : C:\IFS\DataBase\FMYE11.db
+Length        : 81854464
+Mode          : -a-h--
+LastWriteTime : 8/6/2026 11:25:05 AM
+
+FullName      : C:\IFS\DataBase\FMYE11New.log
+Length        : 60882944
+Mode          : -a----
+LastWriteTime : 8/6/2026 2:38:48 PM
+
+FullName      : C:\IFS\DataBase\26.12.2021 work\DataBase File\SALES AND INVENTORY MANAGEMENT SOFTWARE_be.accdb
+Length        : 6717440
+Mode          : -a-h--
+LastWriteTime : 8/6/2026 2:38:51 PM
+
+FullName      : C:\IFS\DataBase\26.12.2021 work\DataBase File\SALES AND INVENTORY MANAGEMENT SOFTWARE_be.laccdb
+Length        : 64
+Mode          : -a----
+LastWriteTime : 8/6/2026 12:08:12 PM
+
+FullName      : C:\IFS\DataBase\Backup\Sales Software
+Length        : 
+Mode          : d--h--
+LastWriteTime : 4/5/2026 8:56:41 AM
+
+FullName      : C:\IFS\DataBase\Backup\FMYE11.db
+Length        : 76611584
+Mode          : -arh--
+LastWriteTime : 4/5/2026 8:49:57 AM
+
+FullName      : C:\IFS\DataBase\Backup\26.12.2021 work\DataBase File\SALES AND INVENTORY MANAGEMENT SOFTWARE_be.accdb
+Length        : 6217728
+Mode          : -a-h--
+LastWriteTime : 4/4/2026 8:43:39 PM
+
+FullName      : C:\IFS\DataBase\Backup\Sales Software\SALES AND INVENTORY MANAGEMENT SOFTWARE.accdb
+Length        : 3903488
+Mode          : -a-h--
+LastWriteTime : 4/5/2026 8:49:53 AM
+
+FullName      : C:\IFS\DataBase\Backup\Sales Software\SALES AND INVENTORY MANAGEMENT SOFTWARE_Backup.accdb
+Length        : 28286976
+Mode          : -a-h--
+LastWriteTime : 12/29/2024 2:51:19 PM
+
+FullName      : C:\IFS\DataBase\Sales Software\SALES AND INVENTORY MANAGEMENT SOFTWARE.accdb
+Length        : 3932160
+Mode          : -a-h--
+LastWriteTime : 8/6/2026 2:38:51 PM
+
+FullName      : C:\IFS\DataBase\Sales Software\SALES AND INVENTORY MANAGEMENT SOFTWARE.laccdb
+Length        : 64
+Mode          : -a----
+LastWriteTime : 8/6/2026 9:26:39 AM
+
+FullName      : C:\IFS\DataBase\Sales Software\SALES AND INVENTORY MANAGEMENT SOFTWARE_Backup.accdb
+Length        : 28286976
+Mode          : -a-h--
+LastWriteTime : 12/29/2024 2:51:19 PM
+
+FullName      : C:\IFS\DataBase\Temp\FMYE11New.log
+Length        : 245432320
+Mode          : -ar---
+LastWriteTime : 7/25/2026 9:22:42 AM
+
+FullName      : C:\IFS\IFS Software\Sale Invoice.jpg
+Length        : 945385
+Mode          : -a-h--
+LastWriteTime : 5/9/2016 4:09:34 PM
+
+FullName      : C:\IFS\IFS Software\Sale Invoice.txt
+Length        : 1286
+Mode          : -a-h--
+LastWriteTime : 5/9/2016 4:07:32 PM
+
+FullName      : C:\IFS\IFS Software\Sale Invoice.wmf
+Length        : 39156
+Mode          : -a-h--
+LastWriteTime : 5/9/2016 4:08:16 PM
+
+FullName      : C:\IFS\IFS Software\Database\ShafiSonsDB\ShafiSonsDB\FMYE11.db
+Length        : 20480000
+Mode          : -a-h--
+LastWriteTime : 1/18/2020 7:35:42 PM
+
+FullName      : C:\IFS\IFS Software\Database\ShafiSonsDB\ShafiSonsDB\FMYE11New.log
+Length        : 39911424
+Mode          : -a-h--
+LastWriteTime : 1/18/2020 7:35:42 PM
+
+FullName      : C:\IFS\TAX\FMYE11New.log
+Length        : 62980096
+Mode          : -a----
+LastWriteTime : 8/6/2026 12:19:08 PM
+
+FullName      : C:\IFS\TAX\TEMP\FMYE11New.log
+Length        : 276889600
+Mode          : -ar---
+LastWriteTime : 7/25/2026 9:23:53 AM
+
+
+
+
+=== All under DataBase recursive (top 500) ===
+
+FullName                                                                                              Length    Mode   LastWriteTime         
+--------                                                                                              ------    ----   -------------         
+C:\IFS\DataBase\26.12.2021 work                                                                                 d--h-- 10/4/2024 10:55:59 PM 
+C:\IFS\DataBase\Backup                                                                                          d----- 4/5/2026 9:00:54 AM   
+C:\IFS\DataBase\PAYROLL                                                                                         d--h-- 8/6/2026 2:17:14 PM   
+C:\IFS\DataBase\Sales Software                                                                                  d--h-- 8/6/2026 9:26:39 AM   
+C:\IFS\DataBase\Temp                                                                                            d----- 7/25/2026 9:23:08 AM  
+C:\IFS\DataBase\Weight Scale                                                                                    d--h-- 7/19/2026 3:25:19 PM  
+C:\IFS\DataBase\Backup.rar                                                                            28653491  -a---- 4/5/2026 9:01:21 AM   
+C:\IFS\DataBase\FMYE11.db                                                                             81854464  -a-h-- 8/6/2026 11:25:05 AM  
+C:\IFS\DataBase\FMYE11New.log                                                                         60882944  -a---- 8/6/2026 2:38:48 PM   
+C:\IFS\DataBase\26.12.2021 work\DataBase File                                                                   d--h-- 8/6/2026 12:08:12 PM  
+C:\IFS\DataBase\26.12.2021 work\DataBase File\SALES AND INVENTORY MANAGEMENT SOFTWARE_be.accdb        6717440   -a-h-- 8/6/2026 2:38:51 PM   
+C:\IFS\DataBase\26.12.2021 work\DataBase File\SALES AND INVENTORY MANAGEMENT SOFTWARE_be.laccdb       64        -a---- 8/6/2026 12:08:12 PM  
+C:\IFS\DataBase\Backup\26.12.2021 work                                                                          d--h-- 4/5/2026 8:56:40 AM   
+C:\IFS\DataBase\Backup\Ahmed Zia                                                                                d----- 4/5/2026 8:57:24 AM   
+C:\IFS\DataBase\Backup\Jawad                                                                                    d----- 4/5/2026 9:00:57 AM   
+C:\IFS\DataBase\Backup\PAYROLL                                                                                  d--h-- 4/5/2026 8:56:40 AM   
+C:\IFS\DataBase\Backup\Sales Software                                                                           d--h-- 4/5/2026 8:56:41 AM   
+C:\IFS\DataBase\Backup\Tax                                                                                      d----- 4/5/2026 8:59:31 AM   
+C:\IFS\DataBase\Backup\Weight Scale                                                                             d--h-- 4/5/2026 8:56:40 AM   
+C:\IFS\DataBase\Backup\FMYE11.db                                                                      76611584  -arh-- 4/5/2026 8:49:57 AM   
+C:\IFS\DataBase\Backup\26.12.2021 work\DataBase File                                                            d--h-- 4/5/2026 8:56:40 AM   
+C:\IFS\DataBase\Backup\26.12.2021 work\DataBase File\SALES AND INVENTORY MANAGEMENT SOFTWARE_be.accdb 6217728   -a-h-- 4/4/2026 8:43:39 PM   
+C:\IFS\DataBase\Backup\Ahmed Zia\Databasedbv11.db                                                     20643840  -arh-- 1/21/2024 2:42:33 PM  
+C:\IFS\DataBase\Backup\Jawad\Databasedbv11.db                                                         24346624  -ar--- 4/4/2026 5:16:12 PM   
+C:\IFS\DataBase\Backup\PAYROLL\IFS-PayRoll-Final.accdb                                                129642496 -a---- 4/4/2026 4:45:01 PM   
+C:\IFS\DataBase\Backup\PAYROLL\IFS-PayRoll-Final.accdbPayTemp.PDF                                     91357     -a-h-- 6/15/2025 5:22:52 PM  
+C:\IFS\DataBase\Backup\PAYROLL\IFS-PayRoll-Final.accdbPayTemp.xlsx                                    13053     -a---- 6/26/2025 12:27:43 PM 
+C:\IFS\DataBase\Backup\PAYROLL\IFS-PayRoll-Final_Backup.accdb                                         463704064 -a-h-- 6/22/2025 4:39:30 PM  
+C:\IFS\DataBase\Backup\PAYROLL\PayTemp.xlsx                                                           22014     -a---- 12/10/2025 11:39:14 AM
+C:\IFS\DataBase\Backup\Sales Software\SALES AND INVENTORY MANAGEMENT SOFTWARE.accdb                   3903488   -a-h-- 4/5/2026 8:49:53 AM   
+C:\IFS\DataBase\Backup\Sales Software\SALES AND INVENTORY MANAGEMENT SOFTWARE_Backup.accdb            28286976  -a-h-- 12/29/2024 2:51:19 PM 
+C:\IFS\DataBase\Backup\Tax\TAX.db                                                                     20480000  -arh-- 4/5/2026 8:49:58 AM   
+C:\IFS\DataBase\Backup\Weight Scale\Weight Scale Final.accdb                                          12603392  -a---- 4/5/2026 8:49:53 AM   
+C:\IFS\DataBase\Backup\Weight Scale\Weight Scale Final_Backup.accdb                                   108683264 -a-h-- 5/18/2025 8:52:43 PM  
+C:\IFS\DataBase\PAYROLL\IFS-PayRoll-Final.accdb                                                       131801088 -a---- 8/6/2026 2:37:40 PM   
+C:\IFS\DataBase\PAYROLL\IFS-PayRoll-Final.accdbPayTemp.PDF                                            91357     -a-h-- 6/15/2025 5:22:52 PM  
+C:\IFS\DataBase\PAYROLL\IFS-PayRoll-Final.accdbPayTemp.xlsx                                           13053     -a---- 6/26/2025 12:27:43 PM 
+C:\IFS\DataBase\PAYROLL\IFS-PayRoll-Final.laccdb                                                      64        -a---- 8/6/2026 2:17:14 PM   
+C:\IFS\DataBase\PAYROLL\IFS-PayRoll-Final_Backup.accdb                                                463704064 -a-h-- 6/22/2025 4:39:30 PM  
+C:\IFS\DataBase\PAYROLL\PayTemp.PDF                                                                   79659     -a---- 8/3/2026 12:27:03 PM  
+C:\IFS\DataBase\PAYROLL\PayTemp.xlsx                                                                  22014     -a---- 12/10/2025 11:39:14 AM
+C:\IFS\DataBase\Sales Software\SALES AND INVENTORY MANAGEMENT SOFTWARE.accdb                          3932160   -a-h-- 8/6/2026 2:38:51 PM   
+C:\IFS\DataBase\Sales Software\SALES AND INVENTORY MANAGEMENT SOFTWARE.laccdb                         64        -a---- 8/6/2026 9:26:39 AM   
+C:\IFS\DataBase\Sales Software\SALES AND INVENTORY MANAGEMENT SOFTWARE_Backup.accdb                   28286976  -a-h-- 12/29/2024 2:51:19 PM 
+C:\IFS\DataBase\Temp\FMYE11New.log                                                                    245432320 -ar--- 7/25/2026 9:22:42 AM  
+C:\IFS\DataBase\Weight Scale\Weight Scale Final.accdb                                                 13336576  -a---- 7/19/2026 3:25:19 PM  
+C:\IFS\DataBase\Weight Scale\Weight Scale Final_Backup.accdb                                          108683264 -a-h-- 5/18/2025 8:52:43 PM  
+
+
+
+
+=== DB-like files under C:\IFS ===
+
+FullName                                                                                                 Length LastWriteTime         
+--------                                                                                                 ------ -------------         
+C:\IFS\Ahmed Zia\Database\Databasedbv11.db                                                             20643840 1/21/2024 2:42:33 PM  
+C:\IFS\DataBase\26.12.2021 work\DataBase File\SALES AND INVENTORY MANAGEMENT SOFTWARE_be.accdb          6717440 8/6/2026 2:38:51 PM   
+C:\IFS\DataBase\Backup\26.12.2021 work\DataBase File\SALES AND INVENTORY MANAGEMENT SOFTWARE_be.accdb   6217728 4/4/2026 8:43:39 PM   
+C:\IFS\DataBase\Backup\Ahmed Zia\Databasedbv11.db                                                      20643840 1/21/2024 2:42:33 PM  
+C:\IFS\DataBase\Backup\Jawad\Databasedbv11.db                                                          24346624 4/4/2026 5:16:12 PM   
+C:\IFS\DataBase\Backup\PAYROLL\IFS-PayRoll-Final.accdb                                                129642496 4/4/2026 4:45:01 PM   
+C:\IFS\DataBase\Backup\PAYROLL\IFS-PayRoll-Final.accdbPayTemp.xlsx                                        13053 6/26/2025 12:27:43 PM 
+C:\IFS\DataBase\Backup\PAYROLL\IFS-PayRoll-Final_Backup.accdb                                         463704064 6/22/2025 4:39:30 PM  
+C:\IFS\DataBase\Backup\PAYROLL\PayTemp.xlsx                                                               22014 12/10/2025 11:39:14 AM
+C:\IFS\DataBase\Backup\Sales Software\SALES AND INVENTORY MANAGEMENT SOFTWARE.accdb                     3903488 4/5/2026 8:49:53 AM   
+C:\IFS\DataBase\Backup\Sales Software\SALES AND INVENTORY MANAGEMENT SOFTWARE_Backup.accdb             28286976 12/29/2024 2:51:19 PM 
+C:\IFS\DataBase\Backup\Tax\TAX.db                                                                      20480000 4/5/2026 8:49:58 AM   
+C:\IFS\DataBase\Backup\Weight Scale\Weight Scale Final.accdb                                           12603392 4/5/2026 8:49:53 AM   
+C:\IFS\DataBase\Backup\Weight Scale\Weight Scale Final_Backup.accdb                                   108683264 5/18/2025 8:52:43 PM  
+C:\IFS\DataBase\Backup\FMYE11.db                                                                       76611584 4/5/2026 8:49:57 AM   
+C:\IFS\DataBase\PAYROLL\IFS-PayRoll-Final.accdb                                                       131801088 8/6/2026 2:37:40 PM   
+C:\IFS\DataBase\PAYROLL\IFS-PayRoll-Final.accdbPayTemp.xlsx                                               13053 6/26/2025 12:27:43 PM 
+C:\IFS\DataBase\PAYROLL\IFS-PayRoll-Final_Backup.accdb                                                463704064 6/22/2025 4:39:30 PM  
+C:\IFS\DataBase\PAYROLL\PayTemp.xlsx                                                                      22014 12/10/2025 11:39:14 AM
+C:\IFS\DataBase\Sales Software\SALES AND INVENTORY MANAGEMENT SOFTWARE.accdb                            3932160 8/6/2026 2:38:51 PM   
+C:\IFS\DataBase\Sales Software\SALES AND INVENTORY MANAGEMENT SOFTWARE_Backup.accdb                    28286976 12/29/2024 2:51:19 PM 
+C:\IFS\DataBase\Weight Scale\Weight Scale Final.accdb                                                  13336576 7/19/2026 3:25:19 PM  
+C:\IFS\DataBase\Weight Scale\Weight Scale Final_Backup.accdb                                          108683264 5/18/2025 8:52:43 PM  
+C:\IFS\DataBase\FMYE11.db                                                                              81854464 8/6/2026 2:40:49 PM   
+C:\IFS\IFS Software\Database\ShafiSonsDB\ShafiSonsDB\FMYE11.db                                         20480000 1/18/2020 7:35:42 PM  
+C:\IFS\IFS Software\DISHWASH STOCK.xls                                                                    45214 4/10/2025 12:09:41 PM 
+C:\IFS\IFS Software\RAEES.xls                                                                              3072 1/2/2025 5:31:28 PM   
+C:\IFS\IFS Software\SERVICE INDUSTRIES LIMITED 01.01.2025 TO 25.05.2025.xls                               27061 5/26/2025 1:14:47 PM  
+C:\IFS\IFS Software\Thumbs.db                                                                             16896 1/18/2020 10:33:44 AM 
+C:\IFS\IFS Software\TOILET CLEANER STOCK NOV.xls                                                          10752 12/4/2025 10:49:03 AM 
+C:\IFS\TAX\TAX.db                                                                                      20873216 8/6/2026 2:40:49 PM   
+
+
+
+
+=== Exact path Sales Software ===
+True
+
+
+    Directory: C:\IFS\DataBase\Sales Software
+
+
+Mode                 LastWriteTime         Length Name                                                                 
+----                 -------------         ------ ----                                                                 
+-a----          8/6/2026   9:26 AM             64 SALES AND INVENTORY MANAGEMENT SOFTWARE.laccdb                       
+
+

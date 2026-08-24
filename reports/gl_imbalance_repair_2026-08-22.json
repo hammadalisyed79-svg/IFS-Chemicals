@@ -1,0 +1,476 @@
+{
+  "when": "2026-08-22T09:52:10",
+  "before": {
+    "CR-126928": {
+      "reference_no": "CR-126928",
+      "gl": [
+        {
+          "id": 47872,
+          "entry_date": "2026-08-09",
+          "account_id": 80,
+          "account_code": "100057",
+          "account_name": "AFZAL SWEET DINA",
+          "debit": 0.0,
+          "credit": 1300000.0,
+          "description": "Receipt from AFZAL SWEET DINA Rcvd by M.Masood sb",
+          "reference_type": "customer_receipt",
+          "reference_id": 39,
+          "reference_no": "CR-126928",
+          "voucher_id": null,
+          "created_by": 2,
+          "created_at": "2026-08-09 10:25:12"
+        }
+      ],
+      "cash_receipt": {
+        "id": 4792,
+        "document_no": "CR-126928",
+        "receipt_date": "2026-08-09",
+        "account_id": null,
+        "party_type": "customer",
+        "party_id": 39,
+        "description": "Receipt from AFZAL SWEET DINA Rcvd by M.Masood sb",
+        "reference_no": "",
+        "amount": 1300000.0,
+        "created_by": 2,
+        "created_at": "2026-08-09 15:25:12",
+        "modified_by": null,
+        "modified_at": null
+      },
+      "customer": {
+        "id": 39,
+        "code": "100057",
+        "name": "AFZAL SWEET DINA"
+      },
+      "journal": null,
+      "gl_debit": 0.0,
+      "gl_credit": 1300000.0,
+      "gl_net": -1300000.0
+    },
+    "CR-126932": {
+      "reference_no": "CR-126932",
+      "gl": [
+        {
+          "id": 47925,
+          "entry_date": "2026-08-10",
+          "account_id": 83,
+          "account_code": "100060",
+          "account_name": "HAJI NAZIR AKHTAR GUJRAT",
+          "debit": 0.0,
+          "credit": 450000.0,
+          "description": "Receipt from HAJI NAZIR AKHTAR GUJRAT",
+          "reference_type": "customer_receipt",
+          "reference_id": 42,
+          "reference_no": "CR-126932",
+          "voucher_id": null,
+          "created_by": 2,
+          "created_at": "2026-08-10 06:16:46"
+        }
+      ],
+      "cash_receipt": {
+        "id": 4796,
+        "document_no": "CR-126932",
+        "receipt_date": "2026-08-10",
+        "account_id": null,
+        "party_type": "customer",
+        "party_id": 42,
+        "description": "Receipt from HAJI NAZIR AKHTAR GUJRAT",
+        "reference_no": "",
+        "amount": 450000.0,
+        "created_by": 2,
+        "created_at": "2026-08-10 11:16:46",
+        "modified_by": null,
+        "modified_at": null
+      },
+      "customer": {
+        "id": 42,
+        "code": "100060",
+        "name": "HAJI NAZIR AKHTAR GUJRAT"
+      },
+      "journal": null,
+      "gl_debit": 0.0,
+      "gl_credit": 450000.0,
+      "gl_net": -450000.0
+    },
+    "JVR-126885": {
+      "reference_no": "JVR-126885",
+      "gl": [
+        {
+          "id": 47531,
+          "entry_date": "2026-08-06",
+          "account_id": 1439,
+          "account_code": "500001",
+          "account_name": "SALE A/C",
+          "debit": 0.0,
+          "credit": 482300.0,
+          "description": "Credit Sale Vide Invoice No26080116",
+          "reference_type": "fmye_voucher",
+          "reference_id": 0,
+          "reference_no": "JVR-126885",
+          "voucher_id": null,
+          "created_by": 1,
+          "created_at": "2026-08-08 04:51:44"
+        }
+      ],
+      "cash_receipt": null,
+      "customer": null,
+      "journal": {
+        "header": {
+          "id": 11308,
+          "document_no": "JVR-126885",
+          "voucher_date": "2026-08-06",
+          "description": "FMYE:JVR-126885 Credit Sale Vide Invoice No26080116",
+          "total_debit": 482300.0,
+          "total_credit": 482300.0,
+          "status": "posted",
+          "created_by": 1,
+          "created_at": "2026-08-08 09:51:44",
+          "modified_by": null,
+          "modified_at": null,
+          "posted_by": 1,
+          "posted_at": "2026-08-08 14:51:44",
+          "approval_status": null,
+          "updated_by": null,
+          "updated_at": null,
+          "printed_count": 0,
+          "last_printed_at": null,
+          "company_id": 1,
+          "branch_id": 1
+        },
+        "lines": [
+          {
+            "id": 27199,
+            "voucher_id": 11308,
+            "account_id": 1439,
+            "description": "Credit Sale Vide Invoice No26080116 ",
+            "debit": 0.0,
+            "credit": 482300.0,
+            "account_code": "500001",
+            "account_name": "SALE A/C"
+          }
+        ]
+      },
+      "gl_debit": 0.0,
+      "gl_credit": 482300.0,
+      "gl_net": -482300.0
+    }
+  },
+  "actions": [
+    {
+      "reference_no": "CR-126928",
+      "action": "add_cash_debit",
+      "amount": 1300000.0,
+      "account": {
+        "id": 29,
+        "code": "000000",
+        "name": "CASH A/C"
+      },
+      "entry_date": "2026-08-09",
+      "customer": {
+        "id": 39,
+        "code": "100057",
+        "name": "AFZAL SWEET DINA"
+      },
+      "narration": "Receipt from AFZAL SWEET DINA Rcvd by M.Masood sb"
+    },
+    {
+      "reference_no": "CR-126932",
+      "action": "add_cash_debit",
+      "amount": 450000.0,
+      "account": {
+        "id": 29,
+        "code": "000000",
+        "name": "CASH A/C"
+      },
+      "entry_date": "2026-08-10",
+      "customer": {
+        "id": 42,
+        "code": "100060",
+        "name": "HAJI NAZIR AKHTAR GUJRAT"
+      },
+      "narration": "Receipt from HAJI NAZIR AKHTAR GUJRAT"
+    },
+    {
+      "reference_no": "JVR-126885",
+      "action": "neutralize_orphan_sale_credit",
+      "amount": 482300.0,
+      "account": {
+        "id": 1439,
+        "code": "500001",
+        "name": "SALE A/C"
+      },
+      "entry_date": "2026-08-06",
+      "narration": "Balance incomplete FMYE JVR-126885 \u2014 invoice 26080116 already posted in ERP (neutralize orphan credit on SALE A/C)",
+      "related_sales_invoice": {
+        "id": 4697,
+        "document_no": "26080116",
+        "customer_id": 1121,
+        "total": 458185.0,
+        "invoice_date": "2026-08-06",
+        "status": "approved"
+      },
+      "related_customer": {
+        "id": 1121,
+        "code": "100961",
+        "name": "SAEED SHEHZAD SB"
+      },
+      "reason": "FMYE JV had only Cr SALE A/C; matching ERP sales invoice already posted AR/Sales Revenue, so debit same SALE A/C to clear imbalance without double-counting receivable."
+    }
+  ],
+  "after": {
+    "CR-126928": {
+      "reference_no": "CR-126928",
+      "gl": [
+        {
+          "id": 47872,
+          "entry_date": "2026-08-09",
+          "account_id": 80,
+          "account_code": "100057",
+          "account_name": "AFZAL SWEET DINA",
+          "debit": 0.0,
+          "credit": 1300000.0,
+          "description": "Receipt from AFZAL SWEET DINA Rcvd by M.Masood sb",
+          "reference_type": "customer_receipt",
+          "reference_id": 39,
+          "reference_no": "CR-126928",
+          "voucher_id": null,
+          "created_by": 2,
+          "created_at": "2026-08-09 10:25:12"
+        },
+        {
+          "id": 49381,
+          "entry_date": "2026-08-09",
+          "account_id": 29,
+          "account_code": "000000",
+          "account_name": "CASH A/C",
+          "debit": 1300000.0,
+          "credit": 0.0,
+          "description": "Receipt from AFZAL SWEET DINA Rcvd by M.Masood sb",
+          "reference_type": "customer_receipt",
+          "reference_id": 39,
+          "reference_no": "CR-126928",
+          "voucher_id": null,
+          "created_by": 2,
+          "created_at": "2026-08-22 04:52:10"
+        }
+      ],
+      "cash_receipt": {
+        "id": 4792,
+        "document_no": "CR-126928",
+        "receipt_date": "2026-08-09",
+        "account_id": 29,
+        "party_type": "customer",
+        "party_id": 39,
+        "description": "Receipt from AFZAL SWEET DINA Rcvd by M.Masood sb",
+        "reference_no": "",
+        "amount": 1300000.0,
+        "created_by": 2,
+        "created_at": "2026-08-09 15:25:12",
+        "modified_by": null,
+        "modified_at": "2026-08-22 09:52:10"
+      },
+      "customer": {
+        "id": 39,
+        "code": "100057",
+        "name": "AFZAL SWEET DINA"
+      },
+      "journal": null,
+      "gl_debit": 1300000.0,
+      "gl_credit": 1300000.0,
+      "gl_net": 0.0
+    },
+    "CR-126932": {
+      "reference_no": "CR-126932",
+      "gl": [
+        {
+          "id": 47925,
+          "entry_date": "2026-08-10",
+          "account_id": 83,
+          "account_code": "100060",
+          "account_name": "HAJI NAZIR AKHTAR GUJRAT",
+          "debit": 0.0,
+          "credit": 450000.0,
+          "description": "Receipt from HAJI NAZIR AKHTAR GUJRAT",
+          "reference_type": "customer_receipt",
+          "reference_id": 42,
+          "reference_no": "CR-126932",
+          "voucher_id": null,
+          "created_by": 2,
+          "created_at": "2026-08-10 06:16:46"
+        },
+        {
+          "id": 49382,
+          "entry_date": "2026-08-10",
+          "account_id": 29,
+          "account_code": "000000",
+          "account_name": "CASH A/C",
+          "debit": 450000.0,
+          "credit": 0.0,
+          "description": "Receipt from HAJI NAZIR AKHTAR GUJRAT",
+          "reference_type": "customer_receipt",
+          "reference_id": 42,
+          "reference_no": "CR-126932",
+          "voucher_id": null,
+          "created_by": 2,
+          "created_at": "2026-08-22 04:52:10"
+        }
+      ],
+      "cash_receipt": {
+        "id": 4796,
+        "document_no": "CR-126932",
+        "receipt_date": "2026-08-10",
+        "account_id": 29,
+        "party_type": "customer",
+        "party_id": 42,
+        "description": "Receipt from HAJI NAZIR AKHTAR GUJRAT",
+        "reference_no": "",
+        "amount": 450000.0,
+        "created_by": 2,
+        "created_at": "2026-08-10 11:16:46",
+        "modified_by": null,
+        "modified_at": "2026-08-22 09:52:10"
+      },
+      "customer": {
+        "id": 42,
+        "code": "100060",
+        "name": "HAJI NAZIR AKHTAR GUJRAT"
+      },
+      "journal": null,
+      "gl_debit": 450000.0,
+      "gl_credit": 450000.0,
+      "gl_net": 0.0
+    },
+    "JVR-126885": {
+      "reference_no": "JVR-126885",
+      "gl": [
+        {
+          "id": 47531,
+          "entry_date": "2026-08-06",
+          "account_id": 1439,
+          "account_code": "500001",
+          "account_name": "SALE A/C",
+          "debit": 0.0,
+          "credit": 482300.0,
+          "description": "Credit Sale Vide Invoice No26080116",
+          "reference_type": "fmye_voucher",
+          "reference_id": 0,
+          "reference_no": "JVR-126885",
+          "voucher_id": null,
+          "created_by": 1,
+          "created_at": "2026-08-08 04:51:44"
+        },
+        {
+          "id": 49383,
+          "entry_date": "2026-08-06",
+          "account_id": 1439,
+          "account_code": "500001",
+          "account_name": "SALE A/C",
+          "debit": 482300.0,
+          "credit": 0.0,
+          "description": "Balance incomplete FMYE JVR-126885 \u2014 invoice 26080116 already posted in ERP (neutralize orphan credit on SALE A/C)",
+          "reference_type": "fmye_voucher",
+          "reference_id": 0,
+          "reference_no": "JVR-126885",
+          "voucher_id": null,
+          "created_by": 1,
+          "created_at": "2026-08-22 04:52:10"
+        }
+      ],
+      "cash_receipt": null,
+      "customer": null,
+      "journal": {
+        "header": {
+          "id": 11308,
+          "document_no": "JVR-126885",
+          "voucher_date": "2026-08-06",
+          "description": "FMYE:JVR-126885 Credit Sale Vide Invoice No26080116",
+          "total_debit": 482300.0,
+          "total_credit": 482300.0,
+          "status": "posted",
+          "created_by": 1,
+          "created_at": "2026-08-08 09:51:44",
+          "modified_by": null,
+          "modified_at": null,
+          "posted_by": 1,
+          "posted_at": "2026-08-08 14:51:44",
+          "approval_status": null,
+          "updated_by": null,
+          "updated_at": null,
+          "printed_count": 0,
+          "last_printed_at": null,
+          "company_id": 1,
+          "branch_id": 1
+        },
+        "lines": [
+          {
+            "id": 27199,
+            "voucher_id": 11308,
+            "account_id": 1439,
+            "description": "Credit Sale Vide Invoice No26080116 ",
+            "debit": 0.0,
+            "credit": 482300.0,
+            "account_code": "500001",
+            "account_name": "SALE A/C"
+          },
+          {
+            "id": 27316,
+            "voucher_id": 11308,
+            "account_id": 1439,
+            "description": "Balance incomplete FMYE JVR-126885 \u2014 invoice 26080116 already posted in ERP (neutralize orphan credit on SALE A/C)",
+            "debit": 482300.0,
+            "credit": 0.0,
+            "account_code": "500001",
+            "account_name": "SALE A/C"
+          }
+        ]
+      },
+      "gl_debit": 482300.0,
+      "gl_credit": 482300.0,
+      "gl_net": 0.0
+    }
+  },
+  "related_invoice_gl": [
+    {
+      "id": 47531,
+      "entry_date": "2026-08-06",
+      "account_code": "500001",
+      "account_name": "SALE A/C",
+      "debit": 0.0,
+      "credit": 482300.0,
+      "reference_type": "fmye_voucher",
+      "reference_no": "JVR-126885",
+      "description": "Credit Sale Vide Invoice No26080116"
+    },
+    {
+      "id": 47806,
+      "entry_date": "2026-08-06",
+      "account_code": "1200",
+      "account_name": "Accounts Receivable",
+      "debit": 458185.0,
+      "credit": 0.0,
+      "reference_type": "sales_invoice",
+      "reference_no": "26080116",
+      "description": "Sales invoice - 100961 - SAEED SHEHZAD SB"
+    },
+    {
+      "id": 47807,
+      "entry_date": "2026-08-06",
+      "account_code": "4000",
+      "account_name": "Sales Revenue",
+      "debit": 0.0,
+      "credit": 458185.0,
+      "reference_type": "sales_invoice",
+      "reference_no": "26080116",
+      "description": "Sales revenue - 100961 - SAEED SHEHZAD SB"
+    }
+  ],
+  "ledger_before": {
+    "dr": 5180422074.71,
+    "cr": 5182654374.71,
+    "net": -2232300.0
+  },
+  "ledger_after": {
+    "dr": 5182654374.71,
+    "cr": 5182654374.71,
+    "net": 0.0
+  }
+}

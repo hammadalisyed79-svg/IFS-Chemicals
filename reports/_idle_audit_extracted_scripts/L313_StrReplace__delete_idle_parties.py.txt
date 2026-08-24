@@ -1,0 +1,17 @@
+            refs = _customer_ref_counts(conn, cid)
+            if refs:
+                # Unlink orphan weight slips only — keep financial history blocked
+                only_ws = set(refs) == {"weight_slips"}
+                if only_ws:
+                    conn.execute(
+                        "UPDATE weight_slips SET customer_id=NULL WHERE customer_id=?",
+                        (cid,),
+                    )
+                    refs = _customer_ref_counts(conn, cid)
+                if refs:
+                    skipped_refs += 1
+                    if len(skip_samples) < 15:
+                        skip_samples.append(("Customer", code, name, refs))
+                    continue
+            conn.execute("DELETE FROM customers WHERE id=?", (cid,))
+            deleted_c += 1

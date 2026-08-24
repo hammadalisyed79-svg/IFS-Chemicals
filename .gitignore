@@ -1,0 +1,17 @@
+__pycache__/
+*.py[cod]
+*.pyo
+.Python
+venv/
+.env
+*.db
+*.db-journal
+*.pdf
+*.exe
+ifs_erp_backup_*.db
+ifs_erp_test_*.db
+*.before_reset.bak
+import/product_weights_template.csv
+test_out.txt
+*.log
+ADMIN_BOOTSTRAP.txt

@@ -1,0 +1,232 @@
+"""Find items with NIL opening stock and no 2026 transactions (read-only)."""
+from __future__ import annotations
+
+import csv
+from pathlib import Path
+
+import database as db
+from database import get_connection, rows_to_list
+
+YEAR = "2026"
+OUT = Path("reports") / f"idle_items_{YEAR}.csv"
+
+
+def main():
+    db.init_db()
+    with get_connection() as conn:
+        prod_cols = [r[1] for r in conn.execute("PRAGMA table_info(products)").fetchall()]
+        print("products columns:", ", ".join(prod_cols))
+
+        tables = [
+            r[0]
+            for r in conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' ORDER BY 1"
+            ).fetchall()
+        ]
+        interesting = [
+            t
+            for t in tables
+            if any(
+                x in t.lower()
+                for x in ("stock", "invent", "product", "item", "movement", "warehouse")
+            )
+        ]
+        print("related tables:", ", ".join(interesting))
+
+        for t in interesting:
+            cols = [r[1] for r in conn.execute(f"PRAGMA table_info({t})").fetchall()]
+            print(f"  {t}: {', '.join(cols)}")
+
+        # Opening: warehouse_stock / products fields
+        stock_cols = []
+        if "warehouse_stock" in tables:
+            stock_cols = [r[1] for r in conn.execute("PRAGMA table_info(warehouse_stock)").fetchall()]
+        if "stock_movements" in tables:
+            mov_cols = [r[1] for r in conn.execute("PRAGMA table_info(stock_movements)").fetchall()]
+            print("stock_movements sample:", mov_cols)
+
+        # Count products
+        n_prod = conn.execute("SELECT COUNT(*) FROM products").fetchone()[0]
+        print(f"total products: {n_prod}")
+
+        # Build idle query based on schema
+        has_opening = "opening_stock" in prod_cols or "opening_qty" in prod_cols or "opening_balance" in prod_cols
+        open_expr = "0"
+        if "opening_stock" in prod_cols:
+            open_expr = "COALESCE(p.opening_stock,0)"
+        elif "opening_qty" in prod_cols:
+            open_expr = "COALESCE(p.opening_qty,0)"
+        elif "opening_balance" in prod_cols:
+            open_expr = "COALESCE(p.opening_balance,0)"
+
+        # Warehouse stock opening / qty
+        wh_qty = "0"
+        if "warehouse_stock" in tables:
+            whc = [r[1] for r in conn.execute("PRAGMA table_info(warehouse_stock)").fetchall()]
+            qty_col = "quantity" if "quantity" in whc else ("qty" if "qty" in whc else None)
+            if qty_col:
+                wh_qty = f"(SELECT COALESCE(SUM({qty_col}),0) FROM warehouse_stock ws WHERE ws.product_id=p.id)"
+
+        # Transaction sources in 2026
+        # stock_movements
+        year_conds = []
+        if "stock_movements" in tables:
+            mc = [r[1] for r in conn.execute("PRAGMA table_info(stock_movements)").fetchall()]
+            date_col = next((c for c in ("movement_date", "trans_date", "created_at", "date") if c in mc), None)
+            pid_col = "product_id" if "product_id" in mc else None
+            if date_col and pid_col:
+                year_conds.append(
+                    f"EXISTS (SELECT 1 FROM stock_movements sm WHERE sm.{pid_col}=p.id "
+                    f"AND substr(COALESCE(sm.{date_col},''),1,4)='{YEAR}')"
+                )
+
+        # invoice lines
+        for table, date_join in (
+            ("sales_invoice_items", ("sales_invoices", "invoice_id", "invoice_date")),
+            ("purchase_invoice_items", ("purchase_invoices", "invoice_id", "invoice_date")),
+            ("sales_return_items", ("sales_returns", "return_id", "return_date")),
+            ("purchase_return_items", ("purchase_returns", "return_id", "return_date")),
+        ):
+            if table not in tables:
+                continue
+            parent, fk, dcol = date_join
+            if parent not in tables:
+                continue
+            ic = [r[1] for r in conn.execute(f"PRAGMA table_info({table})").fetchall()]
+            pid = "product_id" if "product_id" in ic else ("item_id" if "item_id" in ic else None)
+            if not pid:
+                continue
+            year_conds.append(
+                f"EXISTS (SELECT 1 FROM {table} li JOIN {parent} h ON h.id=li.{fk} "
+                f"WHERE li.{pid}=p.id AND substr(COALESCE(h.{dcol},''),1,4)='{YEAR}')"
+            )
+
+        # delivery notes / GRN if present
+        for table, parent_info in (
+            ("delivery_note_items", ("delivery_notes", "delivery_note_id", "dn_date")),
+            ("delivery_note_items", ("delivery_notes", "dn_id", "document_date")),
+            ("grn_items", ("goods_receipt_notes", "grn_id", "grn_date")),
+            ("goods_receipt_note_items", ("goods_receipt_notes", "grn_id", "grn_date")),
+        ):
+            if table not in tables:
+                continue
+            parent, fk, dcol = parent_info
+            if parent not in tables:
+                continue
+            pc = [r[1] for r in conn.execute(f"PRAGMA table_info({parent})").fetchall()]
+            ic = [r[1] for r in conn.execute(f"PRAGMA table_info({table})").fetchall()]
+            if dcol not in pc:
+                # try alternate dates
+                dcol = next((c for c in ("dn_date", "grn_date", "document_date", "date", "created_at") if c in pc), None)
+            if not dcol or fk not in ic:
+                continue
+            pid = "product_id" if "product_id" in ic else ("item_id" if "item_id" in ic else None)
+            if not pid:
+                continue
+            year_conds.append(
+                f"EXISTS (SELECT 1 FROM {table} li JOIN {parent} h ON h.id=li.{fk} "
+                f"WHERE li.{pid}=p.id AND substr(COALESCE(h.{dcol},''),1,4)='{YEAR}')"
+            )
+
+        # quotations / orders
+        for table, parent_info in (
+            ("sales_order_items", ("sales_orders", "order_id", "order_date")),
+            ("purchase_order_items", ("purchase_orders", "order_id", "order_date")),
+            ("quotation_items", ("quotations", "quotation_id", "quotation_date")),
+        ):
+            if table not in tables:
+                continue
+            parent, fk, dcol = parent_info
+            if parent not in tables:
+                continue
+            pc = [r[1] for r in conn.execute(f"PRAGMA table_info({parent})").fetchall()]
+            ic = [r[1] for r in conn.execute(f"PRAGMA table_info({table})").fetchall()]
+            if dcol not in pc:
+                dcol = next((c for c in ("order_date", "quotation_date", "document_date", "date") if c in pc), None)
+            if not dcol or fk not in ic:
+                continue
+            pid = "product_id" if "product_id" in ic else ("item_id" if "item_id" in ic else None)
+            if not pid:
+                continue
+            year_conds.append(
+                f"EXISTS (SELECT 1 FROM {table} li JOIN {parent} h ON h.id=li.{fk} "
+                f"WHERE li.{pid}=p.id AND substr(COALESCE(h.{dcol},''),1,4)='{YEAR}')"
+            )
+
+        # production / stock adjustment
+        for table in ("stock_adjustments", "production_orders", "bom_items", "recipe_items"):
+            if table not in tables:
+                continue
+            tc = [r[1] for r in conn.execute(f"PRAGMA table_info({table})").fetchall()]
+            pid = "product_id" if "product_id" in tc else ("item_id" if "item_id" in tc else None)
+            dcol = next(
+                (c for c in ("adjustment_date", "order_date", "document_date", "created_at", "date") if c in tc),
+                None,
+            )
+            if pid and dcol:
+                year_conds.append(
+                    f"EXISTS (SELECT 1 FROM {table} x WHERE x.{pid}=p.id "
+                    f"AND substr(COALESCE(x.{dcol},''),1,4)='{YEAR}')"
+                )
+
+        # weight slips
+        if "weight_slips" in tables:
+            year_conds.append(
+                f"EXISTS (SELECT 1 FROM weight_slips ws WHERE ws.product_id=p.id "
+                f"AND substr(COALESCE(ws.slip_date,''),1,4)='{YEAR}')"
+            )
+
+        has_txn = " OR ".join(f"({c})" for c in year_conds) if year_conds else "0"
+
+        print(f"\nYear activity checks: {len(year_conds)}")
+        for i, c in enumerate(year_conds, 1):
+            print(f"  {i}. {c[:120]}...")
+
+        q = f"""
+        SELECT p.id, p.code, p.name,
+               COALESCE(p.is_active,1) AS is_active,
+               {open_expr} AS opening_master,
+               {wh_qty} AS warehouse_qty,
+               CASE WHEN ({has_txn}) THEN 1 ELSE 0 END AS has_2026_txn
+        FROM products p
+        ORDER BY p.code
+        """
+        rows = rows_to_list(conn.execute(q).fetchall())
+
+        idle = []
+        for r in rows:
+            opening = abs(float(r.get("opening_master") or 0))
+            wh = abs(float(r.get("warehouse_qty") or 0))
+            # NIL opening: master opening ~0 AND no warehouse qty (stock on hand treated as opening if no txns)
+            # User asked: opening balance NIL and no transaction this year
+            if opening <= 0.0005 and not r["has_2026_txn"]:
+                # also report current warehouse qty for awareness
+                idle.append(r)
+
+        print(f"\nIdle items (NIL opening + no {YEAR} txn): {len(idle)} of {len(rows)}")
+        with_stock = sum(1 for r in idle if abs(float(r.get("warehouse_qty") or 0)) > 0.0005)
+        print(f"  of which still have warehouse qty > 0: {with_stock}")
+
+        OUT.parent.mkdir(parents=True, exist_ok=True)
+        with OUT.open("w", newline="", encoding="utf-8") as f:
+            w = csv.DictWriter(
+                f,
+                fieldnames=["id", "code", "name", "is_active", "opening_master", "warehouse_qty", "has_2026_txn"],
+            )
+            w.writeheader()
+            for r in idle:
+                w.writerow(r)
+        print(f"Wrote {OUT}")
+
+        # preview
+        for r in idle[:30]:
+            print(
+                f"  {r['code']} | {r['name'][:40]:40} | OB={r['opening_master']} | "
+                f"WH={r['warehouse_qty']} | active={r['is_active']}"
+            )
+        if len(idle) > 30:
+            print(f"  ... +{len(idle)-30} more")
+
+
+if __name__ == "__main__":
+    main()

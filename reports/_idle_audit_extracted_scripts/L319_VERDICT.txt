@@ -1,0 +1,12 @@
+Deleted **742** idle party accounts (NIL opening, no 2026 ledger activity), keeping UNKNOWN:
+
+| Action | Count |
+|--------|------:|
+| Customers deleted | 570 |
+| Suppliers deleted | 172 |
+| UNKNOWN kept | 2 (1 customer + 1 supplier) |
+
+**Remaining:** 319 customers, 235 suppliers.
+
+Backup before delete: `C:\MY ERPS\ifs_erp_before_idle_party_delete.db`  
+(4 weight slips on 3 of those parties were unlinked so the masters could be removed.)

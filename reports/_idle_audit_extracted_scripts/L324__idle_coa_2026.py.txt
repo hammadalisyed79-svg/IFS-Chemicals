@@ -1,0 +1,106 @@
+"""List COA accounts: NIL opening, no 2026 GL activity."""
+import csv
+import json
+from pathlib import Path
+import database as db
+
+YEAR_FROM = "2026-01-01"
+YEAR_TO = "2026-12-31"
+
+
+def has_2026_activity(conn, account_id: int) -> bool:
+    checks = [
+        (
+            """SELECT 1 FROM general_ledger
+               WHERE account_id=? AND entry_date>=? AND entry_date<=? LIMIT 1""",
+            (account_id, YEAR_FROM, YEAR_TO),
+        ),
+        (
+            """SELECT 1 FROM journal_voucher_lines jvl
+               JOIN journal_vouchers jv ON jv.id=jvl.voucher_id
+               WHERE jvl.account_id=? AND jv.voucher_date>=? AND jv.voucher_date<=? LIMIT 1""",
+            (account_id, YEAR_FROM, YEAR_TO),
+        ),
+        (
+            """SELECT 1 FROM cash_receipts
+               WHERE account_id=? AND receipt_date>=? AND receipt_date<=? LIMIT 1""",
+            (account_id, YEAR_FROM, YEAR_TO),
+        ),
+        (
+            """SELECT 1 FROM cash_payments
+               WHERE account_id=? AND payment_date>=? AND payment_date<=? LIMIT 1""",
+            (account_id, YEAR_FROM, YEAR_TO),
+        ),
+        (
+            """SELECT 1 FROM bank_receipts
+               WHERE account_id=? AND receipt_date>=? AND receipt_date<=? LIMIT 1""",
+            (account_id, YEAR_FROM, YEAR_TO),
+        ),
+        (
+            """SELECT 1 FROM bank_payments
+               WHERE account_id=? AND payment_date>=? AND payment_date<=? LIMIT 1""",
+            (account_id, YEAR_FROM, YEAR_TO),
+        ),
+    ]
+    for sql, params in checks:
+        try:
+            if conn.execute(sql, params).fetchone():
+                return True
+        except Exception:
+            continue
+    return False
+
+
+rows = []
+with db.get_connection() as conn:
+    # also count children (parent accounts)
+    accounts = conn.execute(
+        """SELECT a.id, a.code, a.name, g.group_type, g.name AS group_name,
+                  COALESCE(a.opening_balance,0) AS opening_balance,
+                  COALESCE(a.current_balance,0) AS current_balance,
+                  COALESCE(a.is_active,1) AS is_active,
+                  a.parent_id,
+                  (SELECT COUNT(*) FROM chart_of_accounts c WHERE c.parent_id=a.id) AS child_count
+           FROM chart_of_accounts a
+           JOIN account_groups g ON a.account_group_id=g.id
+           WHERE ABS(COALESCE(a.opening_balance,0)) < 0.009
+           ORDER BY g.group_type, a.code"""
+    ).fetchall()
+    print("candidates_nil_ob", len(accounts))
+    for a in accounts:
+        aid = int(a["id"])
+        if has_2026_activity(conn, aid):
+            continue
+        rows.append({
+            "id": aid,
+            "type": (a["group_type"] or "").title(),
+            "group": a["group_name"] or "",
+            "code": a["code"] or "",
+            "name": a["name"] or "",
+            "opening": float(a["opening_balance"] or 0),
+            "current": float(a["current_balance"] or 0),
+            "active": bool(a["is_active"]),
+            "children": int(a["child_count"] or 0),
+        })
+
+# stats
+from collections import Counter
+by_type = Counter(r["type"] for r in rows)
+nonzero_cur = sum(1 for r in rows if abs(r["current"]) >= 0.009)
+print("idle_total", len(rows))
+print("by_type", dict(by_type))
+print("nonzero_current", nonzero_cur)
+
+out_json = Path(r"C:\MY ERPS\_idle_coa_2026.json")
+out_json.write_text(json.dumps(rows, indent=2), encoding="utf-8")
+Path("reports").mkdir(exist_ok=True)
+csv_path = Path(r"C:\MY ERPS\reports\idle_coa_gl_accounts_2026.csv")
+with csv_path.open("w", newline="", encoding="utf-8-sig") as f:
+    w = csv.DictWriter(
+        f,
+        fieldnames=["type", "group", "code", "name", "opening", "current", "active", "children"],
+    )
+    w.writeheader()
+    for r in rows:
+        w.writerow({k: r[k] for k in w.fieldnames})
+print("csv", csv_path)

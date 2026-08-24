@@ -1,0 +1,153 @@
+{
+  "total": 347,
+  "by_deleted_as": {
+    "customer": 275,
+    "supplier": 72
+  },
+  "by_fmye_category": {
+    "Customer(S)": 275,
+    "Supplier(V)": 72
+  },
+  "top_20": [
+    {
+      "code": "100016",
+      "name": "SHAFI SONS SOAP FACTORY",
+      "deleted_as": "customer",
+      "historical_ob": 86283495.0,
+      "reason_snippet": "FMYE historical OB period 2020=86283495.00 (cleared by 2026)"
+    },
+    {
+      "code": "100535",
+      "name": "SHAH SALMAN (PARLEY)",
+      "deleted_as": "customer",
+      "historical_ob": -37423907.0,
+      "reason_snippet": "FMYE historical OB period 2022=-37423907.00 (cleared by 2026)"
+    },
+    {
+      "code": "200113",
+      "name": "IMPORT OF GRAVIURE MACHINE",
+      "deleted_as": "supplier",
+      "historical_ob": 26118782.08,
+      "reason_snippet": "FMYE historical OB period 2022=26118782.08 (cleared by 2026)"
+    },
+    {
+      "code": "200335",
+      "name": "WALEED ENTERPRISES",
+      "deleted_as": "supplier",
+      "historical_ob": -17682000.0,
+      "reason_snippet": "FMYE historical OB period 2025=-17682000.00 (cleared by 2026)"
+    },
+    {
+      "code": "100690",
+      "name": "LAURIC ACID",
+      "deleted_as": "customer",
+      "historical_ob": -16335699.01,
+      "reason_snippet": "FMYE historical OB period 2024=-16335699.01 (cleared by 2026)"
+    },
+    {
+      "code": "200055",
+      "name": "C/O ABDULLAH ZAKI SB",
+      "deleted_as": "supplier",
+      "historical_ob": -13193889.0,
+      "reason_snippet": "FMYE historical OB period 2021=-13193889.00 (cleared by 2026)"
+    },
+    {
+      "code": "100414",
+      "name": "FAYYAZ SB MISC A/C",
+      "deleted_as": "customer",
+      "historical_ob": 10383754.0,
+      "reason_snippet": "FMYE historical OB period 2022=10383754.00 (cleared by 2026)"
+    },
+    {
+      "code": "100747",
+      "name": "RAHIM DAD PROPERY A/C",
+      "deleted_as": "customer",
+      "historical_ob": -10000000.0,
+      "reason_snippet": "FMYE historical OB period 2024=-10000000.00 (cleared by 2026)"
+    },
+    {
+      "code": "100748",
+      "name": "RAFIULLAH SB PROPERTY A/C",
+      "deleted_as": "customer",
+      "historical_ob": -10000000.0,
+      "reason_snippet": "FMYE historical OB period 2024=-10000000.00 (cleared by 2026)"
+    },
+    {
+      "code": "100344",
+      "name": "MANUCHAR PAKISTAN",
+      "deleted_as": "customer",
+      "historical_ob": -6571776.0,
+      "reason_snippet": "FMYE historical OB period 2023=-6571776.00 (cleared by 2026)"
+    },
+    {
+      "code": "200066",
+      "name": "BISMILLAH ENGINEERING LAHORE",
+      "deleted_as": "supplier",
+      "historical_ob": 6348460.0,
+      "reason_snippet": "FMYE historical OB period 2022=6348460.00 (cleared by 2026)"
+    },
+    {
+      "code": "200071",
+      "name": "IMPORT OF MACHINERY (FLEXO)",
+      "deleted_as": "supplier",
+      "historical_ob": 6143630.48,
+      "reason_snippet": "FMYE historical OB period 2021=6143630.48 (cleared by 2026)"
+    },
+    {
+      "code": "100168",
+      "name": "SHAFI SONS PACKAGES",
+      "deleted_as": "customer",
+      "historical_ob": 6020674.01,
+      "reason_snippet": "FMYE historical OB period 2025=6020674.01 (cleared by 2026)"
+    },
+    {
+      "code": "100353",
+      "name": "SHAFIULLAH DARGAI",
+      "deleted_as": "customer",
+      "historical_ob": 4795590.0,
+      "reason_snippet": "FMYE historical OB period 2022=4795590.00 (cleared by 2026)"
+    },
+    {
+      "code": "200111",
+      "name": "ARAB PACKAGES MULTAN",
+      "deleted_as": "supplier",
+      "historical_ob": -4105567.0,
+      "reason_snippet": "FMYE historical OB period 2022=-4105567.00 (cleared by 2026)"
+    },
+    {
+      "code": "100746",
+      "name": "ASIF TRADERS",
+      "deleted_as": "customer",
+      "historical_ob": 3211250.0,
+      "reason_snippet": "FMYE historical OB period 2025=3211250.00 (cleared by 2026)"
+    },
+    {
+      "code": "200272",
+      "name": "GOLDEN PACKAGES PVT LTD",
+      "deleted_as": "supplier",
+      "historical_ob": -3163503.0,
+      "reason_snippet": "FMYE historical OB period 2024=-3163503.00 (cleared by 2026)"
+    },
+    {
+      "code": "200267",
+      "name": "GONDAL ROOF",
+      "deleted_as": "supplier",
+      "historical_ob": 3000800.0,
+      "reason_snippet": "FMYE historical OB period 2024=3000800.00 (cleared by 2026)"
+    },
+    {
+      "code": "200279",
+      "name": "KHAWAJA ADNAN OTHER",
+      "deleted_as": "supplier",
+      "historical_ob": -2747500.0,
+      "reason_snippet": "FMYE historical OB period 2024=-2747500.00 (cleared by 2026)"
+    },
+    {
+      "code": "100660",
+      "name": "S.A TRADERS (RAFIULLAH KHAN)",
+      "deleted_as": "customer",
+      "historical_ob": 2339975.0,
+      "reason_snippet": "FMYE historical OB period 2023=2339975.00 (cleared by 2026)"
+    }
+  ]
+}

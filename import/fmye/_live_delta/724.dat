@@ -1,0 +1,5 @@
+'salestaxrate',,'saller','regrate',,,0,,0,0,'#,##0.00',0,0,0,,'N',,,,
+'salestaxrate',,'saller','unregrate',,,0,,0,0,'#,##0.00',0,0,0,,'N',,,,
+'salestaxrate',,'saller','retrate',,,0,,0,0,'#,##0.00',0,0,0,,'N',,,,
+'salestaxrate',,'saller','otherrate',,,0,,0,0,'#,##0.00',0,0,0,,'N',,,,
+'voucher',,'saller','accountcode2',,'Accountcode2:',0,'Accountcode2',0,23,,0,65,311,,'N',,,,

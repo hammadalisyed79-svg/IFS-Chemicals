@@ -1,0 +1,99 @@
+FMYE11.db -> IFS Chemicals ERP — Export Instructions (SQL Anywhere 11)
+======================================================================
+
+You have Sybase Central + SQL Anywhere 11 — use ONE of the methods below.
+
+======================================================================
+METHOD A — FULL DATABASE EXPORT (recommended backup)
+======================================================================
+
+1. Open Command Prompt on the PC where FMYE11.db lives.
+
+2. Find dbunload.exe (usually):
+     C:\Program Files\SQL Anywhere 11\Bin32\dbunload.exe
+   or
+     C:\Program Files\Sybase\SQL Anywhere 11\Bin32\dbunload.exe
+
+3. Create export folder:
+     mkdir C:\FMYE_EXPORT\full
+
+4. Run (change DBF path and password if needed):
+
+     mkdir C:\FMYE_EXPORT\full
+     cd /d C:\FMYE_EXPORT\full
+
+     "C:\Program Files\SQL Anywhere 11\Bin32\dbunload.exe" -c "DBF=C:\Users\Hammad Syed\Desktop\FMYE11.db;UID=DBA;PWD=sql" .
+
+   SYNTAX NOTES:
+     - The folder path goes at the END (here "." = current folder after cd).
+     - Do NOT use -an (creates new DB — PASSWORD error).
+     - Do NOT put a path after -d (-d means "data only", no path).
+     - reload.sql is written in the current folder (C:\FMYE_EXPORT\full).
+
+   Full export (schema + data) = command above with NO extra flags.
+
+   Data only (optional):
+     dbunload -c "DBF=...;UID=DBA;PWD=sql" -d .
+
+   Schema only (optional):
+     dbunload -c "DBF=...;UID=DBA;PWD=sql" -n .
+
+5. Copy the whole C:\FMYE_EXPORT\full folder to:
+     E:\MY ERPS\import\fmye\full\
+   Send to us — we can parse .dat files for import.
+
+======================================================================
+METHOD B — CSV EXPORT (best for direct ERP import)
+======================================================================
+
+1. Sybase Central -> Tools -> SQL Anywhere 11 -> Interactive SQL (dbisql)
+
+2. Connect: Database -> Connect -> choose FMYE11 (user DBA)
+
+3. Create folder:  C:\FMYE_EXPORT\csv\
+
+4. Open and run:  E:\MY ERPS\import\fmye\export_all_fmye.sql
+   - STEP 1 lists all tables
+   - STEP 3 generates UNLOAD commands — copy each line from Results and Execute
+
+5. Copy all CSV files to:
+     E:\MY ERPS\import\fmye\csv\
+
+6. On ERP PC run:
+     cd "E:\MY ERPS"
+     python import_fmye_from_csv.py              (preview)
+     python import_fmye_from_csv.py --apply      (import)
+
+======================================================================
+METHOD C — Sybase Central GUI (single table)
+======================================================================
+
+1. In left tree: FMYE11 -> Tables -> click table (e.g. Voucher (salter))
+
+2. Data tab -> right-click grid -> Export (or File -> Export)
+   Save as CSV to C:\FMYE_EXPORT\csv\
+
+   Repeat for each important table (slow for full DB — use Method A or B).
+
+======================================================================
+TABLES WE NEED MOST (from your Voucher screen)
+======================================================================
+
+  Voucher (salter)     — cash/bank/JV entries (CPV, CRV, JVR, BPV...)
+  Party / Customer / Supplier tables (find in STEP 1 list)
+  Item / Product / Stock tables
+  Sales invoice + line tables
+  Purchase invoice + line tables
+  Account / Chart of accounts
+
+After export, share 1–2 sample CSV files OR the table list from STEP 1.
+We will map columns to the new ERP import script.
+
+======================================================================
+NOTES
+======================================================================
+
+- Table names with spaces need quotes:  DBA."Voucher (salter)"
+- Default SQL Anywhere user is often DBA / password sql (yours may differ)
+- Filter years 2023–2026 in UNLOAD WHERE clause if file size is large
+- Do NOT overwrite live ifs_erp.db without backup — import script auto-backs up

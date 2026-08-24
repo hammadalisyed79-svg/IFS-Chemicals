@@ -1,0 +1,193 @@
+"""Delete idle customer/supplier masters (NIL OB, no 2026 tx), keep UNKNOWN."""
+from __future__ import annotations
+
+import database as db
+
+YEAR_FROM = "2026-01-01"
+YEAR_TO = "2026-12-31"
+
+
+def _is_unknown(code, name) -> bool:
+    c = str(code or "").strip().upper()
+    n = str(name or "").strip().upper()
+    return c in ("UNKNOWN", "UNK", "") and "UNKNOWN" in n or c == "UNKNOWN" or n == "UNKNOWN PARTY" or n == "UNKNOWN"
+
+
+def _has_2026_customer_tx(conn, cid: int) -> bool:
+    checks = [
+        ("SELECT 1 FROM sales_invoices WHERE customer_id=? AND invoice_date>=? AND invoice_date<=? LIMIT 1",
+         (cid, YEAR_FROM, YEAR_TO)),
+        ("SELECT 1 FROM sales_returns WHERE customer_id=? AND return_date>=? AND return_date<=? LIMIT 1",
+         (cid, YEAR_FROM, YEAR_TO)),
+        ("SELECT 1 FROM cash_receipts WHERE party_type='customer' AND party_id=? AND receipt_date>=? AND receipt_date<=? LIMIT 1",
+         (cid, YEAR_FROM, YEAR_TO)),
+        ("SELECT 1 FROM bank_receipts WHERE party_type='customer' AND party_id=? AND receipt_date>=? AND receipt_date<=? LIMIT 1",
+         (cid, YEAR_FROM, YEAR_TO)),
+        ("SELECT 1 FROM fmye_party_entries WHERE party_type='customer' AND party_id=? AND entry_date>=? AND entry_date<=? LIMIT 1",
+         (cid, YEAR_FROM, YEAR_TO)),
+        ("SELECT 1 FROM party_transfers WHERE ((from_party_type='customer' AND from_party_id=?) OR (to_party_type='customer' AND to_party_id=?)) AND transfer_date>=? AND transfer_date<=? LIMIT 1",
+         (cid, cid, YEAR_FROM, YEAR_TO)),
+    ]
+    for sql, params in checks:
+        try:
+            if conn.execute(sql, params).fetchone():
+                return True
+        except Exception:
+            continue
+    return False
+
+
+def _has_2026_supplier_tx(conn, sid: int) -> bool:
+    checks = [
+        ("SELECT 1 FROM purchase_invoices WHERE supplier_id=? AND invoice_date>=? AND invoice_date<=? LIMIT 1",
+         (sid, YEAR_FROM, YEAR_TO)),
+        ("SELECT 1 FROM purchase_returns WHERE supplier_id=? AND return_date>=? AND return_date<=? LIMIT 1",
+         (sid, YEAR_FROM, YEAR_TO)),
+        ("SELECT 1 FROM cash_payments WHERE party_type='supplier' AND party_id=? AND payment_date>=? AND payment_date<=? LIMIT 1",
+         (sid, YEAR_FROM, YEAR_TO)),
+        ("SELECT 1 FROM bank_payments WHERE party_type='supplier' AND party_id=? AND payment_date>=? AND payment_date<=? LIMIT 1",
+         (sid, YEAR_FROM, YEAR_TO)),
+        ("SELECT 1 FROM fmye_party_entries WHERE party_type='supplier' AND party_id=? AND entry_date>=? AND entry_date<=? LIMIT 1",
+         (sid, YEAR_FROM, YEAR_TO)),
+        ("SELECT 1 FROM party_transfers WHERE ((from_party_type='supplier' AND from_party_id=?) OR (to_party_type='supplier' AND to_party_id=?)) AND transfer_date>=? AND transfer_date<=? LIMIT 1",
+         (sid, sid, YEAR_FROM, YEAR_TO)),
+    ]
+    for sql, params in checks:
+        try:
+            if conn.execute(sql, params).fetchone():
+                return True
+        except Exception:
+            continue
+    return False
+
+
+def _customer_ref_counts(conn, cid: int) -> dict:
+    q = {
+        "sales_invoices": "SELECT COUNT(*) FROM sales_invoices WHERE customer_id=?",
+        "sales_orders": "SELECT COUNT(*) FROM sales_orders WHERE customer_id=?",
+        "sales_returns": "SELECT COUNT(*) FROM sales_returns WHERE customer_id=?",
+        "quotations": "SELECT COUNT(*) FROM quotations WHERE customer_id=?",
+        "delivery_notes": "SELECT COUNT(*) FROM delivery_notes WHERE customer_id=?",
+        "weight_slips": "SELECT COUNT(*) FROM weight_slips WHERE customer_id=?",
+        "gate_passes": "SELECT COUNT(*) FROM gate_passes WHERE customer_id=?",
+        "cash_receipts": "SELECT COUNT(*) FROM cash_receipts WHERE party_type='customer' AND party_id=?",
+        "bank_receipts": "SELECT COUNT(*) FROM bank_receipts WHERE party_type='customer' AND party_id=?",
+        "fmye_party_entries": "SELECT COUNT(*) FROM fmye_party_entries WHERE party_type='customer' AND party_id=?",
+        "party_transfers": """SELECT COUNT(*) FROM party_transfers
+            WHERE (from_party_type='customer' AND from_party_id=?)
+               OR (to_party_type='customer' AND to_party_id=?)""",
+        "users_linked": "SELECT COUNT(*) FROM users WHERE linked_customer_id=?",
+        "distributor_profiles": "SELECT COUNT(*) FROM distributor_profiles WHERE customer_id=?",
+        "portal_orders": "SELECT COUNT(*) FROM portal_orders WHERE customer_id=?",
+    }
+    out = {}
+    for name, sql in q.items():
+        try:
+            params = (cid, cid) if name == "party_transfers" else (cid,)
+            n = conn.execute(sql, params).fetchone()[0]
+            if n:
+                out[name] = n
+        except Exception:
+            continue
+    return out
+
+
+def _supplier_ref_counts(conn, sid: int) -> dict:
+    q = {
+        "purchase_invoices": "SELECT COUNT(*) FROM purchase_invoices WHERE supplier_id=?",
+        "purchase_orders": "SELECT COUNT(*) FROM purchase_orders WHERE supplier_id=?",
+        "purchase_returns": "SELECT COUNT(*) FROM purchase_returns WHERE supplier_id=?",
+        "goods_receipt_notes": "SELECT COUNT(*) FROM goods_receipt_notes WHERE supplier_id=?",
+        "weight_slips": "SELECT COUNT(*) FROM weight_slips WHERE supplier_id=?",
+        "gate_passes": "SELECT COUNT(*) FROM gate_passes WHERE supplier_id=?",
+        "cash_payments": "SELECT COUNT(*) FROM cash_payments WHERE party_type='supplier' AND party_id=?",
+        "bank_payments": "SELECT COUNT(*) FROM bank_payments WHERE party_type='supplier' AND party_id=?",
+        "fmye_party_entries": "SELECT COUNT(*) FROM fmye_party_entries WHERE party_type='supplier' AND party_id=?",
+        "party_transfers": """SELECT COUNT(*) FROM party_transfers
+            WHERE (from_party_type='supplier' AND from_party_id=?)
+               OR (to_party_type='supplier' AND to_party_id=?)""",
+    }
+    out = {}
+    for name, sql in q.items():
+        try:
+            params = (sid, sid) if name == "party_transfers" else (sid,)
+            n = conn.execute(sql, params).fetchone()[0]
+            if n:
+                out[name] = n
+        except Exception:
+            continue
+    return out
+
+
+def main():
+    # Backup first
+    import shutil
+    from pathlib import Path
+    src = Path(db.DB_PATH)
+    bak = src.with_name(src.stem + "_before_idle_party_delete.db")
+    if not bak.exists():
+        shutil.copy2(src, bak)
+        print("backup", bak)
+    else:
+        print("backup exists", bak)
+
+    deleted_c = deleted_s = skipped_unknown = skipped_refs = 0
+    skip_samples = []
+
+    with db.get_connection() as conn:
+        custs = conn.execute(
+            """SELECT id, code, name FROM customers
+               WHERE ABS(COALESCE(opening_balance,0)) < 0.009
+               ORDER BY code"""
+        ).fetchall()
+        for c in custs:
+            cid = int(c["id"])
+            code, name = c["code"], c["name"]
+            if _is_unknown(code, name):
+                skipped_unknown += 1
+                continue
+            if _has_2026_customer_tx(conn, cid):
+                continue
+            refs = _customer_ref_counts(conn, cid)
+            if refs:
+                skipped_refs += 1
+                if len(skip_samples) < 15:
+                    skip_samples.append(("Customer", code, name, refs))
+                continue
+            conn.execute("DELETE FROM customers WHERE id=?", (cid,))
+            deleted_c += 1
+
+        sups = conn.execute(
+            """SELECT id, code, name FROM suppliers
+               WHERE ABS(COALESCE(opening_balance,0)) < 0.009
+               ORDER BY code"""
+        ).fetchall()
+        for s in sups:
+            sid = int(s["id"])
+            code, name = s["code"], s["name"]
+            if _is_unknown(code, name):
+                skipped_unknown += 1
+                continue
+            if _has_2026_supplier_tx(conn, sid):
+                continue
+            refs = _supplier_ref_counts(conn, sid)
+            if refs:
+                skipped_refs += 1
+                if len(skip_samples) < 30:
+                    skip_samples.append(("Supplier", code, name, refs))
+                continue
+            conn.execute("DELETE FROM suppliers WHERE id=?", (sid,))
+            deleted_s += 1
+
+    db.invalidate("customers")
+    db.invalidate("suppliers")
+    print("deleted_customers", deleted_c)
+    print("deleted_suppliers", deleted_s)
+    print("skipped_unknown", skipped_unknown)
+    print("skipped_with_history_refs", skipped_refs)
+    for row in skip_samples:
+        print(" SKIP", row)
+
+
+if __name__ == "__main__":
+    main()

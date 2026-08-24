@@ -1,0 +1,1554 @@
+{
+  "when": "2026-08-22T10:49:41",
+  "cutoff": "2026-08-19",
+  "already_closed": [
+    {
+      "date": "2026-08-08",
+      "receipts": 9,
+      "receipt_amount": 328860.0,
+      "payments": 22,
+      "payment_amount": 404370.0,
+      "entries": 31,
+      "closed_at": "2026-08-09 09:10:55"
+    },
+    {
+      "date": "2026-08-09",
+      "receipts": 17,
+      "receipt_amount": 3147540.0,
+      "payments": 19,
+      "payment_amount": 2705045.0,
+      "entries": 36,
+      "closed_at": "2026-08-10 09:10:12"
+    },
+    {
+      "date": "2026-08-11",
+      "receipts": 14,
+      "receipt_amount": 49140.0,
+      "payments": 12,
+      "payment_amount": 242540.0,
+      "entries": 26,
+      "closed_at": "2026-08-12 10:25:25"
+    },
+    {
+      "date": "2026-08-12",
+      "receipts": 11,
+      "receipt_amount": 571550.0,
+      "payments": 6,
+      "payment_amount": 159320.0,
+      "entries": 17,
+      "closed_at": "2026-08-13 09:30:21"
+    },
+    {
+      "date": "2026-08-13",
+      "receipts": 12,
+      "receipt_amount": 39870.0,
+      "payments": 16,
+      "payment_amount": 213201.0,
+      "entries": 28,
+      "closed_at": "2026-08-16 17:53:35"
+    }
+  ],
+  "newly_closed": [
+    {
+      "date": "2026-01-01",
+      "receipts": 11,
+      "receipt_amount": 20040.0,
+      "payments": 6,
+      "payment_amount": 90810.0,
+      "entries": 17
+    },
+    {
+      "date": "2026-01-03",
+      "receipts": 15,
+      "receipt_amount": 687750.0,
+      "payments": 41,
+      "payment_amount": 420430.0,
+      "entries": 56
+    },
+    {
+      "date": "2026-01-04",
+      "receipts": 13,
+      "receipt_amount": 578090.0,
+      "payments": 14,
+      "payment_amount": 1000610.0,
+      "entries": 27
+    },
+    {
+      "date": "2026-01-05",
+      "receipts": 14,
+      "receipt_amount": 1136400.0,
+      "payments": 5,
+      "payment_amount": 241350.0,
+      "entries": 19
+    },
+    {
+      "date": "2026-01-06",
+      "receipts": 14,
+      "receipt_amount": 3039510.0,
+      "payments": 21,
+      "payment_amount": 2331910.0,
+      "entries": 35
+    },
+    {
+      "date": "2026-01-07",
+      "receipts": 7,
+      "receipt_amount": 508960.0,
+      "payments": 9,
+      "payment_amount": 514960.0,
+      "entries": 16
+    },
+    {
+      "date": "2026-01-08",
+      "receipts": 25,
+      "receipt_amount": 1749140.0,
+      "payments": 17,
+      "payment_amount": 3265050.0,
+      "entries": 42
+    },
+    {
+      "date": "2026-01-10",
+      "receipts": 19,
+      "receipt_amount": 1130700.0,
+      "payments": 21,
+      "payment_amount": 701790.0,
+      "entries": 40
+    },
+    {
+      "date": "2026-01-11",
+      "receipts": 7,
+      "receipt_amount": 569130.0,
+      "payments": 9,
+      "payment_amount": 367290.0,
+      "entries": 16
+    },
+    {
+      "date": "2026-01-12",
+      "receipts": 6,
+      "receipt_amount": 539990.0,
+      "payments": 10,
+      "payment_amount": 222750.0,
+      "entries": 16
+    },
+    {
+      "date": "2026-01-13",
+      "receipts": 14,
+      "receipt_amount": 1363670.0,
+      "payments": 14,
+      "payment_amount": 1611700.0,
+      "entries": 28
+    },
+    {
+      "date": "2026-01-14",
+      "receipts": 8,
+      "receipt_amount": 288910.0,
+      "payments": 17,
+      "payment_amount": 386070.0,
+      "entries": 25
+    },
+    {
+      "date": "2026-01-15",
+      "receipts": 14,
+      "receipt_amount": 218590.0,
+      "payments": 19,
+      "payment_amount": 356000.0,
+      "entries": 33
+    },
+    {
+      "date": "2026-01-17",
+      "receipts": 17,
+      "receipt_amount": 486980.0,
+      "payments": 7,
+      "payment_amount": 102240.0,
+      "entries": 24
+    },
+    {
+      "date": "2026-01-18",
+      "receipts": 11,
+      "receipt_amount": 621420.0,
+      "payments": 12,
+      "payment_amount": 444060.0,
+      "entries": 23
+    },
+    {
+      "date": "2026-01-19",
+      "receipts": 17,
+      "receipt_amount": 1396340.0,
+      "payments": 13,
+      "payment_amount": 1276730.0,
+      "entries": 30
+    },
+    {
+      "date": "2026-01-20",
+      "receipts": 9,
+      "receipt_amount": 1718570.0,
+      "payments": 19,
+      "payment_amount": 852050.0,
+      "entries": 28
+    },
+    {
+      "date": "2026-01-21",
+      "receipts": 11,
+      "receipt_amount": 1149120.0,
+      "payments": 5,
+      "payment_amount": 2900000.0,
+      "entries": 16
+    },
+    {
+      "date": "2026-01-22",
+      "receipts": 15,
+      "receipt_amount": 1170970.0,
+      "payments": 12,
+      "payment_amount": 1065940.0,
+      "entries": 27
+    },
+    {
+      "date": "2026-01-24",
+      "receipts": 17,
+      "receipt_amount": 1070240.0,
+      "payments": 27,
+      "payment_amount": 1442810.0,
+      "entries": 44
+    },
+    {
+      "date": "2026-01-25",
+      "receipts": 11,
+      "receipt_amount": 1358080.0,
+      "payments": 18,
+      "payment_amount": 1092310.0,
+      "entries": 29
+    },
+    {
+      "date": "2026-01-26",
+      "receipts": 9,
+      "receipt_amount": 425580.0,
+      "payments": 13,
+      "payment_amount": 343070.0,
+      "entries": 22
+    },
+    {
+      "date": "2026-01-27",
+      "receipts": 21,
+      "receipt_amount": 1352020.0,
+      "payments": 17,
+      "payment_amount": 1292840.0,
+      "entries": 38
+    },
+    {
+      "date": "2026-01-28",
+      "receipts": 8,
+      "receipt_amount": 297490.0,
+      "payments": 7,
+      "payment_amount": 400400.0,
+      "entries": 15
+    },
+    {
+      "date": "2026-01-29",
+      "receipts": 19,
+      "receipt_amount": 1291480.0,
+      "payments": 11,
+      "payment_amount": 1472840.0,
+      "entries": 30
+    },
+    {
+      "date": "2026-01-31",
+      "receipts": 17,
+      "receipt_amount": 1513760.0,
+      "payments": 19,
+      "payment_amount": 1577120.0,
+      "entries": 36
+    },
+    {
+      "date": "2026-02-01",
+      "receipts": 12,
+      "receipt_amount": 555420.0,
+      "payments": 10,
+      "payment_amount": 410850.0,
+      "entries": 22
+    },
+    {
+      "date": "2026-02-02",
+      "receipts": 10,
+      "receipt_amount": 875620.0,
+      "payments": 7,
+      "payment_amount": 562220.0,
+      "entries": 17
+    },
+    {
+      "date": "2026-02-03",
+      "receipts": 18,
+      "receipt_amount": 834660.0,
+      "payments": 14,
+      "payment_amount": 555430.0,
+      "entries": 32
+    },
+    {
+      "date": "2026-02-04",
+      "receipts": 14,
+      "receipt_amount": 1107280.0,
+      "payments": 14,
+      "payment_amount": 84990.0,
+      "entries": 28
+    },
+    {
+      "date": "2026-02-05",
+      "receipts": 24,
+      "receipt_amount": 322800.0,
+      "payments": 5,
+      "payment_amount": 1970590.0,
+      "entries": 29
+    },
+    {
+      "date": "2026-02-07",
+      "receipts": 11,
+      "receipt_amount": 2352980.0,
+      "payments": 11,
+      "payment_amount": 1514960.0,
+      "entries": 22
+    },
+    {
+      "date": "2026-02-08",
+      "receipts": 21,
+      "receipt_amount": 3585590.0,
+      "payments": 16,
+      "payment_amount": 4438310.0,
+      "entries": 37
+    },
+    {
+      "date": "2026-02-09",
+      "receipts": 24,
+      "receipt_amount": 869370.0,
+      "payments": 18,
+      "payment_amount": 921740.0,
+      "entries": 42
+    },
+    {
+      "date": "2026-02-10",
+      "receipts": 15,
+      "receipt_amount": 1261660.0,
+      "payments": 27,
+      "payment_amount": 1198780.0,
+      "entries": 42
+    },
+    {
+      "date": "2026-02-11",
+      "receipts": 11,
+      "receipt_amount": 207270.0,
+      "payments": 23,
+      "payment_amount": 345680.0,
+      "entries": 34
+    },
+    {
+      "date": "2026-02-12",
+      "receipts": 16,
+      "receipt_amount": 22050.0,
+      "payments": 11,
+      "payment_amount": 65980.0,
+      "entries": 27
+    },
+    {
+      "date": "2026-02-14",
+      "receipts": 16,
+      "receipt_amount": 1607720.0,
+      "payments": 17,
+      "payment_amount": 127950.0,
+      "entries": 33
+    },
+    {
+      "date": "2026-02-15",
+      "receipts": 13,
+      "receipt_amount": 773110.0,
+      "payments": 11,
+      "payment_amount": 279280.0,
+      "entries": 24
+    },
+    {
+      "date": "2026-02-16",
+      "receipts": 13,
+      "receipt_amount": 1945380.0,
+      "payments": 11,
+      "payment_amount": 2926420.0,
+      "entries": 24
+    },
+    {
+      "date": "2026-02-17",
+      "receipts": 20,
+      "receipt_amount": 708970.0,
+      "payments": 17,
+      "payment_amount": 457420.0,
+      "entries": 37
+    },
+    {
+      "date": "2026-02-18",
+      "receipts": 15,
+      "receipt_amount": 271650.0,
+      "payments": 8,
+      "payment_amount": 253840.0,
+      "entries": 23
+    },
+    {
+      "date": "2026-02-19",
+      "receipts": 17,
+      "receipt_amount": 31440.0,
+      "payments": 7,
+      "payment_amount": 187770.0,
+      "entries": 24
+    },
+    {
+      "date": "2026-02-21",
+      "receipts": 20,
+      "receipt_amount": 2044510.0,
+      "payments": 25,
+      "payment_amount": 1334850.0,
+      "entries": 45
+    },
+    {
+      "date": "2026-02-22",
+      "receipts": 16,
+      "receipt_amount": 1372410.0,
+      "payments": 19,
+      "payment_amount": 1073660.0,
+      "entries": 35
+    },
+    {
+      "date": "2026-02-23",
+      "receipts": 12,
+      "receipt_amount": 1128270.0,
+      "payments": 20,
+      "payment_amount": 2069890.0,
+      "entries": 32
+    },
+    {
+      "date": "2026-02-24",
+      "receipts": 14,
+      "receipt_amount": 431300.0,
+      "payments": 7,
+      "payment_amount": 1191070.0,
+      "entries": 21
+    },
+    {
+      "date": "2026-02-25",
+      "receipts": 12,
+      "receipt_amount": 1410900.0,
+      "payments": 16,
+      "payment_amount": 192680.0,
+      "entries": 28
+    },
+    {
+      "date": "2026-02-26",
+      "receipts": 23,
+      "receipt_amount": 625120.0,
+      "payments": 16,
+      "payment_amount": 682070.0,
+      "entries": 39
+    },
+    {
+      "date": "2026-02-28",
+      "receipts": 13,
+      "receipt_amount": 530990.0,
+      "payments": 11,
+      "payment_amount": 1671350.0,
+      "entries": 24
+    },
+    {
+      "date": "2026-03-01",
+      "receipts": 7,
+      "receipt_amount": 670140.0,
+      "payments": 16,
+      "payment_amount": 619940.0,
+      "entries": 23
+    },
+    {
+      "date": "2026-03-02",
+      "receipts": 12,
+      "receipt_amount": 524990.0,
+      "payments": 9,
+      "payment_amount": 251350.0,
+      "entries": 21
+    },
+    {
+      "date": "2026-03-03",
+      "receipts": 11,
+      "receipt_amount": 243860.0,
+      "payments": 17,
+      "payment_amount": 501980.0,
+      "entries": 28
+    },
+    {
+      "date": "2026-03-04",
+      "receipts": 19,
+      "receipt_amount": 411730.0,
+      "payments": 8,
+      "payment_amount": 911050.0,
+      "entries": 27
+    },
+    {
+      "date": "2026-03-05",
+      "receipts": 20,
+      "receipt_amount": 3018130.0,
+      "payments": 5,
+      "payment_amount": 2622920.0,
+      "entries": 25
+    },
+    {
+      "date": "2026-03-07",
+      "receipts": 27,
+      "receipt_amount": 3782330.0,
+      "payments": 40,
+      "payment_amount": 3042990.0,
+      "entries": 67
+    },
+    {
+      "date": "2026-03-08",
+      "receipts": 18,
+      "receipt_amount": 1340410.0,
+      "payments": 15,
+      "payment_amount": 130620.0,
+      "entries": 33
+    },
+    {
+      "date": "2026-03-09",
+      "receipts": 13,
+      "receipt_amount": 1125950.0,
+      "payments": 22,
+      "payment_amount": 2978610.0,
+      "entries": 35
+    },
+    {
+      "date": "2026-03-10",
+      "receipts": 26,
+      "receipt_amount": 1247280.0,
+      "payments": 10,
+      "payment_amount": 1072700.0,
+      "entries": 36
+    },
+    {
+      "date": "2026-03-11",
+      "receipts": 7,
+      "receipt_amount": 357130.0,
+      "payments": 12,
+      "payment_amount": 104110.0,
+      "entries": 19
+    },
+    {
+      "date": "2026-03-12",
+      "receipts": 19,
+      "receipt_amount": 288660.0,
+      "payments": 15,
+      "payment_amount": 313160.0,
+      "entries": 34
+    },
+    {
+      "date": "2026-03-14",
+      "receipts": 21,
+      "receipt_amount": 1896950.0,
+      "payments": 17,
+      "payment_amount": 683970.0,
+      "entries": 38
+    },
+    {
+      "date": "2026-03-15",
+      "receipts": 7,
+      "receipt_amount": 8620.0,
+      "payments": 12,
+      "payment_amount": 1142150.0,
+      "entries": 19
+    },
+    {
+      "date": "2026-03-16",
+      "receipts": 18,
+      "receipt_amount": 1708850.0,
+      "payments": 10,
+      "payment_amount": 2048780.0,
+      "entries": 28
+    },
+    {
+      "date": "2026-03-17",
+      "receipts": 17,
+      "receipt_amount": 1086240.0,
+      "payments": 14,
+      "payment_amount": 501590.0,
+      "entries": 31
+    },
+    {
+      "date": "2026-03-18",
+      "receipts": 44,
+      "receipt_amount": 4089590.0,
+      "payments": 10,
+      "payment_amount": 4828934.0,
+      "entries": 54
+    },
+    {
+      "date": "2026-03-24",
+      "receipts": 2,
+      "receipt_amount": 700000.0,
+      "payments": 5,
+      "payment_amount": 19200.0,
+      "entries": 7
+    },
+    {
+      "date": "2026-03-25",
+      "receipts": 4,
+      "receipt_amount": 402750.0,
+      "payments": 2,
+      "payment_amount": 185000.0,
+      "entries": 6
+    },
+    {
+      "date": "2026-03-26",
+      "receipts": 10,
+      "receipt_amount": 218480.0,
+      "payments": 3,
+      "payment_amount": 56730.0,
+      "entries": 13
+    },
+    {
+      "date": "2026-03-28",
+      "receipts": 7,
+      "receipt_amount": 57510.0,
+      "payments": 12,
+      "payment_amount": 1182130.0,
+      "entries": 19
+    },
+    {
+      "date": "2026-03-29",
+      "receipts": 10,
+      "receipt_amount": 1059850.0,
+      "payments": 10,
+      "payment_amount": 430610.0,
+      "entries": 20
+    },
+    {
+      "date": "2026-03-30",
+      "receipts": 10,
+      "receipt_amount": 1263580.0,
+      "payments": 14,
+      "payment_amount": 2028410.0,
+      "entries": 24
+    },
+    {
+      "date": "2026-03-31",
+      "receipts": 14,
+      "receipt_amount": 1151570.0,
+      "payments": 13,
+      "payment_amount": 1092790.0,
+      "entries": 27
+    },
+    {
+      "date": "2026-04-01",
+      "receipts": 10,
+      "receipt_amount": 484540.0,
+      "payments": 17,
+      "payment_amount": 382110.0,
+      "entries": 27
+    },
+    {
+      "date": "2026-04-02",
+      "receipts": 17,
+      "receipt_amount": 2396890.0,
+      "payments": 11,
+      "payment_amount": 2330960.0,
+      "entries": 28
+    },
+    {
+      "date": "2026-04-04",
+      "receipts": 14,
+      "receipt_amount": 1350910.0,
+      "payments": 11,
+      "payment_amount": 513040.0,
+      "entries": 25
+    },
+    {
+      "date": "2026-04-05",
+      "receipts": 16,
+      "receipt_amount": 888350.0,
+      "payments": 14,
+      "payment_amount": 228880.0,
+      "entries": 30
+    },
+    {
+      "date": "2026-04-06",
+      "receipts": 16,
+      "receipt_amount": 662890.0,
+      "payments": 7,
+      "payment_amount": 998990.0,
+      "entries": 23
+    },
+    {
+      "date": "2026-04-07",
+      "receipts": 6,
+      "receipt_amount": 412250.0,
+      "payments": 14,
+      "payment_amount": 1886500.0,
+      "entries": 20
+    },
+    {
+      "date": "2026-04-08",
+      "receipts": 9,
+      "receipt_amount": 617510.0,
+      "payments": 10,
+      "payment_amount": 574870.0,
+      "entries": 19
+    },
+    {
+      "date": "2026-04-09",
+      "receipts": 23,
+      "receipt_amount": 642380.0,
+      "payments": 19,
+      "payment_amount": 425980.0,
+      "entries": 42
+    },
+    {
+      "date": "2026-04-11",
+      "receipts": 10,
+      "receipt_amount": 626010.0,
+      "payments": 17,
+      "payment_amount": 376660.0,
+      "entries": 27
+    },
+    {
+      "date": "2026-04-12",
+      "receipts": 10,
+      "receipt_amount": 465850.0,
+      "payments": 12,
+      "payment_amount": 116240.0,
+      "entries": 22
+    },
+    {
+      "date": "2026-04-13",
+      "receipts": 11,
+      "receipt_amount": 1376740.0,
+      "payments": 8,
+      "payment_amount": 2023810.0,
+      "entries": 19
+    },
+    {
+      "date": "2026-04-14",
+      "receipts": 12,
+      "receipt_amount": 1046480.0,
+      "payments": 17,
+      "payment_amount": 1194220.0,
+      "entries": 29
+    },
+    {
+      "date": "2026-04-15",
+      "receipts": 12,
+      "receipt_amount": 657010.0,
+      "payments": 13,
+      "payment_amount": 246790.0,
+      "entries": 25
+    },
+    {
+      "date": "2026-04-16",
+      "receipts": 12,
+      "receipt_amount": 113820.0,
+      "payments": 12,
+      "payment_amount": 163720.0,
+      "entries": 24
+    },
+    {
+      "date": "2026-04-18",
+      "receipts": 17,
+      "receipt_amount": 614880.0,
+      "payments": 10,
+      "payment_amount": 946870.0,
+      "entries": 27
+    },
+    {
+      "date": "2026-04-19",
+      "receipts": 10,
+      "receipt_amount": 626870.0,
+      "payments": 7,
+      "payment_amount": 116300.0,
+      "entries": 17
+    },
+    {
+      "date": "2026-04-20",
+      "receipts": 15,
+      "receipt_amount": 847680.0,
+      "payments": 16,
+      "payment_amount": 1476770.0,
+      "entries": 31
+    },
+    {
+      "date": "2026-04-21",
+      "receipts": 12,
+      "receipt_amount": 1756970.0,
+      "payments": 11,
+      "payment_amount": 1830200.0,
+      "entries": 23
+    },
+    {
+      "date": "2026-04-22",
+      "receipts": 10,
+      "receipt_amount": 337720.0,
+      "payments": 11,
+      "payment_amount": 316320.0,
+      "entries": 21
+    },
+    {
+      "date": "2026-04-23",
+      "receipts": 19,
+      "receipt_amount": 43060.0,
+      "payments": 8,
+      "payment_amount": 52800.0,
+      "entries": 27
+    },
+    {
+      "date": "2026-04-25",
+      "receipts": 9,
+      "receipt_amount": 471920.0,
+      "payments": 7,
+      "payment_amount": 315850.0,
+      "entries": 16
+    },
+    {
+      "date": "2026-04-26",
+      "receipts": 11,
+      "receipt_amount": 1921930.0,
+      "payments": 12,
+      "payment_amount": 1978290.0,
+      "entries": 23
+    },
+    {
+      "date": "2026-04-27",
+      "receipts": 13,
+      "receipt_amount": 554360.0,
+      "payments": 10,
+      "payment_amount": 618820.0,
+      "entries": 23
+    },
+    {
+      "date": "2026-04-28",
+      "receipts": 13,
+      "receipt_amount": 159740.0,
+      "payments": 6,
+      "payment_amount": 89790.0,
+      "entries": 19
+    },
+    {
+      "date": "2026-04-29",
+      "receipts": 11,
+      "receipt_amount": 502110.0,
+      "payments": 7,
+      "payment_amount": 72320.0,
+      "entries": 18
+    },
+    {
+      "date": "2026-04-30",
+      "receipts": 14,
+      "receipt_amount": 323580.0,
+      "payments": 11,
+      "payment_amount": 667330.0,
+      "entries": 25
+    },
+    {
+      "date": "2026-05-02",
+      "receipts": 8,
+      "receipt_amount": 1186240.0,
+      "payments": 4,
+      "payment_amount": 330410.0,
+      "entries": 12
+    },
+    {
+      "date": "2026-05-03",
+      "receipts": 12,
+      "receipt_amount": 1748870.0,
+      "payments": 30,
+      "payment_amount": 976160.0,
+      "entries": 42
+    },
+    {
+      "date": "2026-05-04",
+      "receipts": 15,
+      "receipt_amount": 792140.0,
+      "payments": 10,
+      "payment_amount": 1058060.0,
+      "entries": 25
+    },
+    {
+      "date": "2026-05-05",
+      "receipts": 12,
+      "receipt_amount": 1652490.0,
+      "payments": 21,
+      "payment_amount": 1264050.0,
+      "entries": 33
+    },
+    {
+      "date": "2026-05-06",
+      "receipts": 12,
+      "receipt_amount": 502670.0,
+      "payments": 9,
+      "payment_amount": 943180.0,
+      "entries": 21
+    },
+    {
+      "date": "2026-05-07",
+      "receipts": 24,
+      "receipt_amount": 1551890.0,
+      "payments": 11,
+      "payment_amount": 1879030.0,
+      "entries": 35
+    },
+    {
+      "date": "2026-05-09",
+      "receipts": 16,
+      "receipt_amount": 625110.0,
+      "payments": 15,
+      "payment_amount": 298430.0,
+      "entries": 31
+    },
+    {
+      "date": "2026-05-10",
+      "receipts": 12,
+      "receipt_amount": 2191300.0,
+      "payments": 9,
+      "payment_amount": 2186370.0,
+      "entries": 21
+    },
+    {
+      "date": "2026-05-11",
+      "receipts": 11,
+      "receipt_amount": 779260.0,
+      "payments": 9,
+      "payment_amount": 167500.0,
+      "entries": 20
+    },
+    {
+      "date": "2026-05-12",
+      "receipts": 9,
+      "receipt_amount": 1095850.0,
+      "payments": 12,
+      "payment_amount": 1588070.0,
+      "entries": 21
+    },
+    {
+      "date": "2026-05-13",
+      "receipts": 7,
+      "receipt_amount": 773480.0,
+      "payments": 19,
+      "payment_amount": 475657.0,
+      "entries": 26
+    },
+    {
+      "date": "2026-05-14",
+      "receipts": 16,
+      "receipt_amount": 738210.0,
+      "payments": 15,
+      "payment_amount": 536330.0,
+      "entries": 31
+    },
+    {
+      "date": "2026-05-16",
+      "receipts": 15,
+      "receipt_amount": 667570.0,
+      "payments": 17,
+      "payment_amount": 213970.0,
+      "entries": 32
+    },
+    {
+      "date": "2026-05-17",
+      "receipts": 18,
+      "receipt_amount": 1247910.0,
+      "payments": 15,
+      "payment_amount": 3522240.0,
+      "entries": 33
+    },
+    {
+      "date": "2026-05-18",
+      "receipts": 12,
+      "receipt_amount": 507070.0,
+      "payments": 11,
+      "payment_amount": 348350.0,
+      "entries": 23
+    },
+    {
+      "date": "2026-05-19",
+      "receipts": 14,
+      "receipt_amount": 136470.0,
+      "payments": 11,
+      "payment_amount": 138400.0,
+      "entries": 25
+    },
+    {
+      "date": "2026-05-20",
+      "receipts": 12,
+      "receipt_amount": 1771450.0,
+      "payments": 12,
+      "payment_amount": 1050720.0,
+      "entries": 24
+    },
+    {
+      "date": "2026-05-21",
+      "receipts": 11,
+      "receipt_amount": 16760.0,
+      "payments": 14,
+      "payment_amount": 986600.0,
+      "entries": 25
+    },
+    {
+      "date": "2026-05-23",
+      "receipts": 19,
+      "receipt_amount": 2299110.0,
+      "payments": 19,
+      "payment_amount": 2009750.0,
+      "entries": 38
+    },
+    {
+      "date": "2026-05-24",
+      "receipts": 18,
+      "receipt_amount": 703350.0,
+      "payments": 16,
+      "payment_amount": 241920.0,
+      "entries": 34
+    },
+    {
+      "date": "2026-05-25",
+      "receipts": 51,
+      "receipt_amount": 2341370.0,
+      "payments": 15,
+      "payment_amount": 3339660.0,
+      "entries": 66
+    },
+    {
+      "date": "2026-05-30",
+      "receipts": 2,
+      "receipt_amount": 152350.0,
+      "payments": 10,
+      "payment_amount": 155490.0,
+      "entries": 12
+    },
+    {
+      "date": "2026-05-31",
+      "receipts": 9,
+      "receipt_amount": 1570830.0,
+      "payments": 4,
+      "payment_amount": 1012600.0,
+      "entries": 13
+    },
+    {
+      "date": "2026-06-01",
+      "receipts": 8,
+      "receipt_amount": 817340.0,
+      "payments": 12,
+      "payment_amount": 400360.0,
+      "entries": 20
+    },
+    {
+      "date": "2026-06-02",
+      "receipts": 8,
+      "receipt_amount": 1140190.0,
+      "payments": 9,
+      "payment_amount": 1834150.0,
+      "entries": 17
+    },
+    {
+      "date": "2026-06-03",
+      "receipts": 7,
+      "receipt_amount": 1160020.0,
+      "payments": 9,
+      "payment_amount": 1039460.0,
+      "entries": 16
+    },
+    {
+      "date": "2026-06-04",
+      "receipts": 6,
+      "receipt_amount": 393910.0,
+      "payments": 15,
+      "payment_amount": 375200.0,
+      "entries": 21
+    },
+    {
+      "date": "2026-06-06",
+      "receipts": 13,
+      "receipt_amount": 3336340.0,
+      "payments": 5,
+      "payment_amount": 779270.0,
+      "entries": 18
+    },
+    {
+      "date": "2026-06-07",
+      "receipts": 13,
+      "receipt_amount": 2473360.0,
+      "payments": 11,
+      "payment_amount": 4569329.0,
+      "entries": 24
+    },
+    {
+      "date": "2026-06-08",
+      "receipts": 14,
+      "receipt_amount": 796310.0,
+      "payments": 18,
+      "payment_amount": 1179720.0,
+      "entries": 32
+    },
+    {
+      "date": "2026-06-09",
+      "receipts": 12,
+      "receipt_amount": 2679610.0,
+      "payments": 11,
+      "payment_amount": 3071440.0,
+      "entries": 23
+    },
+    {
+      "date": "2026-06-10",
+      "receipts": 9,
+      "receipt_amount": 894230.0,
+      "payments": 15,
+      "payment_amount": 604290.0,
+      "entries": 24
+    },
+    {
+      "date": "2026-06-11",
+      "receipts": 12,
+      "receipt_amount": 85120.0,
+      "payments": 18,
+      "payment_amount": 363250.0,
+      "entries": 30
+    },
+    {
+      "date": "2026-06-13",
+      "receipts": 16,
+      "receipt_amount": 1018110.0,
+      "payments": 13,
+      "payment_amount": 228220.0,
+      "entries": 29
+    },
+    {
+      "date": "2026-06-14",
+      "receipts": 15,
+      "receipt_amount": 1262460.0,
+      "payments": 23,
+      "payment_amount": 2091720.0,
+      "entries": 38
+    },
+    {
+      "date": "2026-06-15",
+      "receipts": 11,
+      "receipt_amount": 1594390.0,
+      "payments": 6,
+      "payment_amount": 1443300.0,
+      "entries": 17
+    },
+    {
+      "date": "2026-06-16",
+      "receipts": 20,
+      "receipt_amount": 3504630.0,
+      "payments": 20,
+      "payment_amount": 3537050.0,
+      "entries": 40
+    },
+    {
+      "date": "2026-06-17",
+      "receipts": 10,
+      "receipt_amount": 521430.0,
+      "payments": 12,
+      "payment_amount": 358950.0,
+      "entries": 22
+    },
+    {
+      "date": "2026-06-18",
+      "receipts": 13,
+      "receipt_amount": 2210960.0,
+      "payments": 13,
+      "payment_amount": 2369380.0,
+      "entries": 26
+    },
+    {
+      "date": "2026-06-20",
+      "receipts": 20,
+      "receipt_amount": 626910.0,
+      "payments": 4,
+      "payment_amount": 158620.0,
+      "entries": 24
+    },
+    {
+      "date": "2026-06-21",
+      "receipts": 9,
+      "receipt_amount": 21760.0,
+      "payments": 23,
+      "payment_amount": 480750.0,
+      "entries": 32
+    },
+    {
+      "date": "2026-06-22",
+      "receipts": 11,
+      "receipt_amount": 1419480.0,
+      "payments": 17,
+      "payment_amount": 1352270.0,
+      "entries": 28
+    },
+    {
+      "date": "2026-06-23",
+      "receipts": 11,
+      "receipt_amount": 632450.0,
+      "payments": 8,
+      "payment_amount": 611400.0,
+      "entries": 19
+    },
+    {
+      "date": "2026-06-24",
+      "receipts": 4,
+      "receipt_amount": 113050.0,
+      "payments": 16,
+      "payment_amount": 223760.0,
+      "entries": 20
+    },
+    {
+      "date": "2026-06-25",
+      "receipts": 11,
+      "receipt_amount": 855000.0,
+      "payments": 18,
+      "payment_amount": 573660.0,
+      "entries": 29
+    },
+    {
+      "date": "2026-06-27",
+      "receipts": 12,
+      "receipt_amount": 295240.0,
+      "payments": 5,
+      "payment_amount": 306490.0,
+      "entries": 17
+    },
+    {
+      "date": "2026-06-28",
+      "receipts": 10,
+      "receipt_amount": 768470.0,
+      "payments": 20,
+      "payment_amount": 1094590.0,
+      "entries": 30
+    },
+    {
+      "date": "2026-06-29",
+      "receipts": 8,
+      "receipt_amount": 523750.0,
+      "payments": 9,
+      "payment_amount": 307110.0,
+      "entries": 17
+    },
+    {
+      "date": "2026-06-30",
+      "receipts": 9,
+      "receipt_amount": 20550.0,
+      "payments": 8,
+      "payment_amount": 138070.0,
+      "entries": 17
+    },
+    {
+      "date": "2026-07-01",
+      "receipts": 12,
+      "receipt_amount": 442440.0,
+      "payments": 14,
+      "payment_amount": 168735.0,
+      "entries": 26
+    },
+    {
+      "date": "2026-07-02",
+      "receipts": 9,
+      "receipt_amount": 1162400.0,
+      "payments": 19,
+      "payment_amount": 1564460.0,
+      "entries": 28
+    },
+    {
+      "date": "2026-07-04",
+      "receipts": 8,
+      "receipt_amount": 420060.0,
+      "payments": 22,
+      "payment_amount": 133050.0,
+      "entries": 30
+    },
+    {
+      "date": "2026-07-05",
+      "receipts": 13,
+      "receipt_amount": 3638700.0,
+      "payments": 8,
+      "payment_amount": 2540940.0,
+      "entries": 21
+    },
+    {
+      "date": "2026-07-06",
+      "receipts": 10,
+      "receipt_amount": 1671740.0,
+      "payments": 6,
+      "payment_amount": 1126890.0,
+      "entries": 16
+    },
+    {
+      "date": "2026-07-07",
+      "receipts": 14,
+      "receipt_amount": 237600.0,
+      "payments": 16,
+      "payment_amount": 1801940.0,
+      "entries": 30
+    },
+    {
+      "date": "2026-07-08",
+      "receipts": 14,
+      "receipt_amount": 2596800.0,
+      "payments": 18,
+      "payment_amount": 2799650.0,
+      "entries": 32
+    },
+    {
+      "date": "2026-07-09",
+      "receipts": 21,
+      "receipt_amount": 1580170.0,
+      "payments": 8,
+      "payment_amount": 1609750.0,
+      "entries": 29
+    },
+    {
+      "date": "2026-07-11",
+      "receipts": 13,
+      "receipt_amount": 1169940.0,
+      "payments": 17,
+      "payment_amount": 1324720.0,
+      "entries": 30
+    },
+    {
+      "date": "2026-07-12",
+      "receipts": 9,
+      "receipt_amount": 768190.0,
+      "payments": 7,
+      "payment_amount": 591910.0,
+      "entries": 16
+    },
+    {
+      "date": "2026-07-13",
+      "receipts": 6,
+      "receipt_amount": 12220.0,
+      "payments": 9,
+      "payment_amount": 204170.0,
+      "entries": 15
+    },
+    {
+      "date": "2026-07-14",
+      "receipts": 10,
+      "receipt_amount": 225180.0,
+      "payments": 19,
+      "payment_amount": 216980.0,
+      "entries": 29
+    },
+    {
+      "date": "2026-07-15",
+      "receipts": 15,
+      "receipt_amount": 1290800.0,
+      "payments": 3,
+      "payment_amount": 1045190.0,
+      "entries": 18
+    },
+    {
+      "date": "2026-07-16",
+      "receipts": 20,
+      "receipt_amount": 833800.0,
+      "payments": 13,
+      "payment_amount": 168670.0,
+      "entries": 33
+    },
+    {
+      "date": "2026-07-18",
+      "receipts": 11,
+      "receipt_amount": 124670.0,
+      "payments": 8,
+      "payment_amount": 300880.0,
+      "entries": 19
+    },
+    {
+      "date": "2026-07-19",
+      "receipts": 13,
+      "receipt_amount": 554450.0,
+      "payments": 13,
+      "payment_amount": 774350.0,
+      "entries": 26
+    },
+    {
+      "date": "2026-07-20",
+      "receipts": 12,
+      "receipt_amount": 2131900.0,
+      "payments": 26,
+      "payment_amount": 2405640.0,
+      "entries": 38
+    },
+    {
+      "date": "2026-07-21",
+      "receipts": 1,
+      "receipt_amount": 6000.0,
+      "payments": 6,
+      "payment_amount": 224420.0,
+      "entries": 7
+    },
+    {
+      "date": "2026-07-22",
+      "receipts": 6,
+      "receipt_amount": 655100.0,
+      "payments": 4,
+      "payment_amount": 651500.0,
+      "entries": 10
+    },
+    {
+      "date": "2026-07-23",
+      "receipts": 10,
+      "receipt_amount": 456270.0,
+      "payments": 17,
+      "payment_amount": 522180.0,
+      "entries": 27
+    },
+    {
+      "date": "2026-07-25",
+      "receipts": 5,
+      "receipt_amount": 2208600.0,
+      "payments": 5,
+      "payment_amount": 1996140.0,
+      "entries": 10
+    },
+    {
+      "date": "2026-07-26",
+      "receipts": 11,
+      "receipt_amount": 1751670.0,
+      "payments": 25,
+      "payment_amount": 1806610.0,
+      "entries": 36
+    },
+    {
+      "date": "2026-07-27",
+      "receipts": 10,
+      "receipt_amount": 751690.0,
+      "payments": 5,
+      "payment_amount": 623850.0,
+      "entries": 15
+    },
+    {
+      "date": "2026-07-28",
+      "receipts": 6,
+      "receipt_amount": 17200.0,
+      "payments": 13,
+      "payment_amount": 160380.0,
+      "entries": 19
+    },
+    {
+      "date": "2026-07-29",
+      "receipts": 10,
+      "receipt_amount": 528510.0,
+      "payments": 8,
+      "payment_amount": 237200.0,
+      "entries": 18
+    },
+    {
+      "date": "2026-07-30",
+      "receipts": 17,
+      "receipt_amount": 56530.0,
+      "payments": 11,
+      "payment_amount": 208490.0,
+      "entries": 28
+    },
+    {
+      "date": "2026-08-01",
+      "receipts": 17,
+      "receipt_amount": 1085410.0,
+      "payments": 21,
+      "payment_amount": 733408.0,
+      "entries": 38
+    },
+    {
+      "date": "2026-08-02",
+      "receipts": 11,
+      "receipt_amount": 2063260.0,
+      "payments": 10,
+      "payment_amount": 2136300.0,
+      "entries": 21
+    },
+    {
+      "date": "2026-08-03",
+      "receipts": 7,
+      "receipt_amount": 595780.0,
+      "payments": 6,
+      "payment_amount": 639050.0,
+      "entries": 13
+    },
+    {
+      "date": "2026-08-04",
+      "receipts": 10,
+      "receipt_amount": 37260.0,
+      "payments": 11,
+      "payment_amount": 567010.0,
+      "entries": 21
+    },
+    {
+      "date": "2026-08-05",
+      "receipts": 10,
+      "receipt_amount": 1829420.0,
+      "payments": 10,
+      "payment_amount": 1529310.0,
+      "entries": 20
+    },
+    {
+      "date": "2026-08-06",
+      "receipts": 21,
+      "receipt_amount": 1100170.0,
+      "payments": 9,
+      "payment_amount": 1315700.0,
+      "entries": 30
+    },
+    {
+      "date": "2026-08-10",
+      "receipts": 7,
+      "receipt_amount": 474810.0,
+      "payments": 24,
+      "payment_amount": 565230.0,
+      "entries": 31
+    },
+    {
+      "date": "2026-08-15",
+      "receipts": 16,
+      "receipt_amount": 489470.0,
+      "payments": 4,
+      "payment_amount": 223450.0,
+      "entries": 20
+    },
+    {
+      "date": "2026-08-16",
+      "receipts": 6,
+      "receipt_amount": 617720.0,
+      "payments": 19,
+      "payment_amount": 938970.0,
+      "entries": 25
+    },
+    {
+      "date": "2026-08-17",
+      "receipts": 9,
+      "receipt_amount": 1467920.0,
+      "payments": 37,
+      "payment_amount": 1319100.0,
+      "entries": 46
+    },
+    {
+      "date": "2026-08-18",
+      "receipts": 6,
+      "receipt_amount": 10240.0,
+      "payments": 15,
+      "payment_amount": 400150.0,
+      "entries": 21
+    },
+    {
+      "date": "2026-08-19",
+      "receipts": 13,
+      "receipt_amount": 493710.0,
+      "payments": 11,
+      "payment_amount": 296220.0,
+      "entries": 24
+    }
+  ],
+  "failed_to_close": [],
+  "unclosed_with_activity": [],
+  "summary": {
+    "activity_days_through_cutoff": 191,
+    "already_closed_before": 5,
+    "newly_closed": 186,
+    "failed_to_close": 0,
+    "still_unclosed": 0
+  },
+  "activity_dates_count": 191,
+  "first_activity": "2026-01-01",
+  "last_activity": "2026-08-19",
+  "closed_through_cutoff": 191
+}

@@ -1,0 +1,86 @@
+{
+  "when": "2026-08-23T18:43:09",
+  "cash_coa": {
+    "id": 29,
+    "code": "000000",
+    "name": "CASH A/C",
+    "ob": 282369.0,
+    "cb": 2192810.0
+  },
+  "lifetime": {
+    "coa_opening": 282369.0,
+    "total_receipts": 196505230.0,
+    "total_payments": 194701169.0,
+    "book_closing": 2086430.0
+  },
+  "gl_through_today": {
+    "code": "000000",
+    "coa_opening": 282369.0,
+    "gl_debit": 196505230.0,
+    "gl_credit": 194701169.0,
+    "balance": 2086430.0,
+    "entry_count": 5163
+  },
+  "book_vs_gl": 0.0,
+  "today": {
+    "date": "2026-08-23",
+    "opening": {
+      "coa_code": "000000",
+      "coa_opening": 282369.0,
+      "prior_receipts": 195755680.0,
+      "prior_payments": 193480039.0,
+      "opening": 2558010.0,
+      "receipt_count": 2551,
+      "payment_count": 2574
+    },
+    "day": {
+      "receipts": 749550.0,
+      "receipt_count": 6,
+      "payments": 1221130.0,
+      "payment_count": 32,
+      "net": -471580.0
+    },
+    "closing": 2086430.0,
+    "opening_next_day": 2086430.0,
+    "carry_gap": 0.0
+  },
+  "day_2026-08-18": {
+    "opening": 2205930.0,
+    "receipts": 10240.0,
+    "payments": 400150.0,
+    "closing": 1816020.0
+  },
+  "day_2026-08-19": {
+    "opening": 1816020.0,
+    "receipts": 493710.0,
+    "payments": 296220.0,
+    "closing": 2013510.0
+  },
+  "day_2026-08-20": {
+    "opening": 2013510.0,
+    "receipts": 2649540.0,
+    "payments": 2089300.0,
+    "closing": 2573750.0
+  },
+  "day_2026-08-22": {
+    "opening": 2573750.0,
+    "receipts": 578110.0,
+    "payments": 593850.0,
+    "closing": 2558010.0
+  },
+  "day_2026-08-23": {
+    "opening": 2558010.0,
+    "receipts": 749550.0,
+    "payments": 1221130.0,
+    "closing": 2086430.0
+  },
+  "carry_gaps_aug": [],
+  "gl_orphans_top": [],
+  "gl_orphans_top_net": 0,
+  "first_cash_activity": "2026-01-01",
+  "opening_formula_check": {
+    "coa_opening": 282369.0,
+    "plus_all_receipts_minus_payments": 2086430.0,
+    "note": "Opening in UI = COA opening + receipts before date - payments before date"
+  }
+}

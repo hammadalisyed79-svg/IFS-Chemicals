@@ -1,0 +1,20 @@
+﻿=== Item* tables ===
+creator=7 name=ItemInformation
+creator=7 name=ItemGroupHeader
+creator=7 name=ItemGroupDetail
+=== owner ===
+saller.ItemInformation
+FAIL: SELECT TOP 5 "ItemCode","ItemName" FROM DBA.ItemInformation => Exception calling "ExecuteReader" with "0" argument(s): "ERROR [42S02] [Sybase][ODBC Driver][SQL Anywhere]Table 'ItemInformation' not found"
+FAIL: SELECT TOP 5 ItemCode, ItemName FROM "ItemInformation" => Exception calling "ExecuteReader" with "0" argument(s): "ERROR [42S02] [Sybase][ODBC Driver][SQL Anywhere]Table 'ItemInformation' not found"
+FAIL: SELECT TOP 5 * FROM ItemInformation => Exception calling "ExecuteReader" with "0" argument(s): "ERROR [42S02] [Sybase][ODBC Driver][SQL Anywhere]Table 'ItemInformation' not found"
+FAIL: SELECT COUNT(*) AS c FROM DBA."ItemInformation" => Exception calling "ExecuteReader" with "0" argument(s): "ERROR [42S02] [Sybase][ODBC Driver][SQL Anywhere]Table 'ItemInformation' not found"
+
+=== Code matches ===
+ERR CC0001 : Exception calling "ExecuteReader" with "0" argument(s): "ERROR [42S02] [Sybase][ODBC Driver][SQL Anywhere]Table 'ItemInformation' not found"
+ERR DT0001 : Exception calling "ExecuteReader" with "0" argument(s): "ERROR [42S02] [Sybase][ODBC Driver][SQL Anywhere]Table 'ItemInformation' not found"
+ERR DW1015 : Exception calling "ExecuteReader" with "0" argument(s): "ERROR [42S02] [Sybase][ODBC Driver][SQL Anywhere]Table 'ItemInformation' not found"
+ERR DT2013 : Exception calling "ExecuteReader" with "0" argument(s): "ERROR [42S02] [Sybase][ODBC Driver][SQL Anywhere]Table 'ItemInformation' not found"
+ERR DT1029 : Exception calling "ExecuteReader" with "0" argument(s): "ERROR [42S02] [Sybase][ODBC Driver][SQL Anywhere]Table 'ItemInformation' not found"
+ERR DW1002 : Exception calling "ExecuteReader" with "0" argument(s): "ERROR [42S02] [Sybase][ODBC Driver][SQL Anywhere]Table 'ItemInformation' not found"
+ERR DT1080 : Exception calling "ExecuteReader" with "0" argument(s): "ERROR [42S02] [Sybase][ODBC Driver][SQL Anywhere]Table 'ItemInformation' not found"
+ERR DT0002 : Exception calling "ExecuteReader" with "0" argument(s): "ERROR [42S02] [Sybase][ODBC Driver][SQL Anywhere]Table 'ItemInformation' not found"

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Fallback redirect when IIS reverse-proxy modules are not installed. -->
+<configuration>
+  <system.webServer>
+    <httpRedirect enabled="true" destination="http://ifschemicals.com:8501/" httpResponseStatus="Found" />
+  </system.webServer>
+</configuration>

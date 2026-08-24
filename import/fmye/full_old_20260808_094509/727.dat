@@ -1,0 +1,49 @@
+'###,###.00','###,###.00',90,1,1,32,'10'
+'#####','#####',90,1,1,32,'10'
+'###-##-####','###-##-####',90,1,1,32,'00'
+'MM/DD/YY','MM/DD/YY',90,1,1,32,'20'
+'DD/MM/YY','DD/MM/YY',90,1,1,32,'20'
+'MM/DD/YYYY','MM/DD/YYYY',90,1,1,32,'20'
+'DD/MM/YYYY','DD/MM/YYYY',90,1,1,32,'20'
+'DD/MMM/YY','DD/MMM/YY',90,1,1,32,'20'
+'DDD/YY','DDD/YY',90,1,1,32,'20'
+'DDD/YYYY','DDD/YYYY',90,1,1,32,'20'
+'HH:MM:SS','HH:MM:SS',90,1,1,32,'30'
+'HH:MM:SS:FFF','HH:MM:SS:FFF',90,1,1,32,'30'
+'HH:MM:SS:FFFFFF','HH:MM:SS:FFFFFF',90,1,1,32,'30'
+'MM/DD/YY HH:MM:SS','MM/DD/YY HH:MM:SS',90,1,1,32,'40'
+'DD/MM/YY HH:MM:SS','DD/MM/YY HH:MM:SS',90,1,1,32,'40'
+'MM/DD/YYYY HH:MM:SS','MM/DD/YYYY HH:MM:SS',90,1,1,32,'40'
+'DD/MM/YYYY HH:MM:SS','DD/MM/YYYY HH:MM:SS',90,1,1,32,'40'
+'DD/MMM/YY HH:MM:SS','DD/MMM/YY HH:MM:SS',90,1,1,32,'40'
+'DDD/YY HH:MM:SS','DDD/YY HH:MM:SS',90,1,1,32,'40'
+'DDD/YYYY HH:MM:SS','DDD/YYYY HH:MM:SS',90,1,1,32,'40'
+'DD/MM/YY HH:MM:SS:FFFFFF','DD/MM/YY HH:MM:SS:FFFFFF',90,1,1,32,'40'
+'item_type','3',87,1,1,2,
+'item_type','Finished',87,1,2,0,
+'item_type','F',87,1,3,0,
+'item_type','Raw Material',87,1,4,0,
+'item_type','M',87,1,5,0,
+'item_type','Other',87,1,6,0,
+'item_type','O',87,1,7,0,
+'Status',,85,2,1,268435460,
+'Status','1',85,2,2,0,
+'Status','0',85,2,3,0,
+'Date','[date]',90,1,1,32,'20'
+'dddw_itemGroup','dddw_item_group',88,2,1,2097168,'0'
+'dddw_itemGroup','groupcode',88,2,2,0,
+'dddw_itemGroup','groupcode',88,2,3,0,'200,10'
+'dddw_accountgroup','dddw_group',88,2,1,2097168,'0'
+'dddw_accountgroup','groupcode',88,2,2,0,
+'dddw_accountgroup','groupcode',88,2,3,0,'175,10'
+'ItemTypeList','0',89,1,1,8388609,
+'ItemTypeList',,89,1,2,0,
+'ItemTypeList','Finished',89,1,3,0,
+'ItemTypeList','F',89,1,4,0,
+'ItemTypeList','Raw Material',89,1,5,0,
+'ItemTypeList','M',89,1,6,0,
+'ItemTypeList','Other',89,1,7,0,
+'ItemTypeList','O',89,1,8,0,
+'DepartmentList','dddw_department_list',88,1,1,538968080,'0'
+'DepartmentList','deptid',88,1,2,0,
+'DepartmentList','description',88,1,3,0,'150,10'

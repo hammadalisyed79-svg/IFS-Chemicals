@@ -1,0 +1,330 @@
+{
+  "total_products": 5595,
+  "with_2026_activity": 1537,
+  "nil_open_no_2026_any_stock": 4058,
+  "idle_nil_open_zero_stock": 3742,
+  "idle_but_have_stock_no_2026": 316,
+  "by_type": {
+    "finished": 3368,
+    "packaging": 186,
+    "raw": 188
+  },
+  "top_code_prefixes": {
+    "PSS": 441,
+    "CLY": 424,
+    "RAP": 363,
+    "PBB": 257,
+    "LDM": 195,
+    "PKS": 165,
+    "PSR": 121,
+    "PR0": 107,
+    "DT1": 70,
+    "PP0": 70,
+    "BOP": 69,
+    "PSN": 69
+  },
+  "csv": "reports\\idle_items_nil_opening_no_txn_2026.csv",
+  "full_csv": "reports\\idle_items_2026.csv",
+  "sample": [
+    {
+      "code": "BB001",
+      "name": "BACHAT PP BAGS EMPTY",
+      "type": "finished"
+    },
+    {
+      "code": "BGS001",
+      "name": "BETA GOL SOAP C1 P3 LN",
+      "type": "finished"
+    },
+    {
+      "code": "BGS002",
+      "name": "BETA GOL JAR 20 TIKI C1 P3 LN",
+      "type": "finished"
+    },
+    {
+      "code": "BOP001",
+      "name": "BOPP MAT 825MM 20 MICRON",
+      "type": "finished"
+    },
+    {
+      "code": "BOP002",
+      "name": "BOPP MAT 835MM 20 MICRON",
+      "type": "finished"
+    },
+    {
+      "code": "BOP003",
+      "name": "BOPP MAT 40MM 20 MICRON",
+      "type": "finished"
+    },
+    {
+      "code": "BOP004",
+      "name": "BOPP MAT 90MM 20 MICRON",
+      "type": "finished"
+    },
+    {
+      "code": "BOP005",
+      "name": "BOPP MAT 850MM 20 MICRON",
+      "type": "finished"
+    },
+    {
+      "code": "BOP006",
+      "name": "OPP MTZ 640MM 20MICRON",
+      "type": "finished"
+    },
+    {
+      "code": "BOP007",
+      "name": "BOPP MAT 600MM 25 MICRON",
+      "type": "finished"
+    },
+    {
+      "code": "BOP008",
+      "name": "BOPP MAT 765MM 30MICRON",
+      "type": "finished"
+    },
+    {
+      "code": "BOP009",
+      "name": "BOPP H/S 760MM 30 MICRON",
+      "type": "finished"
+    },
+    {
+      "code": "BOP010",
+      "name": "BOPP PEARL 760MM 38MICRON",
+      "type": "finished"
+    },
+    {
+      "code": "BOP011",
+      "name": "BOPP H/S 820MM 30 MICRON",
+      "type": "finished"
+    },
+    {
+      "code": "BOP013",
+      "name": "BOPP MAT 680MM 20 MICRON (GOLD GLEAM)",
+      "type": "finished"
+    },
+    {
+      "code": "BOP014",
+      "name": "BOPP H/S 570MM 30MICRON",
+      "type": "finished"
+    },
+    {
+      "code": "BOP015",
+      "name": "PEARL 600MM 25 MICRON",
+      "type": "finished"
+    },
+    {
+      "code": "BOP016",
+      "name": "PEARL SKIN VATAMIN  BOPP 590MM",
+      "type": "finished"
+    },
+    {
+      "code": "BOP017",
+      "name": "PEARL 670MM 75 MICRON",
+      "type": "finished"
+    },
+    {
+      "code": "BOP018",
+      "name": "BOPP PRINTED 660MM 75 MICRON",
+      "type": "finished"
+    },
+    {
+      "code": "BOP019",
+      "name": "BOPP H/S 680MM 30 MICRON",
+      "type": "finished"
+    },
+    {
+      "code": "BOP020",
+      "name": "PEARL FEEL 670MM 25MICRON",
+      "type": "finished"
+    },
+    {
+      "code": "BOP021",
+      "name": "BOPP TRI PACK 760MM 25MICRON",
+      "type": "finished"
+    },
+    {
+      "code": "BOP022",
+      "name": "BOPP I PACK 760MM 25MICRON",
+      "type": "finished"
+    },
+    {
+      "code": "BOP023",
+      "name": "BOPP H/S 920MM 30MICRON",
+      "type": "finished"
+    },
+    {
+      "code": "BOP024",
+      "name": "BOPP MAT 820MM 20MICRON",
+      "type": "finished"
+    },
+    {
+      "code": "BOP025",
+      "name": "BOPP MAT 590MM 15MICRON",
+      "type": "finished"
+    },
+    {
+      "code": "BOP026",
+      "name": "BOPP H/S 610MM 30MICRON",
+      "type": "finished"
+    },
+    {
+      "code": "BOP028",
+      "name": "BOPP 660MM 25 MICRON",
+      "type": "finished"
+    },
+    {
+      "code": "BOP029",
+      "name": "BOPP 680MM 30 MICRON",
+      "type": "finished"
+    },
+    {
+      "code": "BOP030",
+      "name": "BOPP I PACK 960MM 30 MICRON",
+      "type": "finished"
+    },
+    {
+      "code": "BOP031",
+      "name": "CPP MILKY 640MM 25 MICRON",
+      "type": "finished"
+    },
+    {
+      "code": "BOP032",
+      "name": "CPP MILKY 610MM 25 MICRON",
+      "type": "finished"
+    },
+    {
+      "code": "BOP033",
+      "name": "BOPP 800MM 25 MICRON",
+      "type": "finished"
+    },
+    {
+      "code": "BOP034",
+      "name": "BOPP PEARL 795MM 30 MICRON",
+      "type": "finished"
+    },
+    {
+      "code": "BOP035",
+      "name": "PEARL570MM 38 MICRON",
+      "type": "finished"
+    },
+    {
+      "code": "BOP036",
+      "name": "BOPP H/S 610MM 20 MICRON",
+      "type": "finished"
+    },
+    {
+      "code": "BOP037",
+      "name": "BOPP PEARL 610MM 30MICRON",
+      "type": "finished"
+    },
+    {
+      "code": "BOP038",
+      "name": "CPP MTZ 855MM 25MICRON",
+      "type": "finished"
+    },
+    {
+      "code": "BOP039",
+      "name": "CPP MILKY 855MM 20MICRON",
+      "type": "finished"
+    },
+    {
+      "code": "BOP040",
+      "name": "BOPP MATT 876MM 12MICRON",
+      "type": "finished"
+    },
+    {
+      "code": "BOP041",
+      "name": "BOPP MATT 635MM 12MICRON",
+      "type": "finished"
+    },
+    {
+      "code": "BOP042",
+      "name": "BOPP 1000MM 20MICRON",
+      "type": "finished"
+    },
+    {
+      "code": "BOP043",
+      "name": "BOPP 570MM 20MICRON",
+      "type": "finished"
+    },
+    {
+      "code": "BOP044",
+      "name": "BOPP PLAIN 825MM 20MICRON",
+      "type": "finished"
+    },
+    {
+      "code": "BOP046",
+      "name": "BOPP SIZE 480MM 20MICRON",
+      "type": "finished"
+    },
+    {
+      "code": "BOP047",
+      "name": "BOPP SIZE 540MM 20MICRON",
+      "type": "finished"
+    },
+    {
+      "code": "BOP048",
+      "name": "BOPP SIZE 650MM 30MICRON",
+      "type": "finished"
+    },
+    {
+      "code": "BOP049",
+      "name": "BOPP SIZE 910MM 20MICRON",
+      "type": "finished"
+    },
+    {
+      "code": "BOP050",
+      "name": "BOPP SIZE 765MM 25MICRON",
+      "type": "finished"
+    },
+    {
+      "code": "BOP051",
+      "name": "BBOPP SIZE 800MM 30MICRON",
+      "type": "finished"
+    },
+    {
+      "code": "BOP054",
+      "name": "CPP MTLYZ 660MM 25MICRON",
+      "type": "finished"
+    },
+    {
+      "code": "BOP055",
+      "name": "BOPP PEARL 680MM 38 MICRON",
+      "type": "finished"
+    },
+    {
+      "code": "BOP056",
+      "name": "BOPP PEARL 840MM 38 MICRON",
+      "type": "finished"
+    },
+    {
+      "code": "BOP058",
+      "name": "CPP MTLYZ 720MM 20MICRON",
+      "type": "finished"
+    },
+    {
+      "code": "BOP059",
+      "name": "CPP MTLYZ 810MM 25MICRON",
+      "type": "finished"
+    },
+    {
+      "code": "BOP060",
+      "name": "CPP MTLYZ 780MM 25MICRON",
+      "type": "finished"
+    },
+    {
+      "code": "BOP062",
+      "name": "BOPP SIZE 480MM 30MICRON",
+      "type": "finished"
+    },
+    {
+      "code": "BOP063",
+      "name": "BOPP SIZE 765MM 40MICRON",
+      "type": "finished"
+    },
+    {
+      "code": "BOP065",
+      "name": "PET+CPP MTZ 260MM",
+      "type": "finished"
+    }
+  ]
+}

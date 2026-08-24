@@ -1,0 +1,616 @@
+{
+  "source": "c:\\MY ERPS\\import\\fmye\\full_old_20260808_094509",
+  "source_note": "Live path C:\\IFS\\DataBase\\FMYE11 is NOT present on this PC. Audited latest dbunload export originally from that database.",
+  "live_db_missing": true,
+  "local_FMYE11_db": "c:\\MY ERPS\\import\\fmye\\FMYE11.db",
+  "local_FMYE11_db_dated": "2026-06-01 (stale vs screenshot Jul/Aug 2026)",
+  "range": "2026-01-01 to 2026-08-12",
+  "export_max_dpr_date": "2026-08-02",
+  "table_totals_all_years": {
+    "DPRHeader": 3893,
+    "DPRDetail": 30729,
+    "SAHeader": 1365,
+    "SADetail": 25388
+  },
+  "dpr_headers_in_range": 173,
+  "dpr_detail_lines": 1940,
+  "dpr_qty_sum": 7504631.935,
+  "dpr_distinct_items": 487,
+  "dpr_status": {
+    "posted/approved (1)": 94,
+    "pending (0)": 79
+  },
+  "dpr_pending_in_range": 79,
+  "dpr_pending_all_years": 84,
+  "dpr_date_min": "2026-01-01",
+  "dpr_date_max": "2026-08-02",
+  "sa_headers_in_range": 19,
+  "sa_detail_lines": 563,
+  "sa_qty_sum": -3836288.19,
+  "sa_distinct_items": 462,
+  "sa_status": {
+    "posted/approved (1)": 19
+  },
+  "sa_pending_in_range": 0,
+  "sa_pending_all_years": 201,
+  "sa_date_min": "2026-01-31",
+  "sa_date_max": "2026-06-30",
+  "dpr_12018_header": [
+    {
+      "DPRCode": "12018",
+      "DPRDate": "2022-06-28 00:00",
+      "ShiftCode": "10004",
+      "ShiftDesc": "Packages RM",
+      "Status": "1",
+      "UserCode": "HAMMAD",
+      "Doc": "2022-07-03 11:40:28.960000",
+      "DEPTID": "01",
+      "AccountCode": "100001",
+      "AccountName": "INVENTORY A/C"
+    }
+  ],
+  "dpr_12018_detail_lines": 1,
+  "erp_production_orders_2026": 0,
+  "erp_production_movements_2026": {
+    "n": 0,
+    "qty": 0
+  },
+  "erp_dpr_code_hits_of_100_sample": 0,
+  "erp_sa_code_hits": 0,
+  "erp_adjustment_like_movements_2026": 0,
+  "erp_imported_dpr_sa": false,
+  "monthly": [
+    {
+      "month": "2026-01",
+      "dpr_docs": 28,
+      "sa_docs": 1
+    },
+    {
+      "month": "2026-02",
+      "dpr_docs": 27,
+      "sa_docs": 3
+    },
+    {
+      "month": "2026-03",
+      "dpr_docs": 18,
+      "sa_docs": 13
+    },
+    {
+      "month": "2026-04",
+      "dpr_docs": 27,
+      "sa_docs": 1
+    },
+    {
+      "month": "2026-05",
+      "dpr_docs": 22,
+      "sa_docs": 0
+    },
+    {
+      "month": "2026-06",
+      "dpr_docs": 24,
+      "sa_docs": 1
+    },
+    {
+      "month": "2026-07",
+      "dpr_docs": 25,
+      "sa_docs": 0
+    },
+    {
+      "month": "2026-08",
+      "dpr_docs": 2,
+      "sa_docs": 0
+    }
+  ],
+  "dpr_pending_sample": [
+    {
+      "DPRCode": "13916",
+      "DPRDate": "2026-08-02",
+      "Status": "0",
+      "UserCode": "Mudassar"
+    },
+    {
+      "DPRCode": "13915",
+      "DPRDate": "2026-08-01",
+      "Status": "0",
+      "UserCode": "Mudassar"
+    },
+    {
+      "DPRCode": "13914",
+      "DPRDate": "2026-07-30",
+      "Status": "0",
+      "UserCode": "Mudassar"
+    },
+    {
+      "DPRCode": "13913",
+      "DPRDate": "2026-07-29",
+      "Status": "0",
+      "UserCode": "Mudassar"
+    },
+    {
+      "DPRCode": "13912",
+      "DPRDate": "2026-07-28",
+      "Status": "0",
+      "UserCode": "Mudassar"
+    },
+    {
+      "DPRCode": "13911",
+      "DPRDate": "2026-07-27",
+      "Status": "0",
+      "UserCode": "Mudassar"
+    },
+    {
+      "DPRCode": "13910",
+      "DPRDate": "2026-07-26",
+      "Status": "0",
+      "UserCode": "Mudassar"
+    },
+    {
+      "DPRCode": "13909",
+      "DPRDate": "2026-07-23",
+      "Status": "0",
+      "UserCode": "Mudassar"
+    },
+    {
+      "DPRCode": "13907",
+      "DPRDate": "2026-07-22",
+      "Status": "0",
+      "UserCode": "Mudassar"
+    },
+    {
+      "DPRCode": "13906",
+      "DPRDate": "2026-07-21",
+      "Status": "0",
+      "UserCode": "Mudassar"
+    },
+    {
+      "DPRCode": "13905",
+      "DPRDate": "2026-07-20",
+      "Status": "0",
+      "UserCode": "Mudassar"
+    },
+    {
+      "DPRCode": "13904",
+      "DPRDate": "2026-07-19",
+      "Status": "0",
+      "UserCode": "Mudassar"
+    },
+    {
+      "DPRCode": "13903",
+      "DPRDate": "2026-07-18",
+      "Status": "0",
+      "UserCode": "Mudassar"
+    },
+    {
+      "DPRCode": "13902",
+      "DPRDate": "2026-07-16",
+      "Status": "0",
+      "UserCode": "Mudassar"
+    },
+    {
+      "DPRCode": "13901",
+      "DPRDate": "2026-07-15",
+      "Status": "0",
+      "UserCode": "Mudassar"
+    },
+    {
+      "DPRCode": "13900",
+      "DPRDate": "2026-07-14",
+      "Status": "0",
+      "UserCode": "Mudassar"
+    },
+    {
+      "DPRCode": "13899",
+      "DPRDate": "2026-07-13",
+      "Status": "0",
+      "UserCode": "Mudassar"
+    },
+    {
+      "DPRCode": "13898",
+      "DPRDate": "2026-07-12",
+      "Status": "0",
+      "UserCode": "Mudassar"
+    },
+    {
+      "DPRCode": "13897",
+      "DPRDate": "2026-07-11",
+      "Status": "0",
+      "UserCode": "Mudassar"
+    },
+    {
+      "DPRCode": "13896",
+      "DPRDate": "2026-07-09",
+      "Status": "0",
+      "UserCode": "Mudassar"
+    },
+    {
+      "DPRCode": "13895",
+      "DPRDate": "2026-07-08",
+      "Status": "0",
+      "UserCode": "Mudassar"
+    },
+    {
+      "DPRCode": "13894",
+      "DPRDate": "2026-07-07",
+      "Status": "0",
+      "UserCode": "Mudassar"
+    },
+    {
+      "DPRCode": "13893",
+      "DPRDate": "2026-07-06",
+      "Status": "0",
+      "UserCode": "Mudassar"
+    },
+    {
+      "DPRCode": "13892",
+      "DPRDate": "2026-07-05",
+      "Status": "0",
+      "UserCode": "Mudassar"
+    },
+    {
+      "DPRCode": "13891",
+      "DPRDate": "2026-07-04",
+      "Status": "0",
+      "UserCode": "Mudassar"
+    }
+  ],
+  "sa_pending_sample": [
+    {
+      "SaCode": "1346",
+      "SaDate": "2025-11-15",
+      "Status": "0",
+      "Remarks": ""
+    },
+    {
+      "SaCode": "1332",
+      "SaDate": "2025-08-07",
+      "Status": "0",
+      "Remarks": "RAPER PARAS SURF W/P 500GM"
+    },
+    {
+      "SaCode": "1333",
+      "SaDate": "2025-08-07",
+      "Status": "0",
+      "Remarks": "RAPER PARAS SURF W/P RS 50"
+    },
+    {
+      "SaCode": "1331",
+      "SaDate": "2025-08-06",
+      "Status": "0",
+      "Remarks": "CHEETA DISHWASH BAR RS-20"
+    },
+    {
+      "SaCode": "1334",
+      "SaDate": "2025-08-04",
+      "Status": "0",
+      "Remarks": "RAPER CHEETA D/W BAR RS 20\\x0d\\x0a"
+    },
+    {
+      "SaCode": "1323",
+      "SaDate": "2025-08-02",
+      "Status": "0",
+      "Remarks": "LASHKARA WASHING POWDER 400GM"
+    },
+    {
+      "SaCode": "1324",
+      "SaDate": "2025-08-02",
+      "Status": "0",
+      "Remarks": "SERVIC"
+    },
+    {
+      "SaCode": "1328",
+      "SaDate": "2025-07-31",
+      "Status": "0",
+      "Remarks": "STOCK ADJUSTMENT "
+    },
+    {
+      "SaCode": "1329",
+      "SaDate": "2025-07-31",
+      "Status": "0",
+      "Remarks": "LASHKARA ADJ JU;Y 25"
+    },
+    {
+      "SaCode": "1325",
+      "SaDate": "2025-07-30",
+      "Status": "0",
+      "Remarks": "INSAF FOOD"
+    },
+    {
+      "SaCode": "1319",
+      "SaDate": "2025-07-29",
+      "Status": "0",
+      "Remarks": "TRAIN DETERGENT"
+    },
+    {
+      "SaCode": "1320",
+      "SaDate": "2025-07-29",
+      "Status": "0",
+      "Remarks": "BAHU SOAP SPECIAL QUALITY"
+    },
+    {
+      "SaCode": "1321",
+      "SaDate": "2025-07-28",
+      "Status": "0",
+      "Remarks": "BAHU SOAP SMALL\\x0d\\x0a"
+    },
+    {
+      "SaCode": "1322",
+      "SaDate": "2025-07-28",
+      "Status": "0",
+      "Remarks": "BAHU SOAP MED"
+    },
+    {
+      "SaCode": "1316",
+      "SaDate": "2025-07-27",
+      "Status": "0",
+      "Remarks": "RAPER LASHKARA WASHING POWDER 1KG"
+    },
+    {
+      "SaCode": "1317",
+      "SaDate": "2025-07-27",
+      "Status": "0",
+      "Remarks": "RAPER ALFIRDOUS COLORED PASTA"
+    },
+    {
+      "SaCode": "1326",
+      "SaDate": "2025-07-27",
+      "Status": "0",
+      "Remarks": "SERVIC"
+    },
+    {
+      "SaCode": "1327",
+      "SaDate": "2025-07-27",
+      "Status": "0",
+      "Remarks": "TURKEY BEAUTY SOAP"
+    },
+    {
+      "SaCode": "1314",
+      "SaDate": "2025-07-24",
+      "Status": "0",
+      "Remarks": "POLY BAG CHAIN BL 70CC"
+    },
+    {
+      "SaCode": "1315",
+      "SaDate": "2025-07-24",
+      "Status": "0",
+      "Remarks": "SERVICE GENUINE PARTS CHAIN "
+    },
+    {
+      "SaCode": "1312",
+      "SaDate": "2025-07-23",
+      "Status": "0",
+      "Remarks": "RAPER TOWER DETERGENT - RS 10"
+    },
+    {
+      "SaCode": "1318",
+      "SaDate": "2025-07-23",
+      "Status": "0",
+      "Remarks": "SERVICE 740*450*335\\x0d\\x0a"
+    },
+    {
+      "SaCode": "1313",
+      "SaDate": "2025-07-19",
+      "Status": "0",
+      "Remarks": "BLUE LINE SPROCKET DRIVEN SERVIS "
+    },
+    {
+      "SaCode": "1301",
+      "SaDate": "2025-07-16",
+      "Status": "0",
+      "Remarks": "MUSTARD OIL ADJUSTMENT "
+    },
+    {
+      "SaCode": "1310",
+      "SaDate": "2025-07-16",
+      "Status": "0",
+      "Remarks": "RAPER DELUXE TURKEY BEAUTY SOAP SKY BLUE"
+    }
+  ],
+  "dpr_latest_15": [
+    {
+      "DPRCode": "13916",
+      "DPRDate": "2026-08-02",
+      "Status": "0",
+      "AccountName": "INVENTORY A/C"
+    },
+    {
+      "DPRCode": "13915",
+      "DPRDate": "2026-08-01",
+      "Status": "0",
+      "AccountName": "INVENTORY A/C"
+    },
+    {
+      "DPRCode": "13914",
+      "DPRDate": "2026-07-30",
+      "Status": "0",
+      "AccountName": "INVENTORY A/C"
+    },
+    {
+      "DPRCode": "13913",
+      "DPRDate": "2026-07-29",
+      "Status": "0",
+      "AccountName": "INVENTORY A/C"
+    },
+    {
+      "DPRCode": "13912",
+      "DPRDate": "2026-07-28",
+      "Status": "0",
+      "AccountName": "INVENTORY A/C"
+    },
+    {
+      "DPRCode": "13911",
+      "DPRDate": "2026-07-27",
+      "Status": "0",
+      "AccountName": "INVENTORY A/C"
+    },
+    {
+      "DPRCode": "13910",
+      "DPRDate": "2026-07-26",
+      "Status": "0",
+      "AccountName": "INVENTORY A/C"
+    },
+    {
+      "DPRCode": "13909",
+      "DPRDate": "2026-07-23",
+      "Status": "0",
+      "AccountName": "INVENTORY A/C"
+    },
+    {
+      "DPRCode": "13907",
+      "DPRDate": "2026-07-22",
+      "Status": "0",
+      "AccountName": "INVENTORY A/C"
+    },
+    {
+      "DPRCode": "13906",
+      "DPRDate": "2026-07-21",
+      "Status": "0",
+      "AccountName": "INVENTORY A/C"
+    },
+    {
+      "DPRCode": "13905",
+      "DPRDate": "2026-07-20",
+      "Status": "0",
+      "AccountName": "INVENTORY A/C"
+    },
+    {
+      "DPRCode": "13904",
+      "DPRDate": "2026-07-19",
+      "Status": "0",
+      "AccountName": "INVENTORY A/C"
+    },
+    {
+      "DPRCode": "13903",
+      "DPRDate": "2026-07-18",
+      "Status": "0",
+      "AccountName": "INVENTORY A/C"
+    },
+    {
+      "DPRCode": "13902",
+      "DPRDate": "2026-07-16",
+      "Status": "0",
+      "AccountName": "INVENTORY A/C"
+    },
+    {
+      "DPRCode": "13901",
+      "DPRDate": "2026-07-15",
+      "Status": "0",
+      "AccountName": "INVENTORY A/C"
+    }
+  ],
+  "sa_all_in_range": [
+    {
+      "SaCode": "1348",
+      "SaDate": "2026-01-31",
+      "Status": "1",
+      "Remarks": "STOCK ADJUSTED JAN 2026"
+    },
+    {
+      "SaCode": "1360",
+      "SaDate": "2026-02-28",
+      "Status": "1",
+      "Remarks": "RAPER"
+    },
+    {
+      "SaCode": "1361",
+      "SaDate": "2026-02-28",
+      "Status": "1",
+      "Remarks": "LDM+PET+BOPP ADJUSTED"
+    },
+    {
+      "SaCode": "1362",
+      "SaDate": "2026-02-28",
+      "Status": "1",
+      "Remarks": "PLNAT DETERGENT "
+    },
+    {
+      "SaCode": "1349",
+      "SaDate": "2026-03-02",
+      "Status": "1",
+      "Remarks": "RING SOAP SPECIAL QUALITY "
+    },
+    {
+      "SaCode": "1354",
+      "SaDate": "2026-03-03",
+      "Status": "1",
+      "Remarks": "HIMALAYA SALT 800GRAM"
+    },
+    {
+      "SaCode": "1355",
+      "SaDate": "2026-03-03",
+      "Status": "1",
+      "Remarks": "SUNDAR SALT 800GRAM"
+    },
+    {
+      "SaCode": "1353",
+      "SaDate": "2026-03-07",
+      "Status": "1",
+      "Remarks": "AL FIRDOUS VERMICEILLI U SHAP"
+    },
+    {
+      "SaCode": "1350",
+      "SaDate": "2026-03-09",
+      "Status": "1",
+      "Remarks": "TRAIN SOAP "
+    },
+    {
+      "SaCode": "1351",
+      "SaDate": "2026-03-09",
+      "Status": "1",
+      "Remarks": "LASHKARA 4PACK"
+    },
+    {
+      "SaCode": "1356",
+      "SaDate": "2026-03-09",
+      "Status": "1",
+      "Remarks": "LASHKARA DETERGENT 400GRAM"
+    },
+    {
+      "SaCode": "1357",
+      "SaDate": "2026-03-10",
+      "Status": "1",
+      "Remarks": "TRAIN WP 500GRAM"
+    },
+    {
+      "SaCode": "1359",
+      "SaDate": "2026-03-15",
+      "Status": "1",
+      "Remarks": "DELUXE TURKEY ORANGE"
+    },
+    {
+      "SaCode": "1358",
+      "SaDate": "2026-03-16",
+      "Status": "1",
+      "Remarks": "DELUXE TURKEY ROSE TOUCH"
+    },
+    {
+      "SaCode": "1364",
+      "SaDate": "2026-03-24",
+      "Status": "1",
+      "Remarks": "SERVIS BLUE SPROCKET DRIVEN"
+    },
+    {
+      "SaCode": "1352",
+      "SaDate": "2026-03-28",
+      "Status": "1",
+      "Remarks": "INSAAF SALTT 800GRAM"
+    },
+    {
+      "SaCode": "1363",
+      "SaDate": "2026-03-31",
+      "Status": "1",
+      "Remarks": "PLANT DETERFGENT MARCH 26"
+    },
+    {
+      "SaCode": "1365",
+      "SaDate": "2026-04-30",
+      "Status": "1",
+      "Remarks": ""
+    },
+    {
+      "SaCode": "1366",
+      "SaDate": "2026-06-30",
+      "Status": "1",
+      "Remarks": "DW/DT"
+    }
+  ]
+}

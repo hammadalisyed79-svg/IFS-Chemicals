@@ -1,0 +1,11 @@
+# Streamlit — distributor portal (bind localhost; proxy at /portal)
+[server]
+port = 8502
+address = "127.0.0.1"
+headless = true
+baseUrlPath = "portal"
+enableCORS = false
+enableXsrfProtection = true
+
+[browser]
+gatherUsageStats = false

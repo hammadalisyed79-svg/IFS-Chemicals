@@ -1,0 +1,27 @@
+﻿=== ItemInformation columns ===
+ItemCode	varchar
+ItemName	varchar
+ItemType	char
+MeasuringUnit	varchar
+PackingQuantity	numeric
+SaleRate	numeric
+PurchaseRate	numeric
+OpeningStock	numeric
+Status	char
+UserCode	varchar
+OpeningRate	numeric
+OpeningAmount	numeric
+InventoryCode	varchar
+InventoryAccountName	varchar
+Batch	decimal
+packingsize	varchar
+DirectLabour	numeric
+FactoryOH	numeric
+
+=== FMYE ItemInformation sample ===
+
+
+=== Lookup Sales ProductIDs in FMYE ItemInformation ===
+FMYE ItemInformation count: 
+
+=== FMYE InwardDetail weight sample ===

@@ -1,0 +1,329 @@
+{
+  "target": "2026-08-23",
+  "when": "2026-08-23T18:22:43",
+  "book": {
+    "opening": {
+      "coa_opening": 282369.0,
+      "prior_receipts": 195755680.0,
+      "prior_payments": 193480039.0,
+      "opening": 2558010.0
+    },
+    "day": {
+      "receipts": 1557330.0,
+      "receipt_count": 13,
+      "payments": 2340040.0,
+      "payment_count": 44,
+      "net": -782710.0
+    },
+    "closing_calc": 1775300.0,
+    "opening_next": 1775300.0,
+    "carry_gap": 0.0,
+    "prev_day_close": 2558010.0,
+    "prev_to_today_gap": 0.0
+  },
+  "gl_through": {
+    "code": "000000",
+    "balance": 1775300.0,
+    "entry_count": 5182
+  },
+  "book_vs_gl": 0.0,
+  "top_receipts": [
+    {
+      "document_no": "CR-127076",
+      "amount": 720300.0,
+      "description": "Cash returned by Fayyaz sb (CA-0009)",
+      "reference_no": "CAS-0012",
+      "party_type": "account",
+      "party_id": 203
+    },
+    {
+      "document_no": "CR-127067",
+      "amount": 500000.0,
+      "description": "Receipt from HAJI NAZIR AKHTAR Sb",
+      "reference_no": "",
+      "party_type": "customer",
+      "party_id": 42
+    },
+    {
+      "document_no": "CR-127072",
+      "amount": 240000.0,
+      "description": "Cash Rcvd frm Fayzan sb",
+      "reference_no": "",
+      "party_type": "customer",
+      "party_id": 861
+    },
+    {
+      "document_no": "CR-127078",
+      "amount": 45530.0,
+      "description": "Cash returned by Yahya Rider (CA-0002)",
+      "reference_no": "CAS-0014",
+      "party_type": "account",
+      "party_id": 203
+    },
+    {
+      "document_no": "CR-127075",
+      "amount": 14320.0,
+      "description": "Cash returned by Raza Saleem Driver (CA-0007)",
+      "reference_no": "CAS-0011",
+      "party_type": "account",
+      "party_id": 203
+    },
+    {
+      "document_no": "CR-127068",
+      "amount": 10000.0,
+      "description": "Cash returned by Hammad sb for test purpose (CA-0010)",
+      "reference_no": "CAS-0002",
+      "party_type": "account",
+      "party_id": 203
+    },
+    {
+      "document_no": "CR-127077",
+      "amount": 10000.0,
+      "description": "Cash returned by Fayyaz Sb paid on 19.08.2026 (CA-0006)",
+      "reference_no": "CAS-0013",
+      "party_type": "account",
+      "party_id": 203
+    },
+    {
+      "document_no": "CR-127074",
+      "amount": 5100.0,
+      "description": "Cash returned by Shahzad Driver dated 17.08.2026 (CA-0004)",
+      "reference_no": "CAS-0010",
+      "party_type": "account",
+      "party_id": 203
+    },
+    {
+      "document_no": "CR-127070",
+      "amount": 4450.0,
+      "description": "Sale SAL-26080464",
+      "reference_no": "SAL-26080464",
+      "party_type": null,
+      "party_id": null
+    },
+    {
+      "document_no": "CR-127073",
+      "amount": 2530.0,
+      "description": "Cash returned by Shahzad Driver (CA-0005)",
+      "reference_no": "CAS-0009",
+      "party_type": "account",
+      "party_id": 203
+    },
+    {
+      "document_no": "CR-127069",
+      "amount": 2100.0,
+      "description": "Sale SAL-26080467",
+      "reference_no": "SAL-26080467",
+      "party_type": null,
+      "party_id": null
+    },
+    {
+      "document_no": "CR-127071",
+      "amount": 2020.0,
+      "description": "Sale SAL-26080458",
+      "reference_no": "SAL-26080458",
+      "party_type": null,
+      "party_id": null
+    },
+    {
+      "document_no": "CR-127066",
+      "amount": 980.0,
+      "description": "Sale SAL-26080456",
+      "reference_no": "SAL-26080456",
+      "party_type": null,
+      "party_id": null
+    }
+  ],
+  "top_payments": [
+    {
+      "document_no": "CP-127177",
+      "amount": 1000000.0,
+      "description": "Cash Paid to Fayyaz sb",
+      "reference_no": "",
+      "party_type": "account",
+      "party_id": 335
+    },
+    {
+      "document_no": "CP-127150",
+      "amount": 720300.0,
+      "description": "Advance to Fayyaz sb",
+      "reference_no": "CA-0009",
+      "party_type": "account",
+      "party_id": 203
+    },
+    {
+      "document_no": "CP-127143",
+      "amount": 271560.0,
+      "description": "Advance to Yahya Rider \u2014 Advance paid to yahya for factory",
+      "reference_no": "CA-0002",
+      "party_type": "account",
+      "party_id": 203
+    },
+    {
+      "document_no": "CP-127178",
+      "amount": 100000.0,
+      "description": "Cash Paid to Fayyaz sb",
+      "reference_no": "",
+      "party_type": "account",
+      "party_id": 96
+    },
+    {
+      "document_no": "CP-127180",
+      "amount": 40000.0,
+      "description": "Adv August 26 to Factory Worker (1216)",
+      "reference_no": "",
+      "party_type": "expense",
+      "party_id": 1402
+    },
+    {
+      "document_no": "CP-127152",
+      "amount": 26600.0,
+      "description": "Advance to Shahzad Driver (23.08.26) \u2014 For Fuel",
+      "reference_no": "CA-0011",
+      "party_type": "account",
+      "party_id": 203
+    },
+    {
+      "document_no": "CP-127181",
+      "amount": 20000.0,
+      "description": "Advance to Raza Saleem \u2014 for Cement",
+      "reference_no": "CA-0012",
+      "party_type": "account",
+      "party_id": 203
+    },
+    {
+      "document_no": "CP-127182",
+      "amount": 20000.0,
+      "description": "Advance to Yahya Butt sb \u2014 for Factory Purchase Item via Usman sb",
+      "reference_no": "CA-0013",
+      "party_type": "account",
+      "party_id": 203
+    },
+    {
+      "document_no": "CP-127179",
+      "amount": 15400.0,
+      "description": "Fuel GTS-576 via Raza (116075) 23.08 (7.45) 44.89Ltr",
+      "reference_no": "",
+      "party_type": "expense",
+      "party_id": 1405
+    },
+    {
+      "document_no": "CP-127142",
+      "amount": 15200.0,
+      "description": "10 Bag Cement Best way @ 1510 +charges 100 via Raza",
+      "reference_no": "",
+      "party_type": "expense",
+      "party_id": 1383
+    },
+    {
+      "document_no": "CP-127149",
+      "amount": 15000.0,
+      "description": "Advance to Ghullam Abbas Motor Winding Grw",
+      "reference_no": "CA-0008",
+      "party_type": "account",
+      "party_id": 203
+    },
+    {
+      "document_no": "CP-127148",
+      "amount": 14320.0,
+      "description": "Advance to Raza Saleem Driver",
+      "reference_no": "CA-0007",
+      "party_type": "account",
+      "party_id": 203
+    },
+    {
+      "document_no": "CP-127147",
+      "amount": 10000.0,
+      "description": "Advance to Fayyaz Sb paid on 19.08.2026",
+      "reference_no": "CA-0006",
+      "party_type": "account",
+      "party_id": 203
+    },
+    {
+      "document_no": "CP-127151",
+      "amount": 10000.0,
+      "description": "Advance to Hammad sb for test purpose",
+      "reference_no": "CA-0010",
+      "party_type": "account",
+      "party_id": 203
+    },
+    {
+      "document_no": "CP-127145",
+      "amount": 5100.0,
+      "description": "Advance to Shahzad Driver dated 17.08.2026",
+      "reference_no": "CA-0004",
+      "party_type": "account",
+      "party_id": 203
+    },
+    {
+      "document_no": "CP-127163",
+      "amount": 4470.0,
+      "description": "Fare 03 Invertor frm Lahore to Gujt by Yahya (03.08.26)",
+      "reference_no": "",
+      "party_type": "expense",
+      "party_id": 1389
+    },
+    {
+      "document_no": "CP-127158",
+      "amount": 4100.0,
+      "description": "01 Gallon Enamul Master Black by Yahya (03.08.26) ",
+      "reference_no": "",
+      "party_type": "expense",
+      "party_id": 1369
+    },
+    {
+      "document_no": "CP-127167",
+      "amount": 4000.0,
+      "description": "02 Bearing # 5211 by Yahya (06.08.26)",
+      "reference_no": "",
+      "party_type": "expense",
+      "party_id": 1369
+    },
+    {
+      "document_no": "CP-127172",
+      "amount": 4000.0,
+      "description": "02 Day Bread working charges by Yahya (06,07.08.26)",
+      "reference_no": "",
+      "party_type": "expense",
+      "party_id": 1387
+    },
+    {
+      "document_no": "CP-127173",
+      "amount": 4000.0,
+      "description": "16 Bag Suduim Sulphate frm Godown Narowali to Surf Factory by Shakee sb",
+      "reference_no": "",
+      "party_type": "expense",
+      "party_id": 1389
+    }
+  ],
+  "advance_receipts": [
+    "<sqlite3.Row object at 0x000002822B2BEC50>",
+    "<sqlite3.Row object at 0x000002822B2BE2C0>",
+    "<sqlite3.Row object at 0x000002822B2BE3E0>",
+    "<sqlite3.Row object at 0x000002822B2BE470>",
+    "<sqlite3.Row object at 0x000002822B2BE4D0>",
+    "<sqlite3.Row object at 0x000002822B2BE5C0>",
+    "<sqlite3.Row object at 0x000002822B2BE650>"
+  ],
+  "advance_payments": [
+    "<sqlite3.Row object at 0x000002822B2BE830>",
+    "<sqlite3.Row object at 0x000002822B2BE950>",
+    "<sqlite3.Row object at 0x000002822B2BEA70>",
+    "<sqlite3.Row object at 0x000002822B2BEB30>",
+    "<sqlite3.Row object at 0x000002822B2BEBF0>",
+    "<sqlite3.Row object at 0x000002822B2BECE0>",
+    "<sqlite3.Row object at 0x000002822B2BED40>",
+    "<sqlite3.Row object at 0x000002822B2BEDA0>",
+    "<sqlite3.Row object at 0x000002822B2BEE00>",
+    "<sqlite3.Row object at 0x000002822B2BEE60>",
+    "<sqlite3.Row object at 0x000002822B2BEEC0>",
+    "<sqlite3.Row object at 0x000002822B2BEF20>"
+  ],
+  "gl_orphans_top": [],
+  "gl_orphans_net_top20": 0,
+  "provisional_cash_sales": {
+    "count": 0,
+    "total": 0
+  },
+  "borrow_receipts": [],
+  "borrow_payments": []
+}

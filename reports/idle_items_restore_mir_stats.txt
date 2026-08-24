@@ -1,0 +1,4 @@
+restored=646
+errors=[]
+products=2752
+csv=c:\MY ERPS\reports\idle_items_restore_fmye_mir_like_cly239.csv

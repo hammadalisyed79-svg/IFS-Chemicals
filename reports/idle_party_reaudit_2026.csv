@@ -1,0 +1,744 @@
+code,name,deleted_as,erp_ob_backup,erp_current_backup,fmye_ob,fmye_2026_txns,fmye_category,should_restore,reason
+100773,TOP LINE PACKAGES,customer,0.0,0.0,-671200.0,5,Customer(S),YES,FMYE OB(2026)=-671200.00; FMYE 2026 txns=5; customer deleted; supplier kept OB=-671200.0 CUR=-4658295.0; COA OB=-671200.0 CUR=-4658295.0
+200164,AL MADINA FINE QUALITY RABAR ENGINEERING(MALIK FAIZ),supplier,0.0,0.0,0.0,4,Supplier(V),YES,FMYE 2026 txns=4; FMYE historical OB period 2023=-88999.00 (cleared by 2026); supplier deleted; customer kept OB=0.0 CUR=9.0; COA OB=0.0 CUR=9.0
+100016,SHAFI SONS SOAP FACTORY,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2020=86283495.00 (cleared by 2026)
+100018,HAJI SARDAR BUTKHAILA KPK,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2023=113800.00 (cleared by 2026)
+100037,MEHAR NISAR TRADERS JALALPUR JATTAN,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2022=19690.00 (cleared by 2026)
+100038,AMJAD JAVED BUTT KARYANA STORE JALALPUR JATTAN,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2022=20520.00 (cleared by 2026)
+100039,TAJ KARYANA STORE JALALPUR JATTAN,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2022=-200.00 (cleared by 2026)
+100040,SARFARAZ TAJ TANDA CHOWK JPJ,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2022=1235.00 (cleared by 2026)
+100041,"HAROON SWEETS SABZI MANDI, JPJ",customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2022=13600.00 (cleared by 2026)
+100043,U-A BROTHERS SABZI MANDI JPJ,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2021=3000.00 (cleared by 2026)
+100044,KHALID KARYNA STORE SABZI MANDI JPJ,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2022=113950.00 (cleared by 2026)
+100046,SYED MOHSIN SHAH SABZI MANDI JPJ,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2021=112447.00 (cleared by 2026)
+100047,KASHIF TRADERS TANDA,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2022=127819.00 (cleared by 2026)
+100048,HAFIZ TRADERS TANDA,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2022=254080.00 (cleared by 2026)
+100049,AL GHANI TRADER SABZI MANDI JPJ,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2022=50.00 (cleared by 2026)
+100050,BUTT TRADERS SABZI MANDI JPJ,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2022=17410.00 (cleared by 2026)
+100051,MAHMOOD KARYANA STORE DOMELA CHOWK JPJ,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2022=150.00 (cleared by 2026)
+100052,WAQAS RAFIQ KARYANA JPJ,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2022=272255.00 (cleared by 2026)
+100059,OMAR LOAN,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2021=135948.00 (cleared by 2026)
+100065,NASIR TRADERS KUNJAH,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2023=94375.00 (cleared by 2026)
+100071,ARIF DHUDRA,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2022=-310.00 (cleared by 2026)
+100076,SUNDRY CREDITORS,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2025=-0.20 (cleared by 2026)
+100077,HAJI GHULAM HUSSAN MUNGOWAL,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2023=31690.00 (cleared by 2026)
+100078,NEW QADRI KERYANA STORE MUNGOWAL,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2023=600.00 (cleared by 2026)
+100096,MUHAMMADI ENTERPRISES CHOKI BHAGGAT,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2022=300000.00 (cleared by 2026)
+100106,SHOAIB KHAN AFG OTHERS,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2020=143100.00 (cleared by 2026)
+100112,MUGHAL KIRYANA STORE MUNGOWAL (HAJI SHOUKAT),customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2023=97180.00 (cleared by 2026)
+100116,SAHIB GENERAL STORE JPJ,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2022=6350.00 (cleared by 2026)
+100117,ZAHOOR ELLAHI KARYANA (QAISAR),customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2022=364140.00 (cleared by 2026)
+100120,CITY KARYANA STORE MAIN BAZAR JPJ,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2022=28580.00 (cleared by 2026)
+100121,BISMILLAH SWEETS BHARILA SHARIF,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2022=39130.00 (cleared by 2026)
+100125,ARIF& BROS SILANWALI,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2021=104400.00 (cleared by 2026)
+100129,KASHIF TRADERS NAROWAL,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2022=3965.00 (cleared by 2026)
+100131,RAZA KERYANA STORE RAILWAY ROAD,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2022=10.00 (cleared by 2026)
+100132,RAZA TRADERS WAZIRABAD,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2024=5.00 (cleared by 2026)
+100134,SARHAD IQBAL BAJOR,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2021=61055.00 (cleared by 2026)
+100136,NOSHA KERYANA STORE,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2022=17840.00 (cleared by 2026)
+100141,ADEEL TRADERS SARGHODA,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2021=682750.00 (cleared by 2026)
+100145,SHAFIQ KERYANA STORE JPJ,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2022=270600.00 (cleared by 2026)
+100147,GIFT CERAMICS GUJRAT,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2023=9807.00 (cleared by 2026)
+100149,NEW ALI TRADERS BAHAWAL NAGAR,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2022=83060.00 (cleared by 2026)
+100151,AL MADINA SUPER STORE PARIANWALI,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2023=29295.00 (cleared by 2026)
+100155,REHMAT TRADERS TANDA,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2022=27200.00 (cleared by 2026)
+100156,HAJI FARMAN TANDA,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2022=73290.00 (cleared by 2026)
+100157,MALIK TRADERS BAREELA SHARIF,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2022=68660.00 (cleared by 2026)
+100161,HAJI AMANAT KERYANA STORE KARIYANWALA,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2022=104035.00 (cleared by 2026)
+100162,SHEIKH SHAHID KERYANA STORE KARIYANWALA,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2022=66700.00 (cleared by 2026)
+100163,MUSLIM TRADERS KARIYANWALA,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2022=300.00 (cleared by 2026)
+100164,HAJI BAGH ALI KERYANA STORE KARIYANWALA,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2022=-220.00 (cleared by 2026)
+100165,QADRI KERYANA STORE JPS,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2022=5.00 (cleared by 2026)
+100167,NAZAR HUSSAIN FATEHPUR,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2022=25000.00 (cleared by 2026)
+100168,SHAFI SONS PACKAGES,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2025=6020674.01 (cleared by 2026)
+100173,NAVEED AFZAL,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2023=-30.00 (cleared by 2026)
+100174,MIAN ABDUL LATIF,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2023=124550.00 (cleared by 2026)
+100175,J. MART MUNGOWAL,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2023=137760.00 (cleared by 2026)
+100176,CITY TRADERS CHOPALA ADA JPJ,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2021=7100.00 (cleared by 2026)
+100185,SHANDAR CERAMICS,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2024=176391.00 (cleared by 2026)
+100186,SARFARAZ TRADERS RAILWAY ROAD,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2023=37160.00 (cleared by 2026)
+100187,ELIXIR CERAMICS,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2023=2079.00 (cleared by 2026)
+100189,SHEF SALT (SHEIKH SHAFQAT),customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2023=53872.00 (cleared by 2026)
+100190,GHOUSIA FAN (DANIYAL BUTT),customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2020=46434.00 (cleared by 2026)
+100191,PLASCO PIPE FACTORY,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2022=384.00 (cleared by 2026)
+100192,RIAZ TAJ SABZI MANDI JPJ,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2022=150790.00 (cleared by 2026)
+100195,AWAIS TRADERS KARYANWALA,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2022=4816.00 (cleared by 2026)
+100196,KAMRAN KERYANA KARYANWALA,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2022=69350.00 (cleared by 2026)
+100200,MUHAMMAD SHAFI QADRI MUNGOWAL,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2023=6140.00 (cleared by 2026)
+100201,MUHAMMAD RAFI MUNGOWAL,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2023=16150.00 (cleared by 2026)
+100203,GHOUS TRADERS KARYANWALA,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2022=17940.00 (cleared by 2026)
+100204,MITTHO TRADERS KARYANWALA,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2022=12000.00 (cleared by 2026)
+100205,MEHAR IMRAN TRADERS JPJ,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2022=15.00 (cleared by 2026)
+100206,TOUSEEF SARAN KARYANWALA,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2022=10950.00 (cleared by 2026)
+100207,ZULFIQAR KERYANA KARYANWALA,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2022=2910.00 (cleared by 2026)
+100209,SHEIKH AFZAL TRADERS KARYANWALA,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2022=7795.00 (cleared by 2026)
+100212,REYAN TRADERS LODHRAN,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2022=-170.00 (cleared by 2026)
+100214,GHOUSIA SWEETS SABZI MANDI JPJ,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2025=252797.00 (cleared by 2026)
+100216,ZAIN SHAH MANDI BAHUDDIN,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2021=100502.50 (cleared by 2026)
+100218,ASHFAQ TRADERS SURKHPUR,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2022=58730.00 (cleared by 2026)
+100219,HAJI KHALID MEHMOOD KERYANA,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2021=7980.00 (cleared by 2026)
+100220,MOHAMMADIYA GHOUSIA TRADERS,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2022=29030.00 (cleared by 2026)
+100221,QAMAR SWEETS KERYANWALA,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2022=16520.00 (cleared by 2026)
+100222,ITTIFAQ KERYANA STORE PARIYANWALI,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2023=284080.00 (cleared by 2026)
+100225,EHSAN KERYANA & GENERAL STORE JPJ,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2022=56730.00 (cleared by 2026)
+100226,HAJI TARIQ DOLTALA,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2021=-200.00 (cleared by 2026)
+100227,MEHAR ZEESHAN SABZI MANDI JPJ,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2022=86460.00 (cleared by 2026)
+100228,MEHAR QAISER MAIN BAZAR JPJ,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2022=50470.00 (cleared by 2026)
+100232,MAKKAH TRADERS LALAMUSA,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2021=210300.00 (cleared by 2026)
+100234,MOHAMMAD SIDDIQUE KABARIYA,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2022=4760.00 (cleared by 2026)
+100238,BR TRADERS PINDI BHATTIAN,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2022=2350.00 (cleared by 2026)
+100239,HANI ICE CREAM,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2023=1000.00 (cleared by 2026)
+100247,UNITED SUPER STORE PARIANWALI,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2022=65000.00 (cleared by 2026)
+100248,CH BROTHERS FAISLABAD,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2022=42150.00 (cleared by 2026)
+100249,A.R TRADERS FAISALABAD,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2022=44000.00 (cleared by 2026)
+100250,AHMED TRADERS PEER MEHAL,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2022=9500.00 (cleared by 2026)
+100253,GHUMMAN TRADERS DHULLANALA,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2022=-105.00 (cleared by 2026)
+100254,MALIK TAYYAB RAILWAY ROAD,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2023=129020.00 (cleared by 2026)
+100255,WAHEED AZAM KERYANA STORE,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2022=50.00 (cleared by 2026)
+100257,TAHIR & WAQAR KERYANA KARIYANWALA,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2022=27800.00 (cleared by 2026)
+100259,AL MUSLIM TRADERS KARIYANWALA,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2022=14000.00 (cleared by 2026)
+100260,MOHAMMAD NAWAZ TRADERS KARIYANWALA,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2022=-400.00 (cleared by 2026)
+100261,TAWAKAL TRADERS KARIYANWALA,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2021=21000.00 (cleared by 2026)
+100265,KAMRAN KERYANA CHAK PINDI,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2021=3390.00 (cleared by 2026)
+100266,ARSLAN TRADERS DHULLANWALA,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2021=4500.00 (cleared by 2026)
+100267,GHOUSIA TRADERS DHULLANWALA,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2021=8000.00 (cleared by 2026)
+100269,SAWAN KERYANA DHULLANWALA,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2021=1590.00 (cleared by 2026)
+100271,SULIMAN TRADERS KERYANWALA,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2022=70.00 (cleared by 2026)
+100272,HAFIZ SHAHZAD KERYANA KERYANWALA,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2022=15600.00 (cleared by 2026)
+100274,CHOUDHARY KERYANA CHAICHIYAN,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2021=2860.00 (cleared by 2026)
+100275,UZAIR GENERAL STORE CHAICHIYAN,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2021=6540.00 (cleared by 2026)
+100277,IKHLAQ SB,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2023=-14167.00 (cleared by 2026)
+100283,ZAFAR BROTHERS FATEHPUR,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2022=-100.00 (cleared by 2026)
+100284,ZAINAB GENERAL STORE,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2022=500.00 (cleared by 2026)
+100285,ATIF BHAI,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2022=-40.00 (cleared by 2026)
+100286,MUDASSAR BUTT JPJ,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2022=123370.00 (cleared by 2026)
+100288,SHALIMAR KERYANA DINGA,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2021=5360.00 (cleared by 2026)
+100289,MOHAMMAD SHAFIQ KERYANA DHULANWALA,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2022=-400.00 (cleared by 2026)
+100292,REHMANI KERYANA GUJRAT,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2023=80000.00 (cleared by 2026)
+100296,HASHIM KERYANA FATEHPUR,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2022=-200.00 (cleared by 2026)
+100297,KHALID SUPER STORE FATEHPUR,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2022=-200.00 (cleared by 2026)
+100298,HAMMAD IRFAN MAISUM,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2022=-40.00 (cleared by 2026)
+100299,MADNI KERYANA BHAKRANWALI,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2021=2960.00 (cleared by 2026)
+100300,G. MART PARIYANWALI,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2022=300.00 (cleared by 2026)
+100306,MEHALMI TRADERS SAMUNDRI,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2022=644.00 (cleared by 2026)
+100310,REHMAT KERYANA DINGA,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2022=-2500.00 (cleared by 2026)
+100311,AMN MARKETING NETWORK,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2021=189306.00 (cleared by 2026)
+100313,NISAR AHMED,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2024=16300.00 (cleared by 2026)
+100316,RIZWAN SHEIKH,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2023=1.00 (cleared by 2026)
+100319,AL-SAEED TRADERS,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2022=8420.00 (cleared by 2026)
+100324,FAYYAZ TRADERS,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2022=797435.00 (cleared by 2026)
+100325,SHAHID MULTAN,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2023=-25000.00 (cleared by 2026)
+100326,CHOUDHARY KARYANA STORE,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2022=1000.00 (cleared by 2026)
+100328,BETA GOL SOAP PACKAGES,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2023=4.00 (cleared by 2026)
+100330,TUQEER TRADERS,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2023=4000.00 (cleared by 2026)
+100334,AL-NADIR GENRAL STORE MASUM,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2022=-480.00 (cleared by 2026)
+100337,ILYAS & JAVEED KARYANA,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2021=40025.00 (cleared by 2026)
+100340,HUSSAIN KARYANA DHULLANWALI,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2021=7460.00 (cleared by 2026)
+100341,SHEIKH AFZAL DOLAT NAGGAR,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2022=-200.00 (cleared by 2026)
+100342,BILAL TRADERS,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2022=-200.00 (cleared by 2026)
+100344,MANUCHAR PAKISTAN,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2023=-6571776.00 (cleared by 2026)
+100345,AL MAKKAH TRADERS,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2021=60943.00 (cleared by 2026)
+100347,G.M.TRADER,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2022=-100.00 (cleared by 2026)
+100350,AL MADINA G.S BHADDHAR,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2022=-650.00 (cleared by 2026)
+100351,AL NOOR KERYANA DOLATNAGAR,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2022=-20.00 (cleared by 2026)
+100353,SHAFIULLAH DARGAI,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2022=4795590.00 (cleared by 2026)
+100354,RAFI TRADERS KAMOKI,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2023=177580.00 (cleared by 2026)
+100355,SHEIKH NISAR FAISALABAD,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2021=18650.00 (cleared by 2026)
+100356,BASHIR TRADERS DHULLANWALA,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2022=-900.00 (cleared by 2026)
+100357,AL MADINA TRADERS FATEHPUR,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2022=-2000.00 (cleared by 2026)
+100358,AL KARAM GENERAL STORE SABOR,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2022=20.00 (cleared by 2026)
+100359,AL MADINA TRADERS DOLATNAGAR,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2021=2650.00 (cleared by 2026)
+100360,MALIK TRADERS MANUCHAK,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2022=400.00 (cleared by 2026)
+100361,CH MUDASSAR WARRIACH JPJ,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2021=23950.00 (cleared by 2026)
+100362,MALIK TRADERS LALAMUSA,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2022=196700.00 (cleared by 2026)
+100363,REHMAT KERYANA MANUCHAK,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2023=75200.00 (cleared by 2026)
+100368,AKHTAR JEHLUM,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2022=980.00 (cleared by 2026)
+100379,MUDASSAR BUTT BAKHRANWALI,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2022=-604.00 (cleared by 2026)
+100381,MUHAMMAD SHAFIQUE,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2022=400.00 (cleared by 2026)
+100383,NAEEM AZAM TIAL FIXER,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2022=3000.00 (cleared by 2026)
+100384,NAEEM TRADERS KOTLA,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2022=535.00 (cleared by 2026)
+100390,AL HAIDER TRADERS JPJ,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2022=39000.00 (cleared by 2026)
+100394,GULSHAN SOAP KALASHAHKAKO,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2023=68400.00 (cleared by 2026)
+100395,HAJI AFZAL TRADERS POOCH,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2022=4300.00 (cleared by 2026)
+100396,KHAN TRADERS QUAIDABAD,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2021=-20.00 (cleared by 2026)
+100398,SEITH RIZWAN BHERA,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2022=1550.00 (cleared by 2026)
+100401,YOUNAS RADDI PACKAGES,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2024=12786.00 (cleared by 2026)
+100406,HAJI GHULLAM QADIR LALAMUSA,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2024=13310.00 (cleared by 2026)
+100408,HAMZA TRADERS RAILWAY ROAD GUJRAT,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2024=96820.00 (cleared by 2026)
+100410,WALEED TRADERS SHAH JAHANGIR ROAD GUJRAT,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2023=5.00 (cleared by 2026)
+100414,FAYYAZ SB MISC A/C,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2022=10383754.00 (cleared by 2026)
+100422,ANSAR KERYANA STORE BURNALA,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2022=15000.00 (cleared by 2026)
+100423,ATTAR SUPER STORE MANUCHAK,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2021=-150.00 (cleared by 2026)
+100424,EHTISHAM TRADERS KUNJAH,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2021=49420.00 (cleared by 2026)
+100434,LABAIK KARWANA STORE KARIYWALA,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2022=160.00 (cleared by 2026)
+100436,ASHFAQ BUTT BAKHRIYANWALI,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2021=1900.00 (cleared by 2026)
+100440,NADEEM MALIK LALAMUSA,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2023=2600.00 (cleared by 2026)
+100441,IMRAN SAMRAN FATEHPUR,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2021=24300.00 (cleared by 2026)
+100446,DAWOOD TRADERS DINGA,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2021=4100.00 (cleared by 2026)
+100448,HAQ TRADERS CHAKWAL,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2022=-2300.00 (cleared by 2026)
+100449,TAHIR GABBA FAISALABAD,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2023=32500.00 (cleared by 2026)
+100450,OLYMPIA PACKAGES,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2021=200000.00 (cleared by 2026)
+100451,HAFIZ KARYANA AIRPORT ROAD,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2023=5950.00 (cleared by 2026)
+100453,AL MADINA G.STORE DULLANWALA,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2021=4160.00 (cleared by 2026)
+100454,HUSSAN K.S SAROKI BRIDGE,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2022=20.00 (cleared by 2026)
+100464,MAQBOOL KHAN,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2022=-5.00 (cleared by 2026)
+100465,S.B TRADERS,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2023=279677.00 (cleared by 2026)
+100466,ABDULLAH GENERAL STORE KARIYAWALA,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2021=10000.00 (cleared by 2026)
+100468,SHIMLA FOODS GUJRAT,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2022=-5.00 (cleared by 2026)
+100471,MALIK ARSHAD,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2023=-5.00 (cleared by 2026)
+100473,WARRAICH TRADERS MANGOWAL,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2022=100.00 (cleared by 2026)
+100477,FARYAD KARYANA BHARILLA SHARIF,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2022=100240.00 (cleared by 2026)
+100480,FINE BLADE LAHORE,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2022=1100.00 (cleared by 2026)
+100484,ISMAIL TRADERS,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2023=476099.00 (cleared by 2026)
+100488,ISHAQ TRADERS GUJRAT MANDI,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2023=58875.00 (cleared by 2026)
+100491,H.A.M TRADERS LAHORE,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2024=14658.00 (cleared by 2026)
+100494,BUTT TRADERS PARIANWALI,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2023=14400.00 (cleared by 2026)
+100496,MEHAR FAYYAZ TRADERS SURHPUR,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2022=294470.00 (cleared by 2026)
+100497,ITEFAQ CERAMICS GUJRAT,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2023=1756.00 (cleared by 2026)
+100498,MAA SHAA ALLAH TRADERS HAJI YASIR JPJ,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2022=32850.00 (cleared by 2026)
+100501,S MART GUJRAT,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2023=9750.00 (cleared by 2026)
+100502,CBS MART GUJRAT,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2023=3940.00 (cleared by 2026)
+100504,MIAN SUFHAN MANGOWAL,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2023=77700.00 (cleared by 2026)
+100506,IRFAN KARYANA JPJ,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2022=9900.00 (cleared by 2026)
+100507,S.F KARYANA JPJ,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2022=14120.00 (cleared by 2026)
+100508,PAINT WORK NEW CONSTRUCTION,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2022=174200.00 (cleared by 2026)
+100509,R.G MART,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2023=5775.00 (cleared by 2026)
+100510,MR. MART,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2022=8710.00 (cleared by 2026)
+100511,FRESH VALLEY,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2023=13840.00 (cleared by 2026)
+100512,PACER MART,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2023=840.00 (cleared by 2026)
+100513,RANJHA TRADERS RAMKEY BAILPUR,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2022=86900.00 (cleared by 2026)
+100514,AZHAR SARGODHA,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2022=18050.00 (cleared by 2026)
+100517,AL SAEED TRADERS GUJRAT MANDI,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2023=268400.00 (cleared by 2026)
+100518,NEW R.C.I ENTERPRISES GUJRAT,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2022=22165.00 (cleared by 2026)
+100519,AMIR SB LAHORE,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2025=250000.00 (cleared by 2026)
+100521,ZAKAT,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2022=225000.00 (cleared by 2026)
+100523,WASEEM IQBAL HEADKHAN,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2022=400.00 (cleared by 2026)
+100526,JAVED SB KHARAIN,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2024=24901.00 (cleared by 2026)
+100532,ASIM TRADER FAISALABAD,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2022=28500.00 (cleared by 2026)
+100534,DAUD TRADERS SARGODHA,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2022=-500.00 (cleared by 2026)
+100535,SHAH SALMAN (PARLEY),customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2022=-37423907.00 (cleared by 2026)
+100537,MA SHAH ALLAH KARYANA STORE DONGA BONGA,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2022=4.00 (cleared by 2026)
+100541,B & B PLASTIC SHEIKHUPURA,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2022=-1302.00 (cleared by 2026)
+100548,GULISTAN KHAN NOODLES,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2022=1009000.00 (cleared by 2026)
+100550,SACHAL MART,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2023=320.00 (cleared by 2026)
+100553,TALIB HUSSAIN MANGOWAL,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2023=1000.00 (cleared by 2026)
+100556,99 ELECTRIC STORE FAISLABAD,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2022=27500.00 (cleared by 2026)
+100559,MUJAHID TRADERS MANGOWAL,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2023=99500.00 (cleared by 2026)
+100561,MEHAR KARYANA SABZI MANDI JPJ,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2022=16350.00 (cleared by 2026)
+100562,NERMA SOAP SIALKOT,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2022=45000.00 (cleared by 2026)
+100563,HAJI NAZIR AKHTAR - PERSONAL A/C,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2022=500000.00 (cleared by 2026)
+100567,QARI ABDUL KHALIQ TANDA,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2022=3640.00 (cleared by 2026)
+100568,KAMRAN TRADER SHADIWAL ROAD,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2023=118300.00 (cleared by 2026)
+100571,SHAKEEL GENERAL KHI,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2022=-122600.00 (cleared by 2026)
+100572,SAIF ULLAH KARYANA JALALPUR,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2022=15020.00 (cleared by 2026)
+100574,A-ONE TRADERS HAJI KHIZAR HAYAT,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2022=222020.00 (cleared by 2026)
+100578,KASHIF NIMKO,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2024=20535.00 (cleared by 2026)
+100582,JUTT TRADERS JPJ,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2022=19650.00 (cleared by 2026)
+100584,MIRZA USMAN BAIG,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2022=50000.00 (cleared by 2026)
+100585,MASTER TRADER PHALIA,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2022=3720.00 (cleared by 2026)
+100588,ZIA TRADERS GUJRAT,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2022=13500.00 (cleared by 2026)
+100590,AMIN SONS RAILWAY ROAD,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2023=1720.00 (cleared by 2026)
+100592,TALHA FOODS DINGA,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2025=182803.00 (cleared by 2026)
+100595,MOEEZ TRADERS,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2023=11400.00 (cleared by 2026)
+100602,NAZIR SWEETS & TRADERS,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2023=1100.00 (cleared by 2026)
+100606,RAJPUT TRADERS,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2024=2865.00 (cleared by 2026)
+100612,NADEEM KERYANA,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2023=100.00 (cleared by 2026)
+100614,ZAKARIYA TRADERS SHAHDIWAL,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2023=630.00 (cleared by 2026)
+100622,MUHAMMAD BILAWAL MANGOWAL,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2024=105.00 (cleared by 2026)
+100623,ALI MUHAMMAD KHAN,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2024=400.00 (cleared by 2026)
+100625,ZIA TRADERS GULYANA,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2023=11400.00 (cleared by 2026)
+100626,TALHA KIRYANA MUNGOWAL,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2023=-200.00 (cleared by 2026)
+100629,BUTT TRADER DEOWNA MANDI,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2023=1000.00 (cleared by 2026)
+100633,LOWA INTERNATIONAL DASKA,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2023=-2.00 (cleared by 2026)
+100634,CHISHTI  TRADERS MANGOWAL,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2023=21100.00 (cleared by 2026)
+100635,HUKUM KHAN,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2025=190821.00 (cleared by 2026)
+100643,KASHMIR TRADERS,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2023=737070.00 (cleared by 2026)
+100645,AFZAL SOAP FACTORY,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2024=150.00 (cleared by 2026)
+100652,HAJI ABBAS SAB QASOOR,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2024=2300.00 (cleared by 2026)
+100660,S.A TRADERS (RAFIULLAH KHAN),customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2023=2339975.00 (cleared by 2026)
+100669,MARIYUM  FOODS,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2024=-70000.00 (cleared by 2026)
+100683,NASEEM ULLAH SCRAP DEALER (IRON EMPTY DRUM),customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2024=1.00 (cleared by 2026)
+100685,MUNAWAR HUSSAIN,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2024=4530.00 (cleared by 2026)
+100690,LAURIC ACID,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2024=-16335699.01 (cleared by 2026)
+100710,MEER SOAP LAHORE,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2025=50453.00 (cleared by 2026)
+100714,KASHIF FOOD PRODUCTS,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2025=1641493.15 (cleared by 2026)
+100718,MULTI TRADERS (DARAZ.PK),customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2024=19201.00 (cleared by 2026)
+100720,JAWAD BUTT,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2024=1.00 (cleared by 2026)
+100725,UNIQUE CREAM (SKIN PRO COSMETIC),customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2025=443748.00 (cleared by 2026)
+100733,MUHAMMAD IMRAN SB,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2024=-5.00 (cleared by 2026)
+100741,ALI TRADERS,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2025=114249.00 (cleared by 2026)
+100743,ABID RAZZAQ (FLOWERS),customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2024=-100.00 (cleared by 2026)
+100746,ASIF TRADERS,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2025=3211250.00 (cleared by 2026)
+100747,RAHIM DAD PROPERY A/C,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2024=-10000000.00 (cleared by 2026)
+100748,RAFIULLAH SB PROPERTY A/C,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2024=-10000000.00 (cleared by 2026)
+100749,MOHID TRADING & COMMISSION AGENT (IMTIAZ AHMED),customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2024=567880.00 (cleared by 2026)
+100757,MAHFILI RICE,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2024=700.00 (cleared by 2026)
+100764,YAQUB SOAP FACTORY (PVT) LTD,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2025=156450.00 (cleared by 2026)
+100784,CH FAKHAR NADEEM - SAHIWAL,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2025=-663100.00 (cleared by 2026)
+100833,HAIDERI FOODS,customer,0.0,0.0,0.0,0,Customer(S),REVIEW,FMYE historical OB period 2025=1058692.00 (cleared by 2026)
+200003,JUNAID PACKAGES,supplier,0.0,0.0,0.0,0,Supplier(V),REVIEW,FMYE historical OB period 2021=9700.00 (cleared by 2026)
+200014,TAJ PIPE STORE,supplier,0.0,0.0,0.0,0,Supplier(V),REVIEW,FMYE historical OB period 2021=-10.00 (cleared by 2026)
+200019,NAEEM PACKAGES,supplier,0.0,0.0,0.0,0,Supplier(V),REVIEW,FMYE historical OB period 2024=305065.00 (cleared by 2026)
+200020,MANSOOR QUETTA,supplier,0.0,0.0,0.0,0,Supplier(V),REVIEW,FMYE historical OB period 2021=-650.00 (cleared by 2026)
+200027,SHAHEEN PAPER MILLS GUJRANWALA,supplier,0.0,0.0,0.0,0,Supplier(V),REVIEW,FMYE historical OB period 2021=-30168.00 (cleared by 2026)
+200029,MUDASSAR SHAH BOILER,supplier,0.0,0.0,0.0,0,Supplier(V),REVIEW,FMYE historical OB period 2023=200000.00 (cleared by 2026)
+200033,AL HADI CHEMICALS,supplier,0.0,0.0,0.0,0,Supplier(V),REVIEW,FMYE historical OB period 2025=1605000.00 (cleared by 2026)
+200041,IMPORT OF TINOPAL,supplier,0.0,0.0,0.0,0,Supplier(V),REVIEW,FMYE historical OB period 2023=-42909.88 (cleared by 2026)
+200046,A.Z PACKAGES,supplier,0.0,0.0,0.0,0,Supplier(V),REVIEW,FMYE historical OB period 2024=-7090.00 (cleared by 2026)
+200048,MOHAMMAD ISHTIAQ,supplier,0.0,0.0,0.0,0,Supplier(V),REVIEW,FMYE historical OB period 2021=6000.00 (cleared by 2026)
+200053,REHMAT CORPORATION,supplier,0.0,0.0,0.0,0,Supplier(V),REVIEW,FMYE historical OB period 2023=308874.00 (cleared by 2026)
+200055,C/O ABDULLAH ZAKI SB,supplier,0.0,0.0,0.0,0,Supplier(V),REVIEW,FMYE historical OB period 2021=-13193889.00 (cleared by 2026)
+200060,UNITED MARBLE INDUSTRY,supplier,0.0,0.0,0.0,0,Supplier(V),REVIEW,FMYE historical OB period 2021=-2066.00 (cleared by 2026)
+200062,AKBARI CHEMICAL INDUSTRIES (PVT) LTD,supplier,0.0,0.0,0.0,0,Supplier(V),REVIEW,FMYE historical OB period 2024=7316.00 (cleared by 2026)
+200063,FAHEEM FAISALABAD LASHKARA BAG,supplier,0.0,0.0,0.0,0,Supplier(V),REVIEW,FMYE historical OB period 2021=-19080.00 (cleared by 2026)
+200064,MALIK BROTHERS LAHORE,supplier,0.0,0.0,0.0,0,Supplier(V),REVIEW,FMYE historical OB period 2021=-3750.00 (cleared by 2026)
+200066,BISMILLAH ENGINEERING LAHORE,supplier,0.0,0.0,0.0,0,Supplier(V),REVIEW,FMYE historical OB period 2022=6348460.00 (cleared by 2026)
+200067,AZIZ PACKAGES,supplier,0.0,0.0,0.0,0,Supplier(V),REVIEW,FMYE historical OB period 2021=4450.00 (cleared by 2026)
+200069,AZAM SB,supplier,0.0,0.0,0.0,0,Supplier(V),REVIEW,FMYE historical OB period 2022=-47250.00 (cleared by 2026)
+200071,IMPORT OF MACHINERY (FLEXO),supplier,0.0,0.0,0.0,0,Supplier(V),REVIEW,FMYE historical OB period 2021=6143630.48 (cleared by 2026)
+200072,TAJ ENGINEERING PESHAWAR,supplier,0.0,0.0,0.0,0,Supplier(V),REVIEW,FMYE historical OB period 2023=482320.00 (cleared by 2026)
+200073,FINE ARTS,supplier,0.0,0.0,0.0,0,Supplier(V),REVIEW,FMYE historical OB period 2021=4723.00 (cleared by 2026)
+200078,PORSCHET PIERRES,supplier,0.0,0.0,0.0,0,Supplier(V),REVIEW,FMYE historical OB period 2021=276800.00 (cleared by 2026)
+200079,YASIN CORPORATION MULTAN,supplier,0.0,0.0,0.0,0,Supplier(V),REVIEW,FMYE historical OB period 2021=163000.00 (cleared by 2026)
+200080,ALTAF PRESS,supplier,0.0,0.0,0.0,0,Supplier(V),REVIEW,FMYE historical OB period 2023=239612.00 (cleared by 2026)
+200083,AHMAD UMAIR SULPHONIC,supplier,0.0,0.0,0.0,0,Supplier(V),REVIEW,FMYE historical OB period 2021=16090.00 (cleared by 2026)
+200086,FUZAIL SB KARACHI,supplier,0.0,0.0,0.0,0,Supplier(V),REVIEW,FMYE historical OB period 2023=1735000.00 (cleared by 2026)
+200087,BAO BASHIR PAPERS LAHORE,supplier,0.0,0.0,0.0,0,Supplier(V),REVIEW,FMYE historical OB period 2023=-326.00 (cleared by 2026)
+200088,ABDULLAH CCTV,supplier,0.0,0.0,0.0,0,Supplier(V),REVIEW,FMYE historical OB period 2022=-21600.00 (cleared by 2026)
+200091,HERO DETERGENT MULTAN,supplier,0.0,0.0,0.0,0,Supplier(V),REVIEW,FMYE historical OB period 2023=-285.00 (cleared by 2026)
+200092,PARACHA CHEMICALS FAISALABAD,supplier,0.0,0.0,0.0,0,Supplier(V),REVIEW,FMYE historical OB period 2025=18697.00 (cleared by 2026)
+200101,ZAM ZAM PLASTIC CONTAINER LAHORE,supplier,0.0,0.0,0.0,0,Supplier(V),REVIEW,FMYE historical OB period 2023=531450.00 (cleared by 2026)
+200103,JAPAN POWER PLANT (LABSA PLANT TANK),supplier,0.0,0.0,0.0,0,Supplier(V),REVIEW,FMYE historical OB period 2022=50000.00 (cleared by 2026)
+200104,USMAN LABSA PLANT,supplier,0.0,0.0,0.0,0,Supplier(V),REVIEW,FMYE historical OB period 2022=200000.00 (cleared by 2026)
+200107,ADNAN KARACHI (PALM ACID),supplier,0.0,0.0,0.0,0,Supplier(V),REVIEW,FMYE historical OB period 2023=662.00 (cleared by 2026)
+200110,JABBAR HUSSAIN (PRINTING DYE MAKER),supplier,0.0,0.0,0.0,0,Supplier(V),REVIEW,FMYE historical OB period 2022=8220.00 (cleared by 2026)
+200111,ARAB PACKAGES MULTAN,supplier,0.0,0.0,0.0,0,Supplier(V),REVIEW,FMYE historical OB period 2022=-4105567.00 (cleared by 2026)
+200113,IMPORT OF GRAVIURE MACHINE,supplier,0.0,0.0,0.0,0,Supplier(V),REVIEW,FMYE historical OB period 2022=26118782.08 (cleared by 2026)
+200118,TRUCK IT IN,supplier,0.0,0.0,0.0,0,Supplier(V),REVIEW,FMYE historical OB period 2023=265000.00 (cleared by 2026)
+200119,SCAN WORLD FAISALABAD,supplier,0.0,0.0,0.0,0,Supplier(V),REVIEW,FMYE historical OB period 2023=320027.96 (cleared by 2026)
+200120,SHIEKH USMAN SHARAFAT & BROTHERS,supplier,0.0,0.0,0.0,0,Supplier(V),REVIEW,FMYE historical OB period 2022=240000.00 (cleared by 2026)
+200122,MICRO GRINDING MILL(TALIB SB),supplier,0.0,0.0,0.0,0,Supplier(V),REVIEW,FMYE historical OB period 2023=4400.00 (cleared by 2026)
+200124,SHAFI SONS LIFTER A/C,supplier,0.0,0.0,0.0,0,Supplier(V),REVIEW,FMYE historical OB period 2022=-483000.00 (cleared by 2026)
+200130,FAZAL PAPER MILLS,supplier,0.0,0.0,0.0,0,Supplier(V),REVIEW,FMYE historical OB period 2023=464.00 (cleared by 2026)
+200134,MUHAMMAD SHAKEEL KHAN(LEATHER),supplier,0.0,0.0,0.0,0,Supplier(V),REVIEW,FMYE historical OB period 2022=28580.00 (cleared by 2026)
+200138,IMPORT OF TAED,supplier,0.0,0.0,0.0,0,Supplier(V),REVIEW,FMYE historical OB period 2023=3565.26 (cleared by 2026)
+200143,NAEEM SPECKLES KARACHI,supplier,0.0,0.0,0.0,0,Supplier(V),REVIEW,FMYE historical OB period 2023=-10000.00 (cleared by 2026)
+200144,BLEACHER FILTER MULTAN,supplier,0.0,0.0,0.0,0,Supplier(V),REVIEW,FMYE historical OB period 2022=200000.00 (cleared by 2026)
+200156,FZ ENTERPRISES,supplier,0.0,0.0,0.0,0,Supplier(V),REVIEW,FMYE historical OB period 2023=-463404.00 (cleared by 2026)
+200166,H.H PACKAGES,supplier,0.0,0.0,0.0,0,Supplier(V),REVIEW,FMYE historical OB period 2023=-9.00 (cleared by 2026)
+200170,LAL KHAN DEONA MANDI(FIRE WOOD),supplier,0.0,0.0,0.0,0,Supplier(V),REVIEW,FMYE historical OB period 2023=-61650.00 (cleared by 2026)
+200173,MEER JAN KHAN (WOOD SUPPLIER),supplier,0.0,0.0,0.0,0,Supplier(V),REVIEW,FMYE historical OB period 2023=-55.00 (cleared by 2026)
+200178,LAHORE PLAS PACKAGING,supplier,0.0,0.0,0.0,0,Supplier(V),REVIEW,FMYE historical OB period 2024=-200000.00 (cleared by 2026)
+200181,MAMMAL PAPER FACTORY,supplier,0.0,0.0,0.0,0,Supplier(V),REVIEW,FMYE historical OB period 2023=-708.00 (cleared by 2026)
+200186,MAKKA HARDWARE (PAINT) GUJRAT,supplier,0.0,0.0,0.0,0,Supplier(V),REVIEW,FMYE historical OB period 2023=-127850.00 (cleared by 2026)
+200191,M&S PACKAGING PVT LTD,supplier,0.0,0.0,0.0,0,Supplier(V),REVIEW,FMYE historical OB period 2023=-1095900.00 (cleared by 2026)
+200206,SHAHAN TRADER (CLEARING AGENT),supplier,0.0,0.0,0.0,0,Supplier(V),REVIEW,FMYE historical OB period 2023=549000.00 (cleared by 2026)
+200208,MUHAMMAD AFZAAL(PALM ACID OIL),supplier,0.0,0.0,0.0,0,Supplier(V),REVIEW,FMYE historical OB period 2023=-2328750.00 (cleared by 2026)
+200214,LIAQUAT RUBBER ROLLER,supplier,0.0,0.0,0.0,0,Supplier(V),REVIEW,FMYE historical OB period 2023=117080.00 (cleared by 2026)
+200232,REHMAT KHAN,supplier,0.0,0.0,0.0,0,Supplier(V),REVIEW,FMYE historical OB period 2024=180000.00 (cleared by 2026)
+200244,AL QAMAR IMPORTS,supplier,0.0,0.0,0.0,0,Supplier(V),REVIEW,FMYE historical OB period 2024=31600.00 (cleared by 2026)
+200246,KABEER ALI BOTTLE CONTRACTOR,supplier,0.0,0.0,0.0,0,Supplier(V),REVIEW,FMYE historical OB period 2024=30000.00 (cleared by 2026)
+200259,MUHAMMAD UMAR NISAR GRAVEUR GAS CONVERSION,supplier,0.0,0.0,0.0,0,Supplier(V),REVIEW,FMYE historical OB period 2024=700000.00 (cleared by 2026)
+200267,GONDAL ROOF,supplier,0.0,0.0,0.0,0,Supplier(V),REVIEW,FMYE historical OB period 2024=3000800.00 (cleared by 2026)
+200272,GOLDEN PACKAGES PVT LTD,supplier,0.0,0.0,0.0,0,Supplier(V),REVIEW,FMYE historical OB period 2024=-3163503.00 (cleared by 2026)
+200275,SWIFT TECH,supplier,0.0,0.0,0.0,0,Supplier(V),REVIEW,FMYE historical OB period 2024=-23587.00 (cleared by 2026)
+200276,MILH SALT LAHORE,supplier,0.0,0.0,0.0,0,Supplier(V),REVIEW,FMYE historical OB period 2024=-218202.00 (cleared by 2026)
+200278,AR PLASTIC,supplier,0.0,0.0,0.0,0,Supplier(V),REVIEW,FMYE historical OB period 2024=179500.00 (cleared by 2026)
+200279,KHAWAJA ADNAN OTHER,supplier,0.0,0.0,0.0,0,Supplier(V),REVIEW,FMYE historical OB period 2024=-2747500.00 (cleared by 2026)
+200316,ABDULLAH TRADERS (YAQOOB SB LHR),supplier,0.0,0.0,0.0,0,Supplier(V),REVIEW,FMYE historical OB period 2025=-141695.00 (cleared by 2026)
+200324,BISMILLAH CHEMICAL,supplier,0.0,0.0,0.0,0,Supplier(V),REVIEW,FMYE historical OB period 2025=-230400.00 (cleared by 2026)
+200335,WALEED ENTERPRISES,supplier,0.0,0.0,0.0,0,Supplier(V),REVIEW,FMYE historical OB period 2025=-17682000.00 (cleared by 2026)
+100017,MUZAFER ABBAS TRADERS MUZAFERGHAR,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100042,AL-HAMAD KARYANA STORE SABZI MANDI JPJ,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100045,BISMILLAH SWEET SABZI MANDI JPJ,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100053,AL MUSLIM GENERAL STORE JPJ,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100054,HAJI ARSHAD KARYANWALA,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100058,HAJI WALAYAT KARIYANWALA,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100070,ARIF TRADERS JALALPUR SOBATIAN,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100072,BABA SARDAR COPRA,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100082,BILAWAL FOODS YAZMAN MANDI,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100083,ANEEQ TRADERS MIAN CHANNU,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100084,GHAMKOL KARYANA STORE,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100085,ABDULLAH SHAFIQ TRADERS,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100086,HAQEEQAT KARYANA STORE,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100087,KASHIF KARYANA STORE,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100088,WAQAS HAMZA TRADER RAILWAY ROAD,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100089,NAVEED TRADERS GULYANA,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100090,ADIL KARYANA STORE GULYANA,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100091,REHMAT KARYANA STORE LANGRIYAL,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100092,MUNIR KARYANA STORE JALALPUR SOBTIYAN,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100093,AL SHIEKH INDUSTRY SIALKOT,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100101,ROYAL TRADERS GUJARKHAN,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100102,NASEER OGHUKI,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100105,SHOAIB KHAN AFG CYLINDERS,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100115,GHAREEB NAWAZ KARYANA STORE JALALPUR SOBTIYAN,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100124,USMAN DRUM GUJRANWALA,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100128,CH IMRAN KHUI RATTA,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100133,M. ALI SALE IN CASH,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100135,HANIF TRADERS DOLAT NAGAR,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100137,SUQLAIN TRADERS PARIANWALI,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100138,TARAR KERYANA STORE PARIANWALI,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100139,ALI KERYANA STORE PARIANWALI,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100148,FAUJI TRADERS KAROR PAKKA,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100150,ZAMAN KERYANA STORE ADA MARLA,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100152,DHUDRA KERYANA STORE MANGOWAL,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100160,ZUBAIR TRADERS BHALWAL,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100178,MEHAR AFZAL KERYANA STORE JPJ,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100179,MAJID BUTT SAROKI,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100197,BABA G KERYANA RAILWAY ROAD,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100202,RAMZAN SUPER STORE MUNGOWAL,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100208,SHAHZAD KARYANWALA,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100210,HAMAD OMAR TRADERS KARYANWALA,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100213,IQBAL TRADERS CHISHTIAN,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100215,SHIBLY TRADERS LALAMUSA,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100217,NAJUM SHAHEEN SHEIKHUPURA,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100224,SHAHID SALEEM TRADERS (ZAHIR PEER),customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100230,MALIK TRADERS PARIANWALI,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100231,SHEIKH EHSAN RAILWAY ROAD,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100233,SHAHID BROTHERS,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100236,ZUBAIR (INSAAF FOODS),customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100237,LUCKY SIALKOT,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100240,SAKHI KERYANA KOTLA ARAB,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100241,HAJI YUSUF GUJRANWALA,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100242,KHAN TRADERS PHALIA,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100244,SILK BANK,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100245,NAEEM KERYANA MUNGOWAL,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100246,PAVWA SUPER STORE PARIYANWALI,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100252,RAFAQAT TRADERS AWAN SHARIF,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100258,HAFIZ KERYANA KARIYANWALA,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100262,ALI GENERAL STORE LALAMUSA,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100263,FAISAL KIYANI (FACTORY OPERATOR),customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100268,GONDAL KERYANA DHULLANWALA,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100273,SHAHID ICHRIAN,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100278,MANZOOR TRADERS BAHAWALPUR,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100279,IFTEKHAR KERYANA LODHRAN,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100280,ALI ASHRAF,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100282,LASANI TRADERS KUNJAH,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100287,AL MADINA SUPER STORE CHAICHIYAN,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100290,JAMNA TRADERS GUJRAT,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100291,RANA SWEET GUJRAT,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100293,MALIK KERYANA BHAKRANWALI,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100294,MASHALLAH KERYANA FATEHPUR,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100295,KHALIL KHIZAR GENERAL STORE FATEHPUR,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100301,SHAFE GENERAL STORE,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100302,LAL KHAN KERYANA,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100303,KOHINOOR KERYANA STORE,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100304,YOUNAS KERYANA STORE,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100307,ABU TALHA TRADERS TANDLA,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100309,OSAMA TRADERS DINGA,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100315,OLYMPIA CHEMICALS,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100318,WAQAR ALI,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100320,DIDDIQUE,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100321,AZHAR CORPORATION (PVT) LTD,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100322,KHALID,supplier,0.0,0.0,0.0,0,Supplier(V),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100323,AFZAL KARYANA DINGA,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100327,HAJI NAFEES KARYANA,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100329,MALIK WAQAS,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100331,SHAFIQUE SB,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100332,SADAT KARYANA FATHEPUR ROAD,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100333,ARIF TRADERS KOTLA,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100335,SHARJEEL TRADERS BHAKHRANWALI,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100339,YOUNAS SWEET,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100343,ARSHAD BUTT,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100346,MALIK GULRIAZ,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100348,HASSAN SUPER STORE,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100349,AL-SAEED KARYANA,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100365,OUT OF CASH,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100366,REHANIYA TRADERS TANDA,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100369,AHMED TRADER BHIMBER ROAD,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100370,CHOUDHARY KERYANA BHIMBER ROAD,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100371,ADNAN TRADERS DOLAT NAGAR,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100372,SIALKOTI TRADERS DOLAT NAGAR,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100373,ALI SUPER STORE DOLAT NAGAR,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100374,RAZZAQ TRADER BHADDAR,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100375,BABA JEE KERYANA BHADDAR,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100377,SALEEM TRADERS KOTLA,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100378,SMART GENERAL STORE BAANIYAN,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100386,FARMS RECEIVABLES A/C,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100387,HAJI BASHIR SB (LANDI KOTAL),customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100388,MOHSIN LALAMUSA (PAINT WORK),customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100389,M. TARIQ DULTALA,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100391,NADEEM KARYANA,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100392,ABDULLAH GENERAL STORE,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100393,DUBAI ISLAMIC BANK,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100397,ZUBAIR TRADERS DOTALA,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100399,FATIMA GENERAL STORE,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100400,BABA GENERAL STORE,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100402,AL MADINA KARYANA JPS,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100404,POPULAR KARYNA DINGA,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100405,JAAN MUHAMMAD LIYYAH,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100409,QAMAR TRADERS RAILWAY ROAD GUJRAT,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100411,NADEEM AKHTER LAHORE,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100413,ABBAS SOAP FACTORY,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100417,ASHFAQ TRADERS RAWALPINDI,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100418,SAID RASOOL DANDI DARA,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100419,CH ASIF KERYANA DANDI DARA,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100420,ASIF TRADERS SANGREELA,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100427,DOCTOR KARYANA BAHIRILLA SHARIF,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100430,ARIF TRADERS KARIYANWALA,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100431,GHULAM NABI KERYANA KARIYWALA,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100433,SAHE TRADERS MANGOWAL,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100442,AL HAMMAD TRADERS BAGOWAL,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100443,ZAKARIYA TRADERS KARIYANWALA,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100444,KHAN TRADERS KARIYANWALA,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100445,WARIACH TRADERS DULLANWALA,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100457,MALIK TUFAIL BHAREELA SHAREF,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100459,MAA SHAA ALLAH TRADERS DEWONA MANDI,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100460,BUTT TRADERS DEWONA MANDI,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100461,HAIDERIA SHOP DEWONA MANDI,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100462,BUTT SUPER STORE DEWONA MANDI,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100463,NADEEM DASKA,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100474,MOHSIN KARYANA TANDA,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100476,HANIF KARYANA DEONA MANDI,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100481,SHEIKH TARIQ,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100492,ALI KARYANA STORE JPJ,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100493,ALI TRADERS DOLATNAGAR,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100505,MALIK YOUNAS KARYANA JPJ,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100515,UNITED DETERGENT SHEIKHUPURA,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100516,SOHAIL ASGHAR AGENCIES (RAHIMYARKHAN),customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100520,AHMED ALI SHAHDRA LAHORE,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100527,SARMAD SB MANGOWAL,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100530,AL-QASIM TRADERS JPS,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100533,MALIK SHANI NAJAAN,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100544,NAWAZ TRADERS MANGOWAL,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100551,ZEESHAN TRADERS BORAYWALA,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100554,QARI BAKHTIYAR SB AFGANISTAN,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100555,SHAHDOLHA PRESS,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100558,IMRAN DANISH FAISALABAD,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100564,FAHAD TRADER NODDLE LAHORE,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100565,RAJA TRADERS SHAKEEL AHMED,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100566,HAJI BASHIR TRADER KOTLA,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100570,HABIB KARYANA STORE KARIANWALA,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100579,F.A TRADERS TANDA,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100591,MAA SHAA ALLAH TRADERS KAMALAY CHAK,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100593,MEHAR AFSHAR KARYANA KARIANWALA,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100594,SABIR BUTT HAFIZABAD,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100598,BABA G TRADERS GUJRAT MANDI,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100599,SHAHID BUTT,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100600,AZAAN TRADERS KARIANWALA,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100605,TUFAIL TRADERS ALI PUR CHATTA,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100608,BILAL TRADERS,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100610,HAIDER SB LAHORE,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100611,MUNIR TRADERS JALALPUR SOBTIAN,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100619,PERVAIZ TRADER BAIL PUR,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100620,AMANULLAH,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100624,LASANI TRADERS GUJRAT,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100628,SAJAD TRADER PARIANWALI,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100630,BILAL TRADERS (AIRPORT ROAD ),customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100632,SALMAN & CO,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100636,REHAB INTERTRADE,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100637,FAROOQ TRADERS,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100639,FAROOQ TRADERS QADIRABAD,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100640,RIAZ GENERAL STORE,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100642,CHAWA RESTAURANT,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100644,SHANGHAI CHEMICAL,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100646,ANMOL SOAP FACTORY (IMRAN SAB),customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100647,NOBIL POULRY SERVICE KUNJAH,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100650,ATIF KARYANA STORE MANO CHAK ALI PUR ROAD,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100661,RIZWAN ULLAH RAWALPINDI,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100662,HUSNAIN TRADERS GULYANA,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100663,ARIF SHUNWARI DINGA,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100664,BRAND SMITH (RAPER ACCOUNT),customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100666,SHAREEN TRADERS MUNDA,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100668,U.S FOOD MAKERS,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100671,ADNAN MEER (ALUMINIUM PLATE),customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100672,CHEETA DETERGENT,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100676,AWAIS TRADERS LALAMUSA,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100679,JAFAR HUSSAIN SHAH LALAMUSA,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100680,PERVAIZ SB TEHSIL SHEIKHUPURA,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100684,UNIQUE GHEE AND ALLIED INDUSTRY PVT LTD,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100686,OLPERS,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100691,SR 5 ENGINE OIL (SHAHZAIB),customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100692,MK PLASTIC,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100694,RAFIULLAH T.T,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100695,FATEH SONS GOODS,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100696,MADINA TRADERS NEW SABZI MANDI,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100699,REHMAT KHAN SB  (SCRAP),customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100700,ALEEM OIL MILLS,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100701,SUPERMAN WASHING POWDER,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100702,AKBAR OIL MILLS,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100705,RIAZ TRADERS  MANGORA,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100708,HAJI MUHAMMAD AFZAL SB,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100709,MEHRAN AGENCY (ZOOR MUHAMMD KHAN),customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100711,HAFIZ KHALID SHAH,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100712,WAHID KARYANA STORE,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100715,SHOUKAT SOAP FACTORY,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100716,SHAHZAM TRADERS,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100717,SHAZAM TRADER RAILWAY ROAD,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100719,CH NASAR ULLAH FAZAL,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100722,ANEES CORRUGATION MACHINE,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100723,MUHAMMAD RIZWAN FAISALABAD,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100724,SHAUKAT SCRAP DEALERS,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100727,KALEEM SB,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100734,ELIXIR INDUSTRIES,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100736,SAIF SOAP,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100737,FAUJI EMPTY DRUM DEALER,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100738,NADEEM SB,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100739,HASHIM CHEMICAL (BASE),customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100742,ABBAS HAIDER (SCRAP MATERIAL),customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100744,JAWAD SB,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100754,SADIQ EXCHANGE COMPANY,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100760,SUPER FLUSHY (RANA SHAHZAD),customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100763,Z.Z  ENTERPRISES (HAFIZ EHSAN SB),customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100767,HAJI MUSHTAQ SB,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100770,HRK TRADERS SADDA (PARACHINAR),customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100777,UMAR AFZAL KARYANA - KASUR,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100779,ABDUL REHMAN TRADERS,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100782,ASLAM KARYANA (MUDASSAR SALEEM) - FORT ABBAS,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100783,NIZAM TRADERS - OKARA,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100787,DILNAWAZ SHAHBAZ TRADERS - MOAR KHUNDA,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100788,SALEEM QADRI BHABRA,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100794,AHSAN TRADERS,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100795,RAJA ARSHAD TRADERS,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100796,WAQAR TRADERS,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100798,SHAHZAIN TRADERS,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100801,HAROON UL RASHEED TRADERS,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100804,SAAD TRADERS SAROKI,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100806,HAMMAD NASIR SYED SB,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100807,SHAREEM TRADERS OKARA,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100808,MAQSOOD AHMED SB (SALE 4COLOR MACHINE),customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100809,HALIMYAN WASHING MATERIALS COMPANY (AFG),customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100810,M.SHAHBAZ SUPER FLEXY,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100814,ABDUL SATTAR SB,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100815,AFZAL DAIRY BUREWALA,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100819,ZAIN BASHIR LTD. AFGHANISTAN,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100821,DISCOUNT STORE,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100823,HASSAN ALI CORPORATION,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100825,ZOHAIB SB KOTLA,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100832,ISRAR AHMED SB (SCRAP DEALER),customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100834,CHILLI FOOD,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100838,KITE DETERGENT,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100839,QAZI RAHIM ULLAH  SB,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100840,USAMA CHEMICALS,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100841,SHEIKH MUKHTAR TRADERS,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100842,HAMI FOODS,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100845,SMILE AID,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100846,BILAL SB LIYAH,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100847,REZIST,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100848,ARSLAN ZAHID,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100850,SARDAR TRADERS (ATTOCK),customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100852,YOUNAS ENTERPRISES (TOWER BAGS & CYLINDER),customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100855,GREEN SPARKLE (PVT) LTD,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100856,SAJJAD SB (SHAFI SONS),customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100857,AKHROT DETEREGENT POWDER,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100858,FAHAD TRADERS LAHORE,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100860,SHAHI WASHING POWDER,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100861,MOHSIN ENTERPRISES (PVT) LTD,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100866,HAFIZ CHEMICALS DASKA,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100867,SADAAT TRADERS DUDIYAL,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100870,VIP WASH,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100873,AMIR KHAN TRADERS,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100875,RAHIL RAZZAQ SB,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100878,KAMRAN TRADERS OKARA,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100885,M.AQIB CHAUDHRY SB,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100887,SADIQ MARKETING WEHRI,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100888,SAAF DETERGENT,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100889,BISMILLAH TRADERS,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100890,RANA ARSHAD SB,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100896,HUSNAIN TRADERS,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100897,MUSHTAQ AHMAD SB (FBM PRODUCTS),customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100898,RAJA ISRAR SB,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100899,DR. CHEMICALS SAHIWAL,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100900,NAZIR SB (SCRAP DEALER),customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100901,ABDUL REHMAN TRADERS,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100915,ATTA UR REHMAN TRADERS,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+100929,JAVEED IQBAL SB,customer,0.0,0.0,0.0,0,Customer(S),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+200005,SAAD ENTERPRISES THREAD SUPPLIER,supplier,0.0,0.0,0.0,0,Supplier(V),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+200006,KHALID YAQOOB SB,supplier,0.0,0.0,0.0,0,Supplier(V),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+200011,FIRDOS SALT,supplier,0.0,0.0,0.0,0,Supplier(V),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+200012,AKBARI TRADERS,supplier,0.0,0.0,0.0,0,Supplier(V),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+200018,MOBEEN PAPERS MART,supplier,0.0,0.0,0.0,0,Supplier(V),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+200022,WAHAB PAPER MILLS,supplier,0.0,0.0,0.0,0,Supplier(V),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+200030,SHABBIR HUSSAIN INSULATION DECK,supplier,0.0,0.0,0.0,0,Supplier(V),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+200035,ALPHA CHEMICALS,supplier,0.0,0.0,0.0,0,Supplier(V),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+200042,FAHAD UMAIR,supplier,0.0,0.0,0.0,0,Supplier(V),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+200043,SYNTRONICS LIMITED,supplier,0.0,0.0,0.0,0,Supplier(V),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+200044,NEELAM PAPER MILLS HATTAR,supplier,0.0,0.0,0.0,0,Supplier(V),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+200047,HANFI TRADERS QUETTA,supplier,0.0,0.0,0.0,0,Supplier(V),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+200051,HAJI LAL GUL,supplier,0.0,0.0,0.0,0,Supplier(V),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+200056,DYNAMIC CORP,supplier,0.0,0.0,0.0,0,Supplier(V),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+200057,IMRAN PACKAGES,supplier,0.0,0.0,0.0,0,Supplier(V),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+200059,FAZAL BARI,supplier,0.0,0.0,0.0,0,Supplier(V),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+200070,IMPORT OF MACHINERY (SOAP),supplier,0.0,0.0,0.0,0,Supplier(V),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+200074,GUJRAT QAYYUM GOODS FORWARDING CO.,supplier,0.0,0.0,0.0,0,Supplier(V),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+200075,PRIME CONCRETE COMPANY GUJRAT,supplier,0.0,0.0,0.0,0,Supplier(V),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+200077,IBRAHIM PAPERS MILLS C/O ATTA ULLAH,supplier,0.0,0.0,0.0,0,Supplier(V),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+200085,AHSAN ELECTRIC STORE GUJRANWALA,supplier,0.0,0.0,0.0,0,Supplier(V),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+200093,DHL PAKISTAN,supplier,0.0,0.0,0.0,0,Supplier(V),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+200095,UMER ENTERPRISES,supplier,0.0,0.0,0.0,0,Supplier(V),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+200100,MODERN CHEMICALS,supplier,0.0,0.0,0.0,0,Supplier(V),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+200102,HAFIZ WAQAS WALL REPAIR,supplier,0.0,0.0,0.0,0,Supplier(V),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+200112,AHMAD FILM PLATE MAKER GUJRANWALA,supplier,0.0,0.0,0.0,0,Supplier(V),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+200114,SITARA CHEMICALS FAISALABAD,supplier,0.0,0.0,0.0,0,Supplier(V),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+200121,REHAN SCRAB GUJRAT,supplier,0.0,0.0,0.0,0,Supplier(V),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+200125,KAS CHEMICALS KARACHI,supplier,0.0,0.0,0.0,0,Supplier(V),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+200126,PERVAIZ TRADERS FLEXO SHAHDRA,supplier,0.0,0.0,0.0,0,Supplier(V),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+200128,ELITE CHEMICALS,supplier,0.0,0.0,0.0,0,Supplier(V),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+200131,INTERNATIONAL FRAGNANCE FACTORY,supplier,0.0,0.0,0.0,0,Supplier(V),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+200133,ADVANCE ELEVATORS SERVICE,supplier,0.0,0.0,0.0,0,Supplier(V),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+200137,MADINA GODOWNS,supplier,0.0,0.0,0.0,0,Supplier(V),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+200139,AHMAD CHEMICALS CO,supplier,0.0,0.0,0.0,0,Supplier(V),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+200145,SHAKIR WASTAGE MATERIAL,supplier,0.0,0.0,0.0,0,Supplier(V),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+200148,SABIR SOAP STONE,supplier,0.0,0.0,0.0,0,Supplier(V),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+200150,ZIA STONE GRINDING PVT LTD,supplier,0.0,0.0,0.0,0,Supplier(V),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+200151,PAK GRINDING MILLS,supplier,0.0,0.0,0.0,0,Supplier(V),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+200152,SHAHBAZ BHALWAL,supplier,0.0,0.0,0.0,0,Supplier(V),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+200153,ARSHAD DOCTOR BLADE,supplier,0.0,0.0,0.0,0,Supplier(V),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+200154,RIAZ GUJRANWALA(LAMINATION MACHINE),supplier,0.0,0.0,0.0,0,Supplier(V),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+200159,SILK CABLES GUJRANWALA,supplier,0.0,0.0,0.0,0,Supplier(V),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+200167,SHAMOON ZAKI KARACHI,supplier,0.0,0.0,0.0,0,Supplier(V),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+200168,AMANULLAH SB  (WOOD SUPPLIER),supplier,0.0,0.0,0.0,0,Supplier(V),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+200169,KHAILLI PACKAGES,supplier,0.0,0.0,0.0,0,Supplier(V),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+200171,ABDUL SAMAD (LEATHER SCRAP),supplier,0.0,0.0,0.0,0,Supplier(V),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+200172,AHSAN CHEMICALS LAHORE,supplier,0.0,0.0,0.0,0,Supplier(V),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+200174,BIN RASHEED COLORS & CHEMICALS COMPANY,supplier,0.0,0.0,0.0,0,Supplier(V),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+200177,REHAB INTERTRADE,supplier,0.0,0.0,0.0,0,Supplier(V),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+200179,AZHAR GRINDING MILLS,supplier,0.0,0.0,0.0,0,Supplier(V),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+200182,PARACHA SOAP & CHEMICALS INDUSTRIES,supplier,0.0,0.0,0.0,0,Supplier(V),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+200184,MAKKA DYE MAKER(M.ARIF),supplier,0.0,0.0,0.0,0,Supplier(V),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+200185,MUBASHIR SB (WOOD SUPPLIER),supplier,0.0,0.0,0.0,0,Supplier(V),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+200193,FAISAL DESIGNER,supplier,0.0,0.0,0.0,0,Supplier(V),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+200201,CHENAB SECURITY SYSTEM & SOLAR ENERGY,supplier,0.0,0.0,0.0,0,Supplier(V),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+200205,WARRICH ACID AGENCY GUJRAT,supplier,0.0,0.0,0.0,0,Supplier(V),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+200221,POWER LINKS ENGINEERING AND TRADER,supplier,0.0,0.0,0.0,0,Supplier(V),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+200223,SHABAB PINSAR STORE,supplier,0.0,0.0,0.0,0,Supplier(V),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+200224,MAQBOOL ENGINEERING,supplier,0.0,0.0,0.0,0,Supplier(V),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+200225,SHOAIB DYE MAKER,supplier,0.0,0.0,0.0,0,Supplier(V),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+200226,FIRE CARE (SHAHZAD),supplier,0.0,0.0,0.0,0,Supplier(V),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+200236,ABU BAKAR PRINTING PRESS,supplier,0.0,0.0,0.0,0,Supplier(V),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+200239,LAL SOAP FACTORY,supplier,0.0,0.0,0.0,0,Supplier(V),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+200240,TAHIR ASAD INDUSTRIES (PVT) LTD,supplier,0.0,0.0,0.0,0,Supplier(V),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+200243,HABIB ULLAH GODOWN,supplier,0.0,0.0,0.0,0,Supplier(V),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+200249,MIAN WALI (WOOD SUPPLIER),supplier,0.0,0.0,0.0,0,Supplier(V),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+200250,NOOR UL AMEEN LABSA,supplier,0.0,0.0,0.0,0,Supplier(V),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+200251,I PAK,supplier,0.0,0.0,0.0,0,Supplier(V),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+200255,MAJEED SONS,supplier,0.0,0.0,0.0,0,Supplier(V),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+200258,ZEESHAN ETHYL,supplier,0.0,0.0,0.0,0,Supplier(V),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+200261,KALEEM ULLAH(FIREWOOD),supplier,0.0,0.0,0.0,0,Supplier(V),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+200268,SAFEENA FOODS INDUSTRY,supplier,0.0,0.0,0.0,0,Supplier(V),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+200269,HAROON GENERAL PIPE,supplier,0.0,0.0,0.0,0,Supplier(V),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+200271,ZAKI SB FRAGNANACE BALANCE,supplier,0.0,0.0,0.0,0,Supplier(V),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+200281,SRP SCIENTIFIC SUPPLIES,supplier,0.0,0.0,0.0,0,Supplier(V),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+200284,STEAM GENERATOR,supplier,0.0,0.0,0.0,0,Supplier(V),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+200286,MULTI NET (ABDUL SALAM),supplier,0.0,0.0,0.0,0,Supplier(V),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+200288,NISAR KHAN KEROSENE OIL,supplier,0.0,0.0,0.0,0,Supplier(V),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+200291,T.M CARGO,supplier,0.0,0.0,0.0,0,Supplier(V),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+200292,DAR COMMUNICATION,supplier,0.0,0.0,0.0,0,Supplier(V),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+200293,BAWALI ARCHITECT,supplier,0.0,0.0,0.0,0,Supplier(V),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+200299,KHADIM HUSSAIN(CEILING WORK),supplier,0.0,0.0,0.0,0,Supplier(V),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+200300,ORIENT TRADERS,supplier,0.0,0.0,0.0,0,Supplier(V),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+200304,NUSRAT ALI GONDAL(WATER PROOF),supplier,0.0,0.0,0.0,0,Supplier(V),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+200306,HM CHEMICALS (PVT) LTD,supplier,0.0,0.0,0.0,0,Supplier(V),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+200309,HALL CONSTRUCTION,supplier,0.0,0.0,0.0,0,Supplier(V),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+200313,PAKISTAN SYNTHETIC LTD (PSL),supplier,0.0,0.0,0.0,0,Supplier(V),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+200320,NEWTEK TECHNOLOGY SOLUTIONS,supplier,0.0,0.0,0.0,0,Supplier(V),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+200321,SOLVE TECH INKS & CHEMICALS,supplier,0.0,0.0,0.0,0,Supplier(V),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+200322,ATS SYNTHETIC N (PVT)LTD,supplier,0.0,0.0,0.0,0,Supplier(V),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+200329,HASSAN JAVED SIALKOT,supplier,0.0,0.0,0.0,0,Supplier(V),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+200338,KHAWAJA MUHAMMAD TAYYAB SALT SUPPLIER,supplier,0.0,0.0,0.0,0,Supplier(V),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+200342,ZAMEER AHMAD MALIK (SALT DEALER),supplier,0.0,0.0,0.0,0,Supplier(V),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+200346,KHUSHAB SODA ASH,supplier,0.0,0.0,0.0,0,Supplier(V),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+200349,ASIM PREFORM,supplier,0.0,0.0,0.0,0,Supplier(V),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+200350,ZAHEER ABBAS (SALT DEALER),supplier,0.0,0.0,0.0,0,Supplier(V),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+200361,SOHAIL GRINDING MILL,supplier,0.0,0.0,0.0,0,Supplier(V),NO,In FMYE chart; nil OB (all periods checked for hist) and no 2026 txn; Truly idle in FMYE 2026; restore only if master list completeness required
+UNKNOWN,UNKNOWN PARTY,both,0.0,0.0,,0,,NO,Not in FMYE Chart export

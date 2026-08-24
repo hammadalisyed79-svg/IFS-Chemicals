@@ -1,0 +1,374 @@
+{
+  "target": "2026-08-19",
+  "when": "2026-08-22T18:55:16",
+  "cash_coa": {
+    "id": 29,
+    "code": "000000",
+    "name": "CASH A/C",
+    "ob": 282369.0
+  },
+  "book": {
+    "opening_19": {
+      "coa_opening": 282369.0,
+      "prior_receipts": 190534320.0,
+      "prior_payments": 190500669.0,
+      "opening": 316020.0,
+      "prior_receipt_count": 2500,
+      "prior_payment_count": 2520
+    },
+    "day_19": {
+      "receipts": 493710.0,
+      "receipt_count": 13,
+      "payments": 296220.0,
+      "payment_count": 11,
+      "net": 197490.0
+    },
+    "closing_19_calc": 513510.0,
+    "opening_20": {
+      "coa_opening": 282369.0,
+      "prior_receipts": 191028030.0,
+      "prior_payments": 190796889.0,
+      "opening": 513510.0,
+      "prior_receipt_count": 2513,
+      "prior_payment_count": 2531
+    },
+    "carry_forward_gap": 0.0
+  },
+  "gl_through_19": {
+    "code": "000000",
+    "name": "CASH A/C",
+    "coa_opening": 282369.0,
+    "gl_debit": 192528030.0,
+    "gl_credit": 190801889.0,
+    "balance": 2008510.0,
+    "entry_count": 5046
+  },
+  "gl_on_19": {
+    "debit": 493710.0,
+    "credit": 296220.0,
+    "net_dr_minus_cr": 197490.0,
+    "count": 24
+  },
+  "book_vs_gl_through_19": -1495000.0,
+  "book_only_through_19": [],
+  "book_only_on_19": [],
+  "gl_on_19_detail": [
+    {
+      "gl_id": 49040,
+      "debit": 3120.0,
+      "credit": 0.0,
+      "net": 3120.0,
+      "reference_type": "sales_invoice",
+      "reference_no": "SAL-26080368",
+      "description": "Cash received - 100013 - SALE IN CASH",
+      "likely_in_book": true
+    },
+    {
+      "gl_id": 49045,
+      "debit": 1050.0,
+      "credit": 0.0,
+      "net": 1050.0,
+      "reference_type": "sales_invoice",
+      "reference_no": "SAL-26080369",
+      "description": "Cash received - 100013 - SALE IN CASH",
+      "likely_in_book": true
+    },
+    {
+      "gl_id": 49052,
+      "debit": 420000.0,
+      "credit": 0.0,
+      "net": 420000.0,
+      "reference_type": "customer_receipt",
+      "reference_no": "CR-127017",
+      "description": "Receipt from HAJI NAZIR AKHTAR SB",
+      "likely_in_book": true
+    },
+    {
+      "gl_id": 49066,
+      "debit": 0.0,
+      "credit": 230.0,
+      "net": -230.0,
+      "reference_type": "cash_bank_gl",
+      "reference_no": "CP-127083",
+      "description": "Cash Paid to Khokhar sb (24.05.26)",
+      "likely_in_book": true
+    },
+    {
+      "gl_id": 49068,
+      "debit": 0.0,
+      "credit": 30600.0,
+      "net": -30600.0,
+      "reference_type": "expense_payment",
+      "reference_no": "CP-127084",
+      "description": "20 Bag Cement Paidar @ 1520+ charges 200 via Raza",
+      "likely_in_book": true
+    },
+    {
+      "gl_id": 49072,
+      "debit": 0.0,
+      "credit": 2200.0,
+      "net": -2200.0,
+      "reference_type": "expense_payment",
+      "reference_no": "CP-127085",
+      "description": "Repair LES-5435 via Shahzad (shaft Cross)",
+      "likely_in_book": true
+    },
+    {
+      "gl_id": 49074,
+      "debit": 0.0,
+      "credit": 1900.0,
+      "net": -1900.0,
+      "reference_type": "expense_payment",
+      "reference_no": "CP-127086",
+      "description": "Kopa Wash+Kopa Oil+charges LES-5435 via Shahzad",
+      "likely_in_book": true
+    },
+    {
+      "gl_id": 49076,
+      "debit": 0.0,
+      "credit": 87500.0,
+      "net": -87500.0,
+      "reference_type": "supplier_payment",
+      "reference_no": "CP-127087",
+      "description": "Cash Paid to Yaqoob sb",
+      "likely_in_book": true
+    },
+    {
+      "gl_id": 49078,
+      "debit": 0.0,
+      "credit": 300.0,
+      "net": -300.0,
+      "reference_type": "expense_payment",
+      "reference_no": "CP-127088",
+      "description": "Milk for Office Mess via M.Amir Nazir",
+      "likely_in_book": true
+    },
+    {
+      "gl_id": 49079,
+      "debit": 50000.0,
+      "credit": 0.0,
+      "net": 50000.0,
+      "reference_type": "cash_bank_gl",
+      "reference_no": "CR-127018",
+      "description": "Cash Rcvd via Raza saleem",
+      "likely_in_book": true
+    },
+    {
+      "gl_id": 49082,
+      "debit": 0.0,
+      "credit": 2300.0,
+      "net": -2300.0,
+      "reference_type": "cash_bank_gl",
+      "reference_no": "CP-127089",
+      "description": "Bilty#110/08 Fine Life Cylinder (N.G.G) by Raza",
+      "likely_in_book": true
+    },
+    {
+      "gl_id": 49084,
+      "debit": 0.0,
+      "credit": 300.0,
+      "net": -300.0,
+      "reference_type": "cash_bank_gl",
+      "reference_no": "CP-127090",
+      "description": "Bilty#110/01 Firdous Color Savayan Cylinder (N.G.G) via Raza",
+      "likely_in_book": true
+    },
+    {
+      "gl_id": 49086,
+      "debit": 0.0,
+      "credit": 103590.0,
+      "net": -103590.0,
+      "reference_type": "cash_bank_gl",
+      "reference_no": "CP-127091",
+      "description": "Electric Bill Fayyaz sb Home via Yahya",
+      "likely_in_book": true
+    },
+    {
+      "gl_id": 49088,
+      "debit": 0.0,
+      "credit": 50000.0,
+      "net": -50000.0,
+      "reference_type": "expense_payment",
+      "reference_no": "CP-127092",
+      "description": "Adv August 26 to M.Azeem Tariq (1213)",
+      "likely_in_book": true
+    },
+    {
+      "gl_id": 49148,
+      "debit": 0.0,
+      "credit": 17300.0,
+      "net": -17300.0,
+      "reference_type": "expense_payment",
+      "reference_no": "CP-127093",
+      "description": "Rent Surf LES-2697 to Umar (Metro Pakistan)",
+      "likely_in_book": true
+    },
+    {
+      "gl_id": 49167,
+      "debit": 3450.0,
+      "credit": 0.0,
+      "net": 3450.0,
+      "reference_type": "sales_invoice",
+      "reference_no": "SAL-26080384",
+      "description": "Cash received - 100013 - SALE IN CASH",
+      "likely_in_book": true
+    },
+    {
+      "gl_id": 49170,
+      "debit": 1380.0,
+      "credit": 0.0,
+      "net": 1380.0,
+      "reference_type": "sales_invoice",
+      "reference_no": "SAL-26080383",
+      "description": "Cash received - 100013 - SALE IN CASH",
+      "likely_in_book": true
+    },
+    {
+      "gl_id": 49175,
+      "debit": 1000.0,
+      "credit": 0.0,
+      "net": 1000.0,
+      "reference_type": "sales_invoice",
+      "reference_no": "SAL-26080381",
+      "description": "Cash received - 100013 - SALE IN CASH",
+      "likely_in_book": true
+    },
+    {
+      "gl_id": 49180,
+      "debit": 1500.0,
+      "credit": 0.0,
+      "net": 1500.0,
+      "reference_type": "sales_invoice",
+      "reference_no": "SAL-26080378",
+      "description": "Cash received - 100013 - SALE IN CASH",
+      "likely_in_book": true
+    },
+    {
+      "gl_id": 49183,
+      "debit": 4560.0,
+      "credit": 0.0,
+      "net": 4560.0,
+      "reference_type": "sales_invoice",
+      "reference_no": "SAL-26080377",
+      "description": "Cash received - 100013 - SALE IN CASH",
+      "likely_in_book": true
+    },
+    {
+      "gl_id": 49186,
+      "debit": 3000.0,
+      "credit": 0.0,
+      "net": 3000.0,
+      "reference_type": "sales_invoice",
+      "reference_no": "SAL-26080376",
+      "description": "Cash received - 100013 - SALE IN CASH",
+      "likely_in_book": true
+    },
+    {
+      "gl_id": 49197,
+      "debit": 2100.0,
+      "credit": 0.0,
+      "net": 2100.0,
+      "reference_type": "sales_invoice",
+      "reference_no": "SAL-26080372",
+      "description": "Cash received - 100013 - SALE IN CASH",
+      "likely_in_book": true
+    },
+    {
+      "gl_id": 49200,
+      "debit": 850.0,
+      "credit": 0.0,
+      "net": 850.0,
+      "reference_type": "sales_invoice",
+      "reference_no": "SAL-26080371",
+      "description": "Cash received - 100013 - SALE IN CASH",
+      "likely_in_book": true
+    },
+    {
+      "gl_id": 49203,
+      "debit": 1700.0,
+      "credit": 0.0,
+      "net": 1700.0,
+      "reference_type": "sales_invoice",
+      "reference_no": "SAL-26080370",
+      "description": "Cash received - 100013 - SALE IN CASH",
+      "likely_in_book": true
+    }
+  ],
+  "gl_on_19_not_in_book": [],
+  "duplicate_invoice_cash_19": [
+    {
+      "document_no": "SAL-26080368",
+      "total": 3120.0,
+      "cr_doc": "CR-127015",
+      "cr_amt": 3120.0
+    },
+    {
+      "document_no": "SAL-26080369",
+      "total": 1050.0,
+      "cr_doc": "CR-127016",
+      "cr_amt": 1050.0
+    },
+    {
+      "document_no": "SAL-26080384",
+      "total": 3450.0,
+      "cr_doc": "CR-127021",
+      "cr_amt": 3450.0
+    },
+    {
+      "document_no": "SAL-26080383",
+      "total": 1380.0,
+      "cr_doc": "CR-127022",
+      "cr_amt": 1380.0
+    },
+    {
+      "document_no": "SAL-26080381",
+      "total": 1000.0,
+      "cr_doc": "CR-127023",
+      "cr_amt": 1000.0
+    },
+    {
+      "document_no": "SAL-26080378",
+      "total": 1500.0,
+      "cr_doc": "CR-127024",
+      "cr_amt": 1500.0
+    },
+    {
+      "document_no": "SAL-26080377",
+      "total": 4560.0,
+      "cr_doc": "CR-127025",
+      "cr_amt": 4560.0
+    },
+    {
+      "document_no": "SAL-26080376",
+      "total": 3000.0,
+      "cr_doc": "CR-127026",
+      "cr_amt": 3000.0
+    },
+    {
+      "document_no": "SAL-26080372",
+      "total": 2100.0,
+      "cr_doc": "CR-127027",
+      "cr_amt": 2100.0
+    },
+    {
+      "document_no": "SAL-26080371",
+      "total": 850.0,
+      "cr_doc": "CR-127028",
+      "cr_amt": 850.0
+    },
+    {
+      "document_no": "SAL-26080370",
+      "total": 1700.0,
+      "cr_doc": "CR-127029",
+      "cr_amt": 1700.0
+    }
+  ],
+  "provisional_cash_sales_19": [],
+  "day_closed": null,
+  "prev_day": {
+    "date": "2026-08-18",
+    "closing": 316020.0,
+    "opening_19": 316020.0,
+    "gap": 0.0
+  }
+}

@@ -1,0 +1,318 @@
+{
+  "total_badge": 30,
+  "breakdown": {
+    "sales_approval": 0,
+    "purchase_approval": 0,
+    "leave": 0,
+    "advances": 0,
+    "payroll_draft": 0,
+    "gate_pass_open": 29,
+    "delivery_draft": 0,
+    "sales_orders_open": 1,
+    "production_active": 0,
+    "journal_draft": 0
+  },
+  "listed": 30,
+  "items": [
+    {
+      "kind": "Gate Pass Open",
+      "doc_no": "GP-0029",
+      "date": "2026-06-13",
+      "party": "REDA INDUSTRIAL MATERIALS PAKISTAN (PVT) LTD",
+      "amount": 0,
+      "id": 29,
+      "open": "Gate Pass",
+      "detail": "material in"
+    },
+    {
+      "kind": "Gate Pass Open",
+      "doc_no": "GP-0028",
+      "date": "2026-07-14",
+      "party": "BB CHAMPACK",
+      "amount": 0,
+      "id": 28,
+      "open": "Gate Pass",
+      "detail": "material in"
+    },
+    {
+      "kind": "Gate Pass Open",
+      "doc_no": "GP-0027",
+      "date": "2026-07-26",
+      "party": "BB CHAMPACK",
+      "amount": 0,
+      "id": 27,
+      "open": "Gate Pass",
+      "detail": "material in"
+    },
+    {
+      "kind": "Gate Pass Open",
+      "doc_no": "GP-0026",
+      "date": "2026-08-01",
+      "party": "BB CHAMPACK",
+      "amount": 0,
+      "id": 26,
+      "open": "Gate Pass",
+      "detail": "material in"
+    },
+    {
+      "kind": "Gate Pass Open",
+      "doc_no": "GP-0006",
+      "date": "2026-08-05",
+      "party": "TRI PACK FILMS LIMITED",
+      "amount": 0,
+      "id": 6,
+      "open": "Gate Pass",
+      "detail": "material in"
+    },
+    {
+      "kind": "Gate Pass Open",
+      "doc_no": "GP-0007",
+      "date": "2026-08-05",
+      "party": "ZUBAIR SALT PERSONAL",
+      "amount": 0,
+      "id": 7,
+      "open": "Gate Pass",
+      "detail": "material in"
+    },
+    {
+      "kind": "Gate Pass Open",
+      "doc_no": "GP-0016",
+      "date": "2026-08-05",
+      "party": "ASIF IQBAL SINDH",
+      "amount": 0,
+      "id": 16,
+      "open": "Gate Pass",
+      "detail": "material out"
+    },
+    {
+      "kind": "Gate Pass Open",
+      "doc_no": "GP-0025",
+      "date": "2026-08-05",
+      "party": "CAPTAIN-PQ CHEMICAL INDUSTRIES (PVT) LTD (MOHEIB ENTERPRISES)",
+      "amount": 0,
+      "id": 25,
+      "open": "Gate Pass",
+      "detail": "material in"
+    },
+    {
+      "kind": "Gate Pass Open",
+      "doc_no": "GP-0003",
+      "date": "2026-08-06",
+      "party": "TUFAIL CHEMICAL & SURFACTANT (PVT) LTD",
+      "amount": 0,
+      "id": 3,
+      "open": "Gate Pass",
+      "detail": "material in"
+    },
+    {
+      "kind": "Gate Pass Open",
+      "doc_no": "GP-0015",
+      "date": "2026-08-06",
+      "party": "IMRAN FOODS GUJRANWALA",
+      "amount": 0,
+      "id": 15,
+      "open": "Gate Pass",
+      "detail": "material out"
+    },
+    {
+      "kind": "Gate Pass Open",
+      "doc_no": "GP-0001",
+      "date": "2026-08-08",
+      "party": "MERCEDEZ FANS GUJRAT",
+      "amount": 0,
+      "id": 1,
+      "open": "Gate Pass",
+      "detail": "material out"
+    },
+    {
+      "kind": "Gate Pass Open",
+      "doc_no": "GP-0002",
+      "date": "2026-08-08",
+      "party": "ASIF KHAN MARBLE (BONAIR)",
+      "amount": 0,
+      "id": 2,
+      "open": "Gate Pass",
+      "detail": "material in"
+    },
+    {
+      "kind": "Gate Pass Open",
+      "doc_no": "GP-0004",
+      "date": "2026-08-08",
+      "party": "TRI PACK FILMS LIMITED",
+      "amount": 0,
+      "id": 4,
+      "open": "Gate Pass",
+      "detail": "material in"
+    },
+    {
+      "kind": "Gate Pass Open",
+      "doc_no": "GP-0005",
+      "date": "2026-08-08",
+      "party": "ZUBAIR SALT PERSONAL",
+      "amount": 0,
+      "id": 5,
+      "open": "Gate Pass",
+      "detail": "material in"
+    },
+    {
+      "kind": "Gate Pass Open",
+      "doc_no": "GP-0008",
+      "date": "2026-08-08",
+      "party": "IZZA TRADERS DASKA",
+      "amount": 0,
+      "id": 8,
+      "open": "Gate Pass",
+      "detail": "material out"
+    },
+    {
+      "kind": "Gate Pass Open",
+      "doc_no": "GP-0009",
+      "date": "2026-08-08",
+      "party": "SOHAIL ENTERPRISES - GUJRAT DISTRIBUTOR",
+      "amount": 0,
+      "id": 9,
+      "open": "Gate Pass",
+      "detail": "material out"
+    },
+    {
+      "kind": "Gate Pass Open",
+      "doc_no": "GP-0010",
+      "date": "2026-08-08",
+      "party": "MERCEDEZ FANS GUJRAT",
+      "amount": 0,
+      "id": 10,
+      "open": "Gate Pass",
+      "detail": "material out"
+    },
+    {
+      "kind": "Gate Pass Open",
+      "doc_no": "GP-0011",
+      "date": "2026-08-08",
+      "party": "SALE IN CASH",
+      "amount": 0,
+      "id": 11,
+      "open": "Gate Pass",
+      "detail": "material out"
+    },
+    {
+      "kind": "Gate Pass Open",
+      "doc_no": "GP-0012",
+      "date": "2026-08-08",
+      "party": "FIRDOUS TRADERS",
+      "amount": 0,
+      "id": 12,
+      "open": "Gate Pass",
+      "detail": "material out"
+    },
+    {
+      "kind": "Gate Pass Open",
+      "doc_no": "GP-0013",
+      "date": "2026-08-08",
+      "party": "SALE IN CASH",
+      "amount": 0,
+      "id": 13,
+      "open": "Gate Pass",
+      "detail": "material out"
+    },
+    {
+      "kind": "Gate Pass Open",
+      "doc_no": "GP-0014",
+      "date": "2026-08-08",
+      "party": "FIRDOUS TRADERS",
+      "amount": 0,
+      "id": 14,
+      "open": "Gate Pass",
+      "detail": "material out"
+    },
+    {
+      "kind": "Gate Pass Open",
+      "doc_no": "GP-0017",
+      "date": "2026-08-08",
+      "party": "SALE IN CASH",
+      "amount": 0,
+      "id": 17,
+      "open": "Gate Pass",
+      "detail": "material out"
+    },
+    {
+      "kind": "Gate Pass Open",
+      "doc_no": "GP-0018",
+      "date": "2026-08-08",
+      "party": "SALE IN CASH",
+      "amount": 0,
+      "id": 18,
+      "open": "Gate Pass",
+      "detail": "material out"
+    },
+    {
+      "kind": "Gate Pass Open",
+      "doc_no": "GP-0019",
+      "date": "2026-08-08",
+      "party": "MED HOUSE",
+      "amount": 0,
+      "id": 19,
+      "open": "Gate Pass",
+      "detail": "material out"
+    },
+    {
+      "kind": "Gate Pass Open",
+      "doc_no": "GP-0020",
+      "date": "2026-08-08",
+      "party": "SALE IN CASH",
+      "amount": 0,
+      "id": 20,
+      "open": "Gate Pass",
+      "detail": "material out"
+    },
+    {
+      "kind": "Gate Pass Open",
+      "doc_no": "GP-0021",
+      "date": "2026-08-08",
+      "party": "ABDUL REHMAN KHAN GRINDING",
+      "amount": 0,
+      "id": 21,
+      "open": "Gate Pass",
+      "detail": "material in"
+    },
+    {
+      "kind": "Gate Pass Open",
+      "doc_no": "GP-0022",
+      "date": "2026-08-08",
+      "party": "SALE IN CASH",
+      "amount": 0,
+      "id": 22,
+      "open": "Gate Pass",
+      "detail": "material out"
+    },
+    {
+      "kind": "Gate Pass Open",
+      "doc_no": "GP-0023",
+      "date": "2026-08-08",
+      "party": "SALE IN CASH",
+      "amount": 0,
+      "id": 23,
+      "open": "Gate Pass",
+      "detail": "material out"
+    },
+    {
+      "kind": "Gate Pass Open",
+      "doc_no": "GP-0024",
+      "date": "2026-08-08",
+      "party": "AMIN SB HARIPUR",
+      "amount": 0,
+      "id": 24,
+      "open": "Gate Pass",
+      "detail": "material out"
+    },
+    {
+      "kind": "Sales Order Open",
+      "doc_no": "SO-0001",
+      "date": "2026-08-08",
+      "party": "MALIK YASEEN SHAKARGHAR",
+      "amount": 3024170.0,
+      "id": 1,
+      "open": "Sales",
+      "detail": "open"
+    }
+  ]
+}
