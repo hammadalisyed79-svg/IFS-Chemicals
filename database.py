@@ -4341,10 +4341,12 @@ def _party_ledger_opening_as_of(
     return _apply_summary_movements(master, prior, kind)
 
 
-def _ledger_period_summary(entries, opening: float, kind: str) -> dict:
+def _ledger_period_summary(entries, opening: float, kind: str, *, balance_rows_only: bool = False) -> dict:
     """Opening, period debit/credit (exclude opening row), and closing (+Dr − Cr)."""
     opening = float(opening or 0)
     body = (entries or [])[1:] if entries else []
+    if balance_rows_only:
+        body = [e for e in body if e.get("balance") not in (None, "")]
     period_debit = round(sum(float(e.get("debit") or 0) for e in body), 2)
     period_credit = round(sum(float(e.get("credit") or 0) for e in body), 2)
     closing = round(opening + period_debit - period_credit, 2)
@@ -5045,7 +5047,7 @@ def _detailed_ledger_finalize(party, entries, opening_balance, balance_fn, kind=
         e.pop("_iso", None)
         e.pop("_group", None)
         out.append(e)
-    party["ledger_summary"] = _ledger_period_summary(out, opening_balance, kind)
+    party["ledger_summary"] = _ledger_period_summary(out, opening_balance, kind, balance_rows_only=True)
     return party, out
 
 
@@ -5409,20 +5411,24 @@ def _append_customer_other_ledger(
     conn, events, customer_id, from_date, to_date, seq_start, *, skip_shared_coa_jv=False,
 ):
     seq = seq_start
-    q3 = """
-        SELECT receipt_date AS dt, document_no AS ref, amount, description, 'CRV' AS typ
-        FROM cash_receipts WHERE party_type='customer' AND party_id=?
-        UNION ALL
-        SELECT receipt_date AS dt, document_no AS ref, amount, description, 'BRV' AS typ
-        FROM bank_receipts WHERE party_type='customer' AND party_id=?
-    """
-    q3, params3 = _filter_union_ledger_dates(q3, [customer_id, customer_id], from_date, to_date)
-    for row in conn.execute(q3, params3).fetchall():
-        r = row_to_dict(row)
+    for r in _party_cash_bank_receipt_rows(conn, "customer", customer_id, from_date, to_date):
+        desc = r.get("description") or "Customer Receipt"
+        if r.get("mode"):
+            desc = f"{desc} ({r['mode']})"
+        typ = "BRV" if (r.get("mode") or "").strip().lower() == "bank" else "CRV"
         events.append(_dledger_row(
-            r["dt"], r.get("typ") or "CRV", r["ref"],
-            r.get("description") or "Cash Received",
+            r["dt"], typ, r["ref"], desc,
             credit=float(r.get("amount") or 0), balance_line=True, sort_seq=seq, group=2,
+        ))
+        seq += 1
+    for r in _party_cash_bank_payment_rows(conn, "customer", customer_id, from_date, to_date):
+        desc = r.get("description") or "Customer Payment"
+        if r.get("mode"):
+            desc = f"{desc} ({r['mode']})"
+        typ = "BPV" if (r.get("mode") or "").strip().lower() == "bank" else "CPV"
+        events.append(_dledger_row(
+            r["dt"], typ, r["ref"], desc,
+            debit=float(r.get("amount") or 0), balance_line=True, sort_seq=seq, group=2,
         ))
         seq += 1
     # SALE IN CASH (100013): cash hits Cash+Sale; FMYE party JV leftovers must not inflate AR.
@@ -5465,20 +5471,31 @@ def _append_supplier_other_ledger(
     conn, events, supplier_id, from_date, to_date, seq_start, *, skip_shared_coa_jv=False,
 ):
     seq = seq_start
-    q3 = """
-        SELECT payment_date AS dt, document_no AS ref, amount, description, 'CPV' AS typ
-        FROM cash_payments WHERE party_type='supplier' AND party_id=?
-        UNION ALL
-        SELECT payment_date AS dt, document_no AS ref, amount, description, 'BPV' AS typ
-        FROM bank_payments WHERE party_type='supplier' AND party_id=?
-    """
-    q3, params3 = _filter_union_ledger_dates(q3, [supplier_id, supplier_id], from_date, to_date)
-    for row in conn.execute(q3, params3).fetchall():
-        r = row_to_dict(row)
+    for r in _party_cash_bank_payment_rows(conn, "supplier", supplier_id, from_date, to_date):
+        desc = r.get("description") or "Supplier Payment"
+        if r.get("mode"):
+            desc = f"{desc} ({r['mode']})"
+        typ = "BPV" if (r.get("mode") or "").strip().lower() == "bank" else "CPV"
         events.append(_dledger_row(
-            r["dt"], r.get("typ") or "CPV", r["ref"],
-            r.get("description") or "Payment",
+            r["dt"], typ, r["ref"], desc,
             debit=float(r.get("amount") or 0), balance_line=True, sort_seq=seq, group=2,
+        ))
+        seq += 1
+    for r in _party_cash_bank_receipt_rows(conn, "supplier", supplier_id, from_date, to_date):
+        desc = r.get("description") or "Supplier Receipt"
+        if r.get("mode"):
+            desc = f"{desc} ({r['mode']})"
+        typ = "BRV" if (r.get("mode") or "").strip().lower() == "bank" else "CRV"
+        events.append(_dledger_row(
+            r["dt"], typ, r["ref"], desc,
+            credit=float(r.get("amount") or 0), balance_line=True, sort_seq=seq, group=2,
+        ))
+        seq += 1
+    for e in _supplier_withholding_ledger_rows(conn, supplier_id, from_date, to_date):
+        events.append(_dledger_row(
+            e["date"], "BPV", e.get("ref") or "", e.get("description") or "Supplier W/H Tax",
+            debit=float(e.get("debit") or 0), credit=float(e.get("credit") or 0),
+            balance_line=True, sort_seq=seq, group=2,
         ))
         seq += 1
     for e in _fmye_party_ledger_rows(conn, "supplier", supplier_id, from_date, to_date):
