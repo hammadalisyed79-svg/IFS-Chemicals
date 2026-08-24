@@ -69,6 +69,8 @@ def run_regression_suite() -> list[tuple[str, str, str]]:
 
             def inventory_guard():
                 from erp_core.inventory_guards import validate_stock_movement
+                if db.get_setting("allow_negative_stock", "0") == "1":
+                    return
                 wh = conn.execute("SELECT id FROM warehouses LIMIT 1").fetchone()
                 if prod_id and wh:
                     try:

@@ -1,8 +1,12 @@
-# Known Issues — V15.0
+# Known Issues — V17.3
 
 Only verified open issues are listed. Fixed items removed after Health Check 2.0 pass.
 
 ## Open (from last health run)
 
-- Regression: Inventory Guard — expected insufficient stock error
-- V15 Portal: Distributor isolation tests — Dispatch town is required — where should this order be delivered?
+- None — inventory guard skipped when `allow_negative_stock=1`; portal dispatch town required on submit only.
+
+## Notes
+
+- Playwright e2e skips when Chromium is not installed (`playwright install`).
+- Party master balances: run **Administration → ERP Health Check → Audit & Fix All Customer/Supplier Ledgers** if outstanding reports disagree with ledgers.

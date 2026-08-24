@@ -449,7 +449,7 @@ def create_portal_order(
         raise ValueError(msg)
 
     town = (dispatch_town or "").strip()
-    if not town:
+    if submit and not town:
         raise ValueError("Dispatch town is required — where should this order be delivered?")
 
     od = str(order_date or date.today())[:10]

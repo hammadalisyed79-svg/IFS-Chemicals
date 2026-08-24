@@ -9,6 +9,8 @@ import tempfile
 import time
 from pathlib import Path
 
+import pytest
+
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
@@ -38,12 +40,10 @@ def _login(page, password: str) -> None:
         page.wait_for_timeout(5000)
 
 
+@pytest.mark.e2e
 def test_ui_automation():
-    try:
-        from playwright.sync_api import sync_playwright
-    except ImportError:
-        print("FAIL playwright not installed")
-        sys.exit(1)
+    pytest.importorskip("playwright")
+    from playwright.sync_api import sync_playwright
 
     db_path, password = _prepare_db()
     proc = subprocess.Popen(
@@ -58,7 +58,10 @@ def test_ui_automation():
     try:
         time.sleep(14)
         with sync_playwright() as p:
-            browser = p.chromium.launch(headless=True)
+            try:
+                browser = p.chromium.launch(headless=True)
+            except Exception as exc:
+                pytest.skip(f"Playwright browser unavailable: {exc}")
             page = browser.new_page()
             page.goto(BASE, timeout=90000)
             page.wait_for_timeout(3000)
@@ -66,13 +69,11 @@ def test_ui_automation():
             content = page.content()
             assert "Dashboard" in content or "Customers" in content or "IFS" in content, "Login/dashboard failed"
 
-            # Search / filter smoke — enterprise search if visible
             search = page.locator('input[placeholder*="Search"], input[aria-label*="Search"]')
             if search.count():
                 search.first.fill("SI")
                 page.wait_for_timeout(1500)
 
-            # Navigate Customers screen via sidebar text if present
             cust = page.get_by_text("Customers", exact=True)
             if cust.count():
                 cust.first.click()
@@ -81,11 +82,6 @@ def test_ui_automation():
 
             browser.close()
         print("PASS Playwright login, dashboard, navigation smoke")
-    except Exception as exc:
-        print(f"FAIL Playwright UI: {exc}")
-        import traceback
-        traceback.print_exc()
-        sys.exit(1)
     finally:
         proc.terminate()
         try:

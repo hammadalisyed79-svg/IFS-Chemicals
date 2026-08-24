@@ -142,7 +142,12 @@ def test_portal_order_creates_sales_order():
             )
             pid = conn.execute("SELECT id FROM products WHERE code='P2'").fetchone()[0]
         dcat.upsert_catalog_item(cid, pid, rate=10, discount_pct=0, created_by=1, notify=False)
-        oid = ps.create_portal_order(u, [{"product_id": pid, "quantity": 1, "rate": 10}], submit=True)
+        oid = ps.create_portal_order(
+            u,
+            [{"product_id": pid, "quantity": 1, "rate": 10}],
+            submit=True,
+            dispatch_town="Lahore",
+        )
         order = ps.get_portal_order(u, oid)
         assert order.get("sales_order_id"), "sales_order_id missing on portal order"
         with db.get_connection() as conn:
