@@ -1110,6 +1110,8 @@ def render_ledger_detailed_table(entries):
     """Finance Manager detailed ledger with line qty/rate/amount."""
     from html import escape
 
+    from database import parse_ledger_balance_display
+
     if not entries:
         return
     headers = ("Date", "Type", "Vr. #", "Narration", "Qty", "Rate", "Amount", "Debit", "Credit", "Balance")
@@ -1121,7 +1123,11 @@ def render_ledger_detailed_table(entries):
         amount = e.get("amount")
         debit = float(e.get("debit") or 0)
         credit = float(e.get("credit") or 0)
-        bal = float(e.get("balance") or 0)
+        bal_raw = e.get("balance")
+        if bal_raw in (None, ""):
+            bal_txt = "—"
+        else:
+            bal_txt = fmt_signed_dr_cr(parse_ledger_balance_display(bal_raw))
         qty_txt = f"{float(qty):,.3f}" if qty not in (None, "") else "—"
         rate_txt = fmt_money(rate) if rate not in (None, "") and float(rate or 0) else "—"
         amt_txt = fmt_money(amount) if amount not in (None, "") and float(amount or 0) else "—"
@@ -1136,7 +1142,7 @@ def render_ledger_detailed_table(entries):
             f"<td class='txn-num'>{escape(amt_txt)}</td>"
             f"<td class='txn-num'>{escape(fmt_money(debit)) if debit else '—'}</td>"
             f"<td class='txn-num'>{escape(fmt_money(credit)) if credit else '—'}</td>"
-            f"<td class='txn-num'>{escape(fmt_signed_dr_cr(bal))}</td>"
+            f"<td class='txn-num'>{escape(bal_txt)}</td>"
             "</tr>"
         )
     st.markdown(
