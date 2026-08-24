@@ -17,3 +17,11 @@ import/product_weights_template.csv
 test_out.txt
 *.log
 ADMIN_BOOTSTRAP.txt
+backups/
+_diag_*.py
+_audit_*.py
+_assess_*.py
+_tmp_*.py
+*.bundle
+data/documents/
+ifs-chemicals-push.bundle
