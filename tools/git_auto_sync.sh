@@ -27,13 +27,22 @@ else
   echo "[$TS] Committed on $BRANCH"
 fi
 
+push_remote() {
+  local remote="$1"
+  local b="$2"
+  if git push "$remote" "$b" 2>&1; then
+    echo "[$TS] Pushed $remote/$b"
+  else
+    echo "[$TS] WARN: push failed for $remote/$b" >&2
+    return 1
+  fi
+}
+
 push_branch() {
   local b="$1"
-  if git push origin "$b" 2>&1; then
-    echo "[$TS] Pushed origin/$b"
-  else
-    echo "[$TS] WARN: push failed for $b (run: origin auth login)" >&2
-    return 1
+  push_remote origin "$b" || true
+  if git remote get-url github >/dev/null 2>&1; then
+    push_remote github "$b" || true
   fi
 }
 

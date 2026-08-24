@@ -44,6 +44,7 @@ echo  Done.
 echo  - Commits + pushes tracked changes every 30 minutes
 echo  - Also pushes immediately after manual git commit
 echo  - Uses WSL Ubuntu + origin auth ^(run origin auth login if push fails^)
+echo  - Also pushes to GitHub remote ^(run tools\setup_github_remote.ps1 once^)
 echo  - Manual run: tools\git_auto_sync.ps1
 echo ============================================================
 echo.
