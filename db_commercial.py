@@ -1751,7 +1751,7 @@ def get_gate_passes(pass_type=None, from_date=None, to_date=None, sales_invoice_
 
 
 def search_weight_slips(q=None, from_date=None, to_date=None, customer_id=None, supplier_id=None,
-                        status=None, page=1, page_size=50, export_all=False):
+                        status=None, statuses=None, page=1, page_size=50, export_all=False):
     from database import run_paginated_list
     from_clause = f"""
         (
@@ -1789,7 +1789,11 @@ def search_weight_slips(q=None, from_date=None, to_date=None, customer_id=None, 
         where.append("customer_id=?"); params.append(customer_id)
     if supplier_id:
         where.append("supplier_id=?"); params.append(supplier_id)
-    if status and status != "All":
+    status_list = [s for s in (statuses or []) if s]
+    if status_list:
+        where.append(f"status IN ({','.join('?' for _ in status_list)})")
+        params.extend(status_list)
+    elif status and status != "All":
         where.append("status=?"); params.append(status)
     if q:
         like = f"%{q.strip()}%"
@@ -1798,13 +1802,20 @@ def search_weight_slips(q=None, from_date=None, to_date=None, customer_id=None, 
             "OR product_name LIKE ? OR sales_invoice_no LIKE ? OR purchase_invoice_no LIKE ?)"
         )
         params.extend([like] * 7)
+    order_by = "slip_date DESC, id DESC"
+    if status_list and "first_weigh" in status_list:
+        # Pending first for Edit / Delete pickers
+        order_by = (
+            "CASE status WHEN 'first_weigh' THEN 0 WHEN 'completed' THEN 1 "
+            "WHEN 'cancelled' THEN 2 ELSE 9 END, slip_date DESC, id DESC"
+        )
     return run_paginated_list(
         from_clause,
         "id, document_no, slip_date, slip_time, created_at, status, vehicle_no, driver_name, first_weight, second_weight, net_weight, "
         "customer_name, customer_code, supplier_name, supplier_code, product_name, sales_invoice_no, purchase_invoice_no",
         where or None,
         params,
-        "slip_date DESC, id DESC",
+        order_by,
         page,
         page_size,
         export_all=export_all,
