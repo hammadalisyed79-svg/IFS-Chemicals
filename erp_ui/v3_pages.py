@@ -276,7 +276,12 @@ def _crud(title, list_fn, get_fn, add_fn, update_fn, delete_fn, prefix, fields):
         if not rows:
             return
         sel = st.selectbox("Select", [f"{r['code']} - {r.get('name', r.get('registration_no',''))}" for r in rows])
-        rid = next(r["id"] for r in rows if sel.startswith(r["code"]))
+        if not sel:
+            return
+        rid = next((r["id"] for r in rows if str(sel).startswith(str(r["code"]))), None)
+        if rid is None:
+            st.warning("Could not resolve selection.")
+            return
         rec = get_fn(rid) if get_fn else next(r for r in rows if r["id"] == rid)
         with st.form(f"edit_{title}"):
             data = {"code": st.text_input("Code", rec["code"])}
@@ -1536,7 +1541,10 @@ def page_general_ledger():
     sel = st.selectbox("Account (All)", ["All"] + [f"{a['code']} - {a['name']}" for a in accts])
     c1, c2 = st.columns(2)
     fd, td = c1.date_input("From", value=None), c2.date_input("To", value=None)
-    aid = None if sel == "All" else next(a["id"] for a in accts if sel.startswith(a["code"]))
+    if not sel or sel == "All":
+        aid = None
+    else:
+        aid = next((a["id"] for a in accts if str(sel).startswith(str(a["code"]))), None)
     rows = db.get_general_ledger(
         aid, str(fd) if fd else None, str(td) if td else None, account_group_id=account_group_id,
     )
@@ -1755,7 +1763,13 @@ def page_roles():
         st.info("No roles.")
         return
     sel = st.selectbox("Role", [f"{r['code']} - {r['name']}" for r in roles])
-    rid = next(r["id"] for r in roles if sel.startswith(r["code"]))
+    if not sel:
+        st.info("Select a role.")
+        return
+    rid = next((r["id"] for r in roles if str(sel).startswith(str(r["code"]))), None)
+    if rid is None:
+        st.warning("Could not resolve role.")
+        return
     modules = ["Dashboard", "Masters", "Sales", "Purchase", "Inventory", "Production", "Finance", "HR", "Reports", "Admin"]
     perms = []
     for m in modules:

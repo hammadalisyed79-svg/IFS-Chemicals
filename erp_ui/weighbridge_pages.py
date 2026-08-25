@@ -181,6 +181,7 @@ def _second_weight_form_body(slip_id: int, *, key_prefix: str = "ws2"):
             index=0 if is_sale else 1,
             key=f"{key_prefix}_ptype",
         )
+        party_type_2 = party_type_2 or ("SALE (Customer)" if is_sale else "PURCHASE (Supplier)")
         _real_cust = [
             r for r in db.get_customers(active_only=True)
             if str(r.get("code") or "").upper() != UNKNOWN_PARTY_CODE
@@ -189,7 +190,7 @@ def _second_weight_form_body(slip_id: int, *, key_prefix: str = "ws2"):
             r for r in db.get_suppliers(active_only=True)
             if str(r.get("code") or "").upper() != UNKNOWN_PARTY_CODE
         ]
-        if party_type_2.startswith("SALE"):
+        if str(party_type_2).startswith("SALE"):
             _, cid2, _ = smart_select(
                 "Customer account *", _real_cust, f"{key_prefix}_c", "id",
                 _party_fmt,
@@ -216,7 +217,7 @@ def _second_weight_form_body(slip_id: int, *, key_prefix: str = "ws2"):
                 raise ValueError("Second weight is required.")
             party_update = None
             if need_party:
-                if party_type_2.startswith("SALE"):
+                if str(party_type_2).startswith("SALE"):
                     if not cid2:
                         raise ValueError("Select the customer for this dispatch.")
                     if is_unknown_party(cid2, "customer"):
@@ -303,6 +304,7 @@ def page_weight_entry():
         slip_date = c1.date_input("Date", value=date.today(), key=wk("date"))
         slip_time = c2.text_input("Time", value=now.strftime("%H:%M:%S"), key=wk("time"))
         party_type = st.selectbox("Type", ["SALE (Customer)", "PURCHASE (Supplier)"], key=wk("party"))
+        party_type = party_type or "SALE (Customer)"
         st.caption(
             "At **1st weight** record vehicle and party (or mark **UNKNOWN**). "
             "At **2nd weight** the party is kept automatically; only UNKNOWN slips ask for a party again. "
@@ -317,12 +319,12 @@ def page_weight_entry():
         cid = sid = None
         if unknown_party:
             from db_invoice_workflow import unknown_party_id
-            if party_type.startswith("SALE"):
+            if str(party_type).startswith("SALE"):
                 cid = unknown_party_id("customer", uid())
             else:
                 sid = unknown_party_id("supplier", uid())
             st.info("Party set to **UNKNOWN**. Select the real party when completing 2nd weight.")
-        elif party_type.startswith("SALE"):
+        elif str(party_type).startswith("SALE"):
             _, cid, _ = smart_select(
                 "Customer account *", db.get_customers(active_only=True), "ws1_c", "id",
                 _party_fmt,
@@ -344,9 +346,9 @@ def page_weight_entry():
                 st.error("First weight is required.")
             elif not vehicle_no.strip():
                 st.error("Vehicle number is required.")
-            elif party_type.startswith("SALE") and not cid:
+            elif str(party_type).startswith("SALE") and not cid:
                 st.error("Select a customer, or tick **Party unknown**.")
-            elif party_type.startswith("PURCHASE") and not sid:
+            elif str(party_type).startswith("PURCHASE") and not sid:
                 st.error("Select a supplier, or tick **Party unknown**.")
             else:
                 try:
@@ -655,7 +657,7 @@ def page_weight_entry():
                 cid_ed = sid_ed = None
                 keep_unknown = st.checkbox("Keep UNKNOWN for now", value=slip_party_is_unknown(slip), key="ws_ed_keep_unk")
                 if not keep_unknown:
-                    if ptype_ed.startswith("SALE"):
+                    if str(ptype_ed).startswith("SALE"):
                         _, cid_ed, _ = smart_select(
                             "Customer account", _rc, "ws_ed_c", "id",
                             _party_fmt,
@@ -689,7 +691,7 @@ def page_weight_entry():
                                 "gross_weight": first_w,
                             }
                             if not keep_unknown:
-                                if ptype_ed.startswith("SALE"):
+                                if str(ptype_ed).startswith("SALE"):
                                     if not cid_ed:
                                         raise ValueError("Select a customer, or tick Keep UNKNOWN.")
                                     payload.update({
@@ -724,7 +726,7 @@ def page_weight_entry():
                 _rc = [r for r in db.get_customers(active_only=True) if str(r.get("code") or "").upper() != UNKNOWN_PARTY_CODE]
                 _rs = [r for r in db.get_suppliers(active_only=True) if str(r.get("code") or "").upper() != UNKNOWN_PARTY_CODE]
                 cid_ed = sid_ed = None
-                if ptype_ed.startswith("SALE"):
+                if str(ptype_ed).startswith("SALE"):
                     _, cid_ed, _ = smart_select(
                         "Customer account", _rc, "ws_edc_c", "id",
                         _party_fmt,
@@ -764,7 +766,7 @@ def page_weight_entry():
                                 "second_weight_time": second_t,
                                 "remarks": remarks,
                             }
-                            if ptype_ed.startswith("SALE"):
+                            if str(ptype_ed).startswith("SALE"):
                                 if not cid_ed:
                                     raise ValueError("Select a customer.")
                                 payload.update({

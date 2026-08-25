@@ -38,12 +38,27 @@ PERIOD_PRESETS = {
 
 @st.cache_data(ttl=60, show_spinner=False)
 def _cached_customer_party_opts():
-    return {f"{r['code']} - {r['name']}": r["id"] for r in db.get_customers()}
+    # Return list of tuples (pickle-safe); callers convert with dict(...).
+    return [
+        (f"{r['code']} - {r['name']}", int(r["id"]))
+        for r in db.get_customers()
+    ]
 
 
 @st.cache_data(ttl=60, show_spinner=False)
 def _cached_supplier_party_opts():
-    return {f"{r['code']} - {r['name']}": r["id"] for r in db.get_suppliers()}
+    return [
+        (f"{r['code']} - {r['name']}", int(r["id"]))
+        for r in db.get_suppliers()
+    ]
+
+
+def customer_party_opts():
+    return dict(_cached_customer_party_opts())
+
+
+def supplier_party_opts():
+    return dict(_cached_supplier_party_opts())
 
 
 def _period_dates(preset):
@@ -688,7 +703,7 @@ def linked_invoice_picker(key_prefix, search_fn, party_id, party_kw, row_label_f
 def sales_register_list(action_panel=None, open_handler=None):
     from erp_ui.doc_workflow import go_sale_new, open_sale_from_register
 
-    party_opts = _cached_customer_party_opts()
+    party_opts = customer_party_opts()
     cols = [
         {"field": "invoice_no", "label": "Invoice"},
         {"field": "sale_date", "label": "Date / Time", "format": "datetime"},
@@ -723,7 +738,7 @@ def sales_register_list(action_panel=None, open_handler=None):
 def purchase_register_list(action_panel=None, open_handler=None):
     from erp_ui.doc_workflow import go_purchase_new, open_purchase_from_register
 
-    party_opts = _cached_supplier_party_opts()
+    party_opts = supplier_party_opts()
     cols = [
         {"field": "invoice_no", "label": "Invoice"},
         {"field": "purchase_date", "label": "Date / Time", "format": "datetime"},
