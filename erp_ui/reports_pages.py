@@ -1107,8 +1107,10 @@ def _run_report(report, fd, td, cid, sid, pid, wid, eid, payroll_id=None, gf=Non
     pvm = gf.get("party_view_mode") or "detail"
     fvm = gf.get("view_mode") or "detail"
     if report == "Sales Register":
-        df = pd.DataFrame(db.get_sales())
-        return _filter_df_date(df, "sale_date", fd, td)
+        result = db.search_sales_invoices(
+            from_date=fd, to_date=td, customer_id=cid, export_all=True,
+        )
+        return pd.DataFrame(result.get("items") or [])
     if report == "Sales Invoice Register":
         return pd.DataFrame(rpt_db.get_sales_invoice_register(
             fd, td, cid, pid,
@@ -1171,15 +1173,25 @@ def _run_report(report, fd, td, cid, sid, pid, wid, eid, payroll_id=None, gf=Non
             fd, td, cid, customer_group_id=gf.get("customer_group_id"),
         ))
     if report == "Pending Sale Invoices":
-        return pd.DataFrame(db.get_sales_by_status("pending_approval"))
+        result = db.search_sales_invoices(
+            from_date=fd, to_date=td, customer_id=cid,
+            status="pending_approval", export_all=True,
+        )
+        return pd.DataFrame(result.get("items") or [])
     if report == "Approved Sale Invoices":
-        return pd.DataFrame(db.get_sales_by_status("approved"))
+        result = db.search_sales_invoices(
+            from_date=fd, to_date=td, customer_id=cid,
+            status="approved", export_all=True,
+        )
+        return pd.DataFrame(result.get("items") or [])
     if report == "Sale Weight Variance Report":
         return pd.DataFrame(rpt_db.get_weight_variance_report(fd, td, "sales"))
 
     if report == "Purchase Register":
-        df = pd.DataFrame(db.get_purchases())
-        return _filter_df_date(df, "purchase_date", fd, td)
+        result = db.search_purchases(
+            from_date=fd, to_date=td, supplier_id=sid, export_all=True,
+        )
+        return pd.DataFrame(result.get("items") or [])
     if report == "Purchase Invoice Register":
         return pd.DataFrame(rpt_db.get_purchase_invoice_register(
             fd, td, sid, pid,
@@ -1241,9 +1253,17 @@ def _run_report(report, fd, td, cid, sid, pid, wid, eid, payroll_id=None, gf=Non
         df = pd.DataFrame(db.get_grns())
         return _filter_df_date(df, "grn_date", fd, td)
     if report == "Pending Purchase Invoices":
-        return pd.DataFrame(db.get_purchases_by_status("pending_approval"))
+        result = db.search_purchases(
+            from_date=fd, to_date=td, supplier_id=sid,
+            status="pending_approval", export_all=True,
+        )
+        return pd.DataFrame(result.get("items") or [])
     if report == "Approved Purchase Invoices":
-        return pd.DataFrame(db.get_purchases_by_status("approved"))
+        result = db.search_purchases(
+            from_date=fd, to_date=td, supplier_id=sid,
+            status="approved", export_all=True,
+        )
+        return pd.DataFrame(result.get("items") or [])
     if report == "Purchase Weight Variance Report":
         return pd.DataFrame(rpt_db.get_weight_variance_report(fd, td, "purchase"))
 
