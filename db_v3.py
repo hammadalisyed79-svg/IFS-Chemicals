@@ -5062,11 +5062,20 @@ def revert_all_cash_advance_cash_book(user_id=None):
             entry_id = s.get("cash_entry_id")
             if entry_id:
                 src = (s.get("cash_entry_source") or "").lower()
-                if src == "cash_receipt":
-                    conn.execute("DELETE FROM cash_receipts WHERE id=?", (entry_id,))
-                    report["cash_receipts_deleted"] += 1
-                elif src == "bank_receipt":
-                    conn.execute("DELETE FROM bank_receipts WHERE id=?", (entry_id,))
+                cash_doc = (s.get("cash_doc_no") or "").strip()
+                # Require document_no match — bare id can collide with unrelated vouchers.
+                if src == "cash_receipt" and cash_doc.startswith("CR-"):
+                    cur = conn.execute(
+                        "DELETE FROM cash_receipts WHERE id=? AND document_no=?",
+                        (entry_id, cash_doc),
+                    )
+                    report["cash_receipts_deleted"] += cur.rowcount
+                elif src == "bank_receipt" and cash_doc:
+                    cur = conn.execute(
+                        "DELETE FROM bank_receipts WHERE id=? AND document_no=?",
+                        (entry_id, cash_doc),
+                    )
+                    report["cash_receipts_deleted"] += cur.rowcount
             conn.execute(
                 "DELETE FROM cash_advance_settlement_lines WHERE settlement_id=?", (sid,),
             )
@@ -5088,11 +5097,19 @@ def revert_all_cash_advance_cash_book(user_id=None):
             entry_id = adv.get("issue_entry_id")
             if entry_id:
                 src = (adv.get("issue_entry_source") or "").lower()
-                if src == "cash_payment":
-                    conn.execute("DELETE FROM cash_payments WHERE id=?", (entry_id,))
-                    report["cash_payments_deleted"] += 1
-                elif src == "bank_payment":
-                    conn.execute("DELETE FROM bank_payments WHERE id=?", (entry_id,))
+                issue_doc = (adv.get("issue_doc_no") or "").strip()
+                if src == "cash_payment" and issue_doc:
+                    cur = conn.execute(
+                        "DELETE FROM cash_payments WHERE id=? AND document_no=?",
+                        (entry_id, issue_doc),
+                    )
+                    report["cash_payments_deleted"] += cur.rowcount
+                elif src == "bank_payment" and issue_doc:
+                    cur = conn.execute(
+                        "DELETE FROM bank_payments WHERE id=? AND document_no=?",
+                        (entry_id, issue_doc),
+                    )
+                    report["cash_payments_deleted"] += cur.rowcount
             amt = round(float(adv.get("amount") or 0), 2)
             conn.execute(
                 """UPDATE cash_advances

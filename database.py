@@ -2889,21 +2889,15 @@ def _add_bank_payment(conn, entry_date, description, reference_no, amount, accou
 
 
 def _cash_advance_return_receipt_exclude_sql():
-    """Cash-advance settlement *returns* (CR vouchers) are GL/advance-only — not in Cash Book.
+    """Exclude legacy cash-advance *return* CRs from Cash Book (GL/advance-only).
 
-    Settlements also store cash_entry_id for *payment* (CP) bill vouchers. Those IDs must not
-    be applied against cash_receipts — autoincrement collision would hide real sale receipts.
+    Never filter cash_receipts by settlement ``cash_entry_id``. Settlements store that
+    id for *payment* (CP) bill vouchers; SQLite autoincrement reuse would hide real
+    sale receipts when the same integer later appears as a CR id. Match only by
+    document_no (``CR-*``) and ``CAS-*`` reference — both are unique across books.
     """
     return (
         " AND reference_no NOT GLOB 'CAS-*' "
-        " AND id NOT IN ("
-        "SELECT cash_entry_id FROM cash_advance_settlements "
-        "WHERE cash_entry_id IS NOT NULL "
-        "AND ("
-        " LOWER(COALESCE(cash_entry_source,'')) LIKE '%receipt%' "
-        " OR COALESCE(cash_doc_no,'') GLOB 'CR-*'"
-        ")"
-        ") "
         " AND COALESCE(document_no,'') NOT IN ("
         "SELECT cash_doc_no FROM cash_advance_settlements "
         "WHERE cash_doc_no IS NOT NULL AND cash_doc_no != '' "
@@ -2913,18 +2907,29 @@ def _cash_advance_return_receipt_exclude_sql():
 
 
 def _cash_advance_issue_payment_exclude_sql():
-    """Cash-advance issue payments are shadow-only — never in Cash Book."""
+    """Cash-advance issue payments are shadow-only — never in Cash Book.
+
+    Prefer ``issue_doc_no`` / CA-* markers. When matching by ``issue_entry_id``,
+    require the payment row's document_no to equal the advance's issue_doc_no so a
+    stale id cannot hide an unrelated CP voucher after autoincrement reuse.
+    """
     return (
-        " AND id NOT IN ("
-        "SELECT issue_entry_id FROM cash_advances WHERE issue_entry_id IS NOT NULL"
-        ") "
-        "AND document_no NOT IN ("
-        "SELECT issue_doc_no FROM cash_advances "
-        "WHERE issue_doc_no IS NOT NULL AND issue_doc_no != ''"
-        ") "
-        "AND NOT ("
-        "COALESCE(reference_no,'') GLOB 'CA-*' "
-        "AND COALESCE(description,'') LIKE 'Advance to%'"
+        " AND NOT ("
+        " id IN ("
+        "  SELECT a.issue_entry_id FROM cash_advances a"
+        "  INNER JOIN cash_payments p ON p.id = a.issue_entry_id"
+        "  WHERE a.issue_entry_id IS NOT NULL"
+        "    AND COALESCE(a.issue_doc_no,'') != ''"
+        "    AND p.document_no = a.issue_doc_no"
+        " )"
+        " OR document_no IN ("
+        "  SELECT issue_doc_no FROM cash_advances "
+        "  WHERE issue_doc_no IS NOT NULL AND issue_doc_no != ''"
+        " )"
+        " OR ("
+        "  COALESCE(reference_no,'') GLOB 'CA-*' "
+        "  AND COALESCE(description,'') LIKE 'Advance to%'"
+        " )"
         ")"
     )
 
@@ -3046,6 +3051,62 @@ def _cash_bank_account_title(conn, party_type, party_id) -> str:
 def get_cash_book(from_date=None, to_date=None):
     with get_connection() as conn:
         return _cash_book_rows(conn, from_date, to_date)
+
+
+def audit_cash_book_integrity(from_date=None, to_date=None):
+    """Detect Cash Book integrity issues that previously hid sale receipts.
+
+    Returns:
+        id_collisions: settlement payment ids that also exist as cash_receipts ids
+            (informational — exclude SQL must never use bare ids against receipts).
+        missing_sale_receipts: approved cash-sale CRs that cash_book_receipts_sum /
+            get_cash_book would omit (should always be empty after the harden fix).
+    """
+    with get_connection() as conn:
+        collisions = rows_to_list(
+            conn.execute(
+                """
+                SELECT s.id AS settlement_id, s.document_no AS settlement_doc,
+                       s.cash_entry_id, s.cash_entry_source, s.cash_doc_no AS settle_cash_doc,
+                       r.document_no AS receipt_doc, r.reference_no, r.amount,
+                       r.receipt_date
+                FROM cash_advance_settlements s
+                JOIN cash_receipts r ON r.id = s.cash_entry_id
+                WHERE s.cash_entry_id IS NOT NULL
+                  AND LOWER(COALESCE(s.cash_entry_source, '')) NOT LIKE '%receipt%'
+                  AND COALESCE(s.cash_doc_no, '') NOT GLOB 'CR-*'
+                ORDER BY s.id
+                """
+            ).fetchall()
+        )
+        q = """
+            SELECT r.id, r.document_no, r.reference_no, r.amount, r.receipt_date,
+                   s.document_no AS sale_doc
+            FROM cash_receipts r
+            JOIN sales_invoices s ON s.document_no = r.reference_no
+            WHERE LOWER(COALESCE(s.payment_mode, '')) = 'cash'
+              AND LOWER(COALESCE(s.status, '')) = 'approved'
+              AND COALESCE(r.document_no, '') GLOB 'CR-*'
+        """
+        params = []
+        if from_date:
+            q += " AND r.receipt_date>=?"; params.append(from_date)
+        if to_date:
+            q += " AND r.receipt_date<=?"; params.append(to_date)
+        sale_crs = rows_to_list(conn.execute(q, params).fetchall())
+        book_docs = {
+            (row.get("document_no") or "")
+            for row in _cash_book_rows(conn, from_date, to_date)
+            if row.get("entry_source") == "cash_receipt"
+        }
+        missing = [r for r in sale_crs if (r.get("document_no") or "") not in book_docs]
+        return {
+            "id_collisions": collisions,
+            "id_collision_count": len(collisions),
+            "missing_sale_receipts": missing,
+            "missing_sale_receipt_count": len(missing),
+            "sale_receipt_count": len(sale_crs),
+        }
 
 
 def get_provisional_cash_sale_invoices(from_date=None, to_date=None):

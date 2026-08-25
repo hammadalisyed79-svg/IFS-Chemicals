@@ -175,6 +175,19 @@ def _run_all_checks() -> list[tuple[str, str, str, str]]:
         today = date.today().isoformat()
         assert db.get_cash_book(today, today) is not None
 
+    def cash_book_sale_receipts_visible():
+        """Approved cash-sale CRs must never be hidden by advance-settlement id collisions."""
+        from datetime import date, timedelta
+        today = date.today()
+        start = (today - timedelta(days=30)).isoformat()
+        end = today.isoformat()
+        rep = db.audit_cash_book_integrity(start, end)
+        missing = rep.get("missing_sale_receipt_count") or 0
+        assert missing == 0, (
+            f"{missing} approved cash-sale receipt(s) missing from Cash Book "
+            f"(sample: {rep.get('missing_sale_receipts', [])[:3]})"
+        )
+
     def bank_book_query():
         from datetime import date
         today = date.today().isoformat()
@@ -195,8 +208,8 @@ def _run_all_checks() -> list[tuple[str, str, str, str]]:
     for fn in (
         login_ok, customer_required, supplier_required, blank_sale_blocked,
         blank_purchase_blocked, totals_recalc, weekly_holidays_table,
-        draft_registry, v14_tables, cash_book_query, bank_book_query, gl_table,
-        enterprise_search_ok, transaction_engine_registry,
+        draft_registry, v14_tables, cash_book_query, cash_book_sale_receipts_visible,
+        bank_book_query, gl_table, enterprise_search_ok, transaction_engine_registry,
     ):
         checks.append(_check(fn.__name__.replace("_", " ").title(), fn))
     return checks
