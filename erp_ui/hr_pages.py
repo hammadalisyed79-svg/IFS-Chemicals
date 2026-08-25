@@ -444,8 +444,18 @@ def page_leave():
                 f"<p class='txn-kpi-val'>{pending_n:,}</p></div>",
                 unsafe_allow_html=True,
             )
-            render_dataframe_html_table(pd.DataFrame(rows))
+            from erp_ui.list_paging import page_slice
+            view = page_slice(rows, "leave_req_pg", default_size=50)
+            render_dataframe_html_table(pd.DataFrame(view))
             export_df(pd.DataFrame(rows), "leave_report")
+        else:
+            st.markdown(
+                '<div class="erp-empty-state"><p>No leave requests yet.</p></div>',
+                unsafe_allow_html=True,
+            )
+            if st.button("New Leave Request", type="primary", key="leave_empty_cta"):
+                st.session_state["leave_tab"] = "New Request"
+                st.rerun()
     elif tab == "New Request":
         emps = _emp_opts()
         ltypes = {lt["name"]: lt for lt in db.get_leave_types()}
@@ -676,8 +686,18 @@ def page_payroll():
                 f"<p class='txn-kpi-val'>{paid_n:,}</p></div>",
                 unsafe_allow_html=True,
             )
-            render_dataframe_html_table(pd.DataFrame(runs))
+            from erp_ui.list_paging import page_slice
+            view = page_slice(runs, "hr_pay_runs_pg", default_size=40)
+            render_dataframe_html_table(pd.DataFrame(view))
             export_df(pd.DataFrame(runs), "payroll_register")
+        else:
+            st.markdown(
+                '<div class="erp-empty-state"><p>No payroll runs yet.</p></div>',
+                unsafe_allow_html=True,
+            )
+            if st.button("Generate Payroll", type="primary", key="pay_empty_cta"):
+                st.session_state["hr_pay_tab"] = "Generate Payroll"
+                st.rerun()
     elif tab == "Generate Payroll":
         if db.user_can_hr(st.session_state.user, "add"):
             c1, c2 = st.columns(2)
@@ -923,7 +943,17 @@ def page_advances():
     if tab == "Advance List":
         rows = db.get_advances()
         if rows:
-            render_dataframe_html_table(pd.DataFrame(rows))
+            from erp_ui.list_paging import page_slice
+            view = page_slice(rows, "hr_adv_list_pg", default_size=40)
+            render_dataframe_html_table(pd.DataFrame(view))
+        else:
+            st.markdown(
+                '<div class="erp-empty-state"><p>No employee advances yet.</p></div>',
+                unsafe_allow_html=True,
+            )
+            if st.button("New Advance Request", type="primary", key="adv_empty_cta"):
+                st.session_state["hr_adv_tab"] = "New Request"
+                st.rerun()
         out = db.report_outstanding_advances()
         if out:
             st.markdown("**Outstanding Advances**")
