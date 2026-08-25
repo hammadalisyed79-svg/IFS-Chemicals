@@ -308,7 +308,7 @@ def page_purchases():
             header.pop("weight_slip_as_primary", None)
         if not direct_pur:
             st.caption(f"Total invoice item weight: **{inv_wt:,.3f} kg**")
-        st.write(f"**Net Invoice:** {fmt_money(totals['total'])}")
+        st.write(f"**Net Invoice:** {hlp.fmt_money(totals['total'])}")
         st.session_state["pur_header"] = header
 
         from erp_ui.voucher_validation import (
@@ -328,7 +328,7 @@ def page_purchases():
         with st.container(key="pur_new_act_bar"):
             c_save, c_tot = st.columns([1, 2])
             with c_tot:
-                st.markdown(f"**Net total:** {fmt_money(totals['total'])} · Draft until submitted")
+                st.markdown(f"**Net total:** {hlp.fmt_money(totals['total'])} · Draft until submitted")
             with c_save:
                 save_clicked = st.button("Save Draft Invoice", type="primary", key="save_pur", use_container_width=True)
 
@@ -481,7 +481,7 @@ def page_purchases():
                     inv_wt, header["weight_slip_id"],
                     as_primary=header.get("weight_slip_as_primary", True),
                 )
-            st.write(f"**Net Invoice:** {fmt_money(totals['total'])}")
+            st.write(f"**Net Invoice:** {hlp.fmt_money(totals['total'])}")
             if purchase.get("gate_pass_id"):
                 gps = db.get_gate_passes(purchase_invoice_id=pid)
                 if gps:

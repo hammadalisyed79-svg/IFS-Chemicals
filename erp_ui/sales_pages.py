@@ -386,7 +386,7 @@ def page_sales():
             header.pop("weight_slip_as_primary", None)
         if flow["show_weight"]:
             st.caption(f"Total invoice item weight: **{inv_wt:,.3f} kg**")
-        st.write(f"**Net Invoice:** {fmt_money(totals['total'])}")
+        st.write(f"**Net Invoice:** {hlp.fmt_money(totals['total'])}")
         was_retail_new = st.session_state.get("sal_new_was_retail", False)
         if was_retail_new and not retail_sale:
             header["paid_amount"] = 0
@@ -419,7 +419,7 @@ def page_sales():
         with st.container(key="sal_new_act_bar"):
             c_save, c_tot = st.columns([1, 2])
             with c_tot:
-                st.markdown(f"**Net total:** {fmt_money(totals['total'])} · Draft until submitted")
+                st.markdown(f"**Net total:** {hlp.fmt_money(totals['total'])} · Draft until submitted")
             with c_save:
                 save_clicked = st.button("Save Draft Invoice", type="primary", key="save_sal", use_container_width=True)
 
@@ -588,7 +588,7 @@ def page_sales():
                     inv_wt, header["weight_slip_id"],
                     as_primary=header.get("weight_slip_as_primary", True),
                 )
-            st.write(f"**Net Invoice:** {fmt_money(totals['total'])}")
+            st.write(f"**Net Invoice:** {hlp.fmt_money(totals['total'])}")
             was_retail = st.session_state.get("sal_edit_was_retail", False)
             if was_retail and not retail_edit:
                 header["paid_amount"] = 0
