@@ -14,8 +14,16 @@ def _apply_prefill(defaults):
             st.session_state[f"gp_{k}"] = v
 
 
+def _invoice_status_map(kind):
+    """id -> status for sales or purchase invoices (gate pass requires approved)."""
+    table = "sales_invoices" if kind == "sales" else "purchase_invoices"
+    with db.get_connection() as conn:
+        return {int(r["id"]): (r["status"] or "") for r in conn.execute(f"SELECT id, status FROM {table}").fetchall()}
+
+
 def _sales_invoice_rows(order_id=None):
     invs = db.get_sales()
+    status_by_id = _invoice_status_map("sales")
     if order_id:
         with db.get_connection() as conn:
             allowed = {
@@ -25,11 +33,19 @@ def _sales_invoice_rows(order_id=None):
                 ).fetchall()
             }
         invs = [r for r in invs if r["id"] in allowed]
-    return [
-        {"id": r["id"], "code": r["invoice_no"], "name": r["customer_name"],
-         "label": f"{r['invoice_no']} — {r['customer_name']} ({r['sale_date']})"}
-        for r in invs
-    ]
+    rows = []
+    for r in invs:
+        st_lbl = (status_by_id.get(int(r["id"])) or "—").replace("_", " ")
+        rows.append({
+            "id": r["id"],
+            "code": r["invoice_no"],
+            "name": r["customer_name"],
+            "status": status_by_id.get(int(r["id"])) or "",
+            "label": f"{r['invoice_no']} — {r['customer_name']} ({r['sale_date']}) [{st_lbl}]",
+        })
+    # Approved first so operators land on usable invoices
+    rows.sort(key=lambda x: (0 if x.get("status") == "approved" else 1, -(x["id"] or 0)))
+    return rows
 
 
 def _sales_order_rows():
@@ -49,11 +65,25 @@ def _sales_order_rows():
 
 
 def _purchase_invoice_rows():
-    return [
-        {"id": r["id"], "code": r["invoice_no"], "name": r["supplier_name"],
-         "label": f"{r['invoice_no']} — {r['supplier_name']} ({r['purchase_date']})"}
-        for r in db.get_purchases()
-    ]
+    status_by_id = _invoice_status_map("purchase")
+    rows = []
+    for r in db.get_purchases():
+        st_lbl = (status_by_id.get(int(r["id"])) or "—").replace("_", " ")
+        rows.append({
+            "id": r["id"],
+            "code": r["invoice_no"],
+            "name": r["supplier_name"],
+            "status": status_by_id.get(int(r["id"])) or "",
+            "label": f"{r['invoice_no']} — {r['supplier_name']} ({r['purchase_date']}) [{st_lbl}]",
+        })
+    rows.sort(key=lambda x: (0 if x.get("status") == "approved" else 1, -(x["id"] or 0)))
+    return rows
+
+
+def _nav_button(label, module, screen, key):
+    from erp_ui.nav import request_nav
+    if st.button(label, key=key, use_container_width=True):
+        request_nav(module, screen)
 
 
 def _delivery_note_rows():
@@ -178,6 +208,8 @@ def page_gate_pass_entry():
 
         sales_inv_id = purchase_inv_id = dn_id = grn_id = None
         sales_order_id = None
+        inv_rows = []
+        pur_rows = []
         if is_outward:
             st.markdown("**Dispatch link** *(sales order optional, invoice required)*")
             so_rows = _sales_order_rows()
@@ -208,45 +240,109 @@ def page_gate_pass_entry():
                         st.session_state.pop(f"gp_last_so_{pass_type}", None)
                         st.rerun()
                 with c_so1:
-                    from erp_ui.nav import request_nav
-                    if st.button("Open Dispatch Planning", key=f"gp_dsp_{pass_type}"):
-                        request_nav("Production", "Dispatch Planning")
-                        st.rerun()
+                    _nav_button("Open Dispatch Planning", "Production", "Dispatch Planning", f"gp_dsp_{pass_type}")
             st.markdown("**Link to Sales Invoice** *(required for outward pass)*")
             inv_rows = _sales_invoice_rows(order_id=sales_order_id)
-            if sales_order_id and not inv_rows:
-                st.caption("No sales invoices linked to this order yet — create one from Sales Invoices.")
-            _, sales_inv_id, _ = smart_select(
-                "Sales Invoice",
-                inv_rows,
-                f"gp_sales_inv_{pass_type}",
-                "id",
-                lambda r: r["label"],
-            )
-            if sales_inv_id and st.session_state.get("gp_last_sales_inv") != sales_inv_id:
-                defaults = db.gate_pass_defaults_from_sales_invoice(sales_inv_id)
-                _apply_prefill(defaults)
-                st.session_state["gp_last_sales_inv"] = sales_inv_id
-                st.rerun()
+            if not inv_rows:
+                st.warning(
+                    "No sales invoices available"
+                    + (" for this sales order" if sales_order_id else "")
+                    + ". Create and **approve** an invoice before issuing a gate pass."
+                )
+                cta1, cta2 = st.columns(2)
+                with cta1:
+                    _nav_button("Open Sales Invoices", "Sales", "Sales Invoices", f"gp_cta_sales_{pass_type}")
+                with cta2:
+                    _nav_button("Sale Approval", "Sales", "Sale Approval", f"gp_cta_sale_appr_{pass_type}")
+            else:
+                if sales_order_id:
+                    st.caption("Showing sales invoices linked to the selected order.")
+                _, sales_inv_id, _ = smart_select(
+                    "Sales Invoice",
+                    inv_rows,
+                    f"gp_sales_inv_{pass_type}",
+                    "id",
+                    lambda r: r["label"],
+                )
+                if sales_inv_id and st.session_state.get("gp_last_sales_inv") != sales_inv_id:
+                    defaults = db.gate_pass_defaults_from_sales_invoice(sales_inv_id)
+                    _apply_prefill(defaults)
+                    st.session_state["gp_last_sales_inv"] = sales_inv_id
+                    st.rerun()
             dn_opts = ["(None)"] + [r["label"] for r in _delivery_note_rows()]
             dn_map = {r["label"]: r["id"] for r in _delivery_note_rows()}
             dn_sel = st.selectbox("Delivery Note (optional)", dn_opts, key=wk("dn_sel"))
             dn_id = dn_map.get(dn_sel) if dn_sel != "(None)" else st.session_state.get("gp_delivery_note_id")
         elif is_inward:
             st.markdown("**Link to Purchase Invoice** *(required for inward pass)*")
-            _, purchase_inv_id, _ = smart_select(
-                "Purchase Invoice", _purchase_invoice_rows(), f"gp_pur_inv_{pass_type}", "id",
-                lambda r: r["label"],
-            )
-            if purchase_inv_id and st.session_state.get("gp_last_pur_inv") != purchase_inv_id:
-                defaults = db.gate_pass_defaults_from_purchase_invoice(purchase_inv_id)
-                _apply_prefill(defaults)
-                st.session_state["gp_last_pur_inv"] = purchase_inv_id
-                st.rerun()
+            pur_rows = _purchase_invoice_rows()
+            if not pur_rows:
+                st.warning(
+                    "No purchase invoices available. Create and **approve** a purchase invoice "
+                    "before issuing an inward gate pass."
+                )
+                cta1, cta2 = st.columns(2)
+                with cta1:
+                    _nav_button("Open Purchase Invoices", "Purchases", "Purchase Invoices", f"gp_cta_pur_{pass_type}")
+                with cta2:
+                    _nav_button("Purchase Approval", "Purchases", "Purchase Approval", f"gp_cta_pur_appr_{pass_type}")
+            else:
+                _, purchase_inv_id, _ = smart_select(
+                    "Purchase Invoice", pur_rows, f"gp_pur_inv_{pass_type}", "id",
+                    lambda r: r["label"],
+                )
+                if purchase_inv_id and st.session_state.get("gp_last_pur_inv") != purchase_inv_id:
+                    defaults = db.gate_pass_defaults_from_purchase_invoice(purchase_inv_id)
+                    _apply_prefill(defaults)
+                    st.session_state["gp_last_pur_inv"] = purchase_inv_id
+                    st.rerun()
             grn_opts = ["(None)"] + [r["label"] for r in _grn_rows()]
             grn_map = {r["label"]: r["id"] for r in _grn_rows()}
             grn_sel = st.selectbox("GRN (optional)", grn_opts, key=wk("grn_sel"))
             grn_id = grn_map.get(grn_sel) if grn_sel != "(None)" else st.session_state.get("gp_grn_id")
+
+        linked_inv_id = sales_inv_id or purchase_inv_id
+        inv_kind = "sales" if sales_inv_id else ("purchase" if purchase_inv_id else None)
+        inv_status = ""
+        if linked_inv_id and inv_kind:
+            inv_status = next(
+                (r.get("status") or "" for r in (inv_rows if inv_kind == "sales" else pur_rows) if r["id"] == linked_inv_id),
+                "",
+            )
+            if not inv_status:
+                inv_status = _invoice_status_map(inv_kind).get(int(linked_inv_id), "")
+
+        can_save = True
+        block_reason = None
+        if is_outward and not sales_inv_id:
+            can_save = False
+            block_reason = "Select an **approved sales invoice** to save an outward gate pass."
+        elif is_inward and not purchase_inv_id:
+            can_save = False
+            block_reason = "Select an **approved purchase invoice** to save an inward gate pass."
+        elif linked_inv_id and inv_status and inv_status != "approved":
+            can_save = False
+            block_reason = (
+                f"Invoice status is **{inv_status.replace('_', ' ')}** — gate pass requires an "
+                f"**approved** invoice."
+            )
+
+        if block_reason:
+            st.warning(block_reason)
+            if is_outward and not sales_inv_id and inv_rows:
+                st.caption("Use the Sales Invoice picker above, or open Sales to create one.")
+            if linked_inv_id and inv_status and inv_status != "approved":
+                cta1, cta2 = st.columns(2)
+                if inv_kind == "sales":
+                    with cta1:
+                        _nav_button("Open Sales Invoices", "Sales", "Sales Invoices", f"gp_blk_sales_{pass_type}")
+                    with cta2:
+                        _nav_button("Sale Approval", "Sales", "Sale Approval", f"gp_blk_sale_appr_{pass_type}")
+                else:
+                    with cta1:
+                        _nav_button("Open Purchase Invoices", "Purchases", "Purchase Invoices", f"gp_blk_pur_{pass_type}")
+                    with cta2:
+                        _nav_button("Purchase Approval", "Purchases", "Purchase Approval", f"gp_blk_pur_appr_{pass_type}")
 
         gp_no = st.text_input("Gate Pass No", value=db.peek_document("GP"), key=wk("document_no"))
         c1, c2 = st.columns(2)
@@ -260,8 +356,6 @@ def page_gate_pass_entry():
         party_phone = (st.session_state.get("gp_party_phone") or "").strip()
         if party_phone:
             st.caption(f"Party contact: **{party_phone}** — prints on gate pass")
-        linked_inv_id = sales_inv_id or purchase_inv_id
-        inv_kind = "sales" if sales_inv_id else ("purchase" if purchase_inv_id else None)
         pid = None
         mat = None
         material = ""
@@ -277,6 +371,19 @@ def page_gate_pass_entry():
                 material = mat.get("material_desc") or ""
                 qty = float(mat.get("quantity") or 0)
                 weight = float(mat.get("net_weight") or st.session_state.get("gp_weight") or 0)
+            c3, c4 = st.columns(2)
+            c3.metric("Pass Quantity", f"{qty:,.2f}")
+            weight = c4.number_input(
+                "Physical Weight (kg)", min_value=0.0,
+                value=float(st.session_state.get("gp_weight") or weight or 0),
+                key=wk("weight_linked"),
+                help="Scale weight for this shipment (invoice line weights shown above).",
+            )
+        elif is_outward or is_inward:
+            st.info(
+                "Material, quantity, and party fill from the linked invoice once you select one above. "
+                "Saving without an invoice is blocked."
+            )
         else:
             _, pid, _ = smart_select(
                 "Material / Item", db.get_items(), "gp_item", "id",
@@ -298,17 +405,8 @@ def page_gate_pass_entry():
                 value=float(st.session_state.get("gp_weight") or 0),
                 key=wk("weight_free"),
             )
-        if linked_inv_id and inv_kind:
-            c3, c4 = st.columns(2)
-            c3.metric("Pass Quantity", f"{qty:,.2f}")
-            weight = c4.number_input(
-                "Physical Weight (kg)", min_value=0.0,
-                value=float(st.session_state.get("gp_weight") or weight or 0),
-                key=wk("weight_linked"),
-                help="Scale weight for this shipment (invoice line weights shown above).",
-            )
         approved = st.text_input("Approved By / Remarks", key=wk("remarks"))
-        if st.button("Save Gate Pass"):
+        if st.button("Save Gate Pass", type="primary", disabled=not can_save):
             try:
                 payload = {
                     "document_no": gp_no, "pass_type": pass_type, "pass_date": str(gp_date),
@@ -334,7 +432,11 @@ def page_gate_pass_entry():
 
     elif tab == "Register":
         from erp_ui import transaction_list as txn
-        txn.gate_pass_register_list()
+        items = txn.gate_pass_register_list()
+        if items is None:
+            if st.button("New Gate Pass", type="primary", key="gp_reg_empty_cta"):
+                st.session_state["gp_entry_tab"] = "New Pass"
+                st.rerun()
 
 
 def page_gate_pass_reports():
