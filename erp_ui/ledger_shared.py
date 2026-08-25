@@ -75,7 +75,8 @@ def render_party_ledger(
         st.success(
             f"Dual-role party **{linked.get('primary_code') or linked.get('code')}** — "
             f"{party_label} and {linked_label} **{linked['code']} — {linked['name']}** "
-            f"share one **combined ledger**."
+            f"share one **combined ledger**. Master balances stay **per book**; "
+            f"Outstanding nets both."
         )
         split_books = st.checkbox(
             f"Show {party_label.lower()} book only (not combined)",
