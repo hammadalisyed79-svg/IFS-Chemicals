@@ -511,12 +511,13 @@ def render_module_topbar(nav: dict, user: dict, company: str, group: str, screen
             if st.button("Change password", key=f"nav_pwd_{nav_key}", use_container_width=True):
                 open_change_password()
             st.markdown(
-                f'<p class="erp-mod-crumb">{company}</p>'
                 f'<p class="erp-mod-screen">{screen_title(screen)}</p>',
                 unsafe_allow_html=True,
             )
             from erp_ui.enterprise_search import render_enterprise_search
             render_enterprise_search(key_prefix=f"mod_srch_{nav_key}")
+            from erp_ui.page_shell import render_favorites_bar
+            render_favorites_bar(nav, key_prefix=f"fav_{nav_key}")
         else:
             c1, c2, c3, c4 = st.columns([1.3, 1.3, 4.4, 2.2], gap="small")
             with c1:
@@ -542,11 +543,6 @@ def render_module_topbar(nav: dict, user: dict, company: str, group: str, screen
                 render_enterprise_search(key_prefix=f"mod_srch_{nav_key}")
                 from erp_ui.page_shell import render_favorites_bar
                 render_favorites_bar(nav, key_prefix=f"fav_{nav_key}")
-                st.markdown(
-                    f'<p class="erp-mod-crumb">{company} / {module_title(group)}</p>'
-                    f'<p class="erp-mod-screen">{screen_title(screen)}</p>',
-                    unsafe_allow_html=True,
-                )
             with c4:
                 n1, n2, n3 = st.columns(3)
                 with n1:
@@ -568,6 +564,8 @@ def render_module_topbar(nav: dict, user: dict, company: str, group: str, screen
 
 
 def render_module_screen_chips(nav: dict, group: str, screen: str) -> None:
+    from erp_ui.nav import screen_tagline
+
     screens = nav.get(group) or []
     if len(screens) <= 1:
         return
@@ -576,8 +574,8 @@ def render_module_screen_chips(nav: dict, group: str, screen: str) -> None:
     primary = screens[:max_chips]
     overflow = screens[max_chips:]
     with st.container(key=chip_key):
-        cols = st.columns(min(len(primary), max_chips))
-        for col, scr in zip(cols, primary):
+        chip_cols = st.columns(min(len(primary), max_chips) + 1)
+        for col, scr in zip(chip_cols[:len(primary)], primary):
             with col:
                 if st.button(
                     screen_title(scr),
@@ -587,23 +585,35 @@ def render_module_screen_chips(nav: dict, group: str, screen: str) -> None:
                 ):
                     if scr != screen:
                         go_screen(group, scr)
-        if overflow:
-            more_labels = {screen_title(s): s for s in overflow}
-            m1, m2 = st.columns([4, 1])
-            with m1:
-                pick = st.selectbox(
-                    "More screens in this module",
-                    list(more_labels.keys()),
-                    key=f"mod_chip_more_{group}",
-                    label_visibility="collapsed",
+        with chip_cols[-1]:
+            with st.popover("All screens", use_container_width=True):
+                q = st.text_input(
+                    "Search screens",
+                    key=f"mod_scr_q_{group}",
+                    placeholder="Type to filter…",
                 )
-            with m2:
-                if st.button("Open", key=f"mod_chip_more_go_{group}", use_container_width=True):
-                    target = more_labels.get(pick)
-                    if target and target != screen:
-                        go_screen(group, target)
-            if screen in overflow:
-                st.caption(f"Current: **{screen_title(screen)}** (also available under More screens)")
+                qlo = (q or "").strip().lower()
+                shown = [
+                    s for s in screens
+                    if not qlo
+                    or qlo in screen_title(s).lower()
+                    or qlo in screen_tagline(s).lower()
+                    or qlo in s.lower()
+                ]
+                if not shown:
+                    st.caption("No screens match.")
+                for scr in shown:
+                    mark = "▸ " if scr == screen else ""
+                    if st.button(
+                        f"{mark}{screen_title(scr)}",
+                        key=f"mod_scr_all_{group}_{scr}",
+                        use_container_width=True,
+                        type="primary" if scr == screen else "secondary",
+                    ):
+                        if scr != screen:
+                            go_screen(group, scr)
+        if overflow and screen in overflow:
+            st.caption(f"Current screen **{screen_title(screen)}** — also in **All screens**")
     st.divider()
 
 
@@ -773,6 +783,9 @@ def render_ceo_desktop(nav: dict, user: dict, company: str) -> None:
     display_name = (user.get("full_name") or user.get("username") or "User").split()[0]
     _render_hero_banner(display_name, company)
 
+    from erp_ui.home_kpis import render_home_kpi_strip
+    render_home_kpi_strip(nav, user)
+
     pending = _pending_count()
     if pending:
         st.markdown(
@@ -795,6 +808,20 @@ def render_ceo_desktop(nav: dict, user: dict, company: str) -> None:
                 with col:
                     if st.button(screen_title(f["screen"]), key=f"pin_{f['group']}_{f['screen']}", use_container_width=True):
                         go_screen(f["group"], f["screen"])
+
+    from erp_ui.user_prefs import list_recent_docs
+    from erp_ui.doc_workflow import open_recent_document
+    recent_docs = list_recent_docs()
+    if recent_docs:
+        st.markdown('<p class="erp-desk-section">Recent Documents</p>', unsafe_allow_html=True)
+        with st.container(key="desk_recent_docs"):
+            dcols = st.columns(min(len(recent_docs), 5))
+            for col, d in zip(dcols, recent_docs[:5]):
+                with col:
+                    lbl = d.get("label") or d.get("doc_no") or "Doc"
+                    if st.button(lbl, key=f"desk_doc_{d.get('doc_no', lbl)}", use_container_width=True):
+                        open_recent_document(d)
+                        st.rerun()
 
     for section in DESKTOP_SECTIONS:
         st.markdown(f'<p class="erp-desk-section">{section["title"]}</p>', unsafe_allow_html=True)

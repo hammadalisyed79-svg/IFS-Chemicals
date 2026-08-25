@@ -79,12 +79,35 @@ def render_page_header_block(
     status_kind: str = "shell",
     crumbs: list[str] | None = None,
 ) -> None:
-    render_breadcrumb(crumbs)
+    crumbs_list = crumbs if crumbs is not None else breadcrumb_from_session()
+    render_breadcrumb(crumbs_list)
     t = escape(title)
     s = escape(subtitle) if subtitle else ""
     badge = ""
     if status:
         badge = shell_status_badge(status, kind=status_kind)
+    # Screen name is already the active breadcrumb — avoid repeating it in the title line.
+    dedupe_title = bool(crumbs_list) and crumbs_list[-1] == title
+    if dedupe_title:
+        if s and compact:
+            st.markdown(
+                f'<div class="page-header-wrap page-header-compact erp-page-shell">'
+                f'<p class="sub-header erp-shell-sub-only">{s}{badge}</p></div>',
+                unsafe_allow_html=True,
+            )
+        elif s:
+            st.markdown(
+                f'<div class="page-header-wrap erp-page-shell">'
+                f'<p class="sub-header">{s}{badge}</p></div>',
+                unsafe_allow_html=True,
+            )
+        elif badge:
+            st.markdown(
+                f'<div class="page-header-wrap page-header-compact erp-page-shell">'
+                f'<p class="main-header">{badge}</p></div>',
+                unsafe_allow_html=True,
+            )
+        return
     if s and compact:
         st.markdown(
             f'<div class="page-header-wrap page-header-compact erp-page-shell">'
@@ -166,32 +189,54 @@ def render_sticky_action_bar(
 
 
 def render_favorites_bar(nav: dict, *, key_prefix: str = "fav") -> None:
-    from erp_ui.user_prefs import is_favorite, list_favorites, list_recent_docs, toggle_favorite
-    from erp_ui.nav import go_screen
+    from erp_ui.user_prefs import is_favorite, list_favorites, list_recent_docs, list_recent_screens, toggle_favorite
+    from erp_ui.nav import go_screen, screen_title
+    from erp_ui.doc_workflow import open_recent_document
 
     group = st.session_state.get("sidebar_group", "")
     screen = st.session_state.get("sidebar_screen", "")
     if screen and screen != "Dashboard":
-        from erp_ui.nav import screen_title
         fav_now = is_favorite(group, screen)
-        label = "Unpin screen" if fav_now else "Pin screen"
-        if st.button(label, key=f"{key_prefix}_toggle"):
+        pin_label = "Unpin screen" if fav_now else "Pin screen"
+        if st.button(pin_label, key=f"{key_prefix}_toggle", help="Pin this screen to the shortcut bar"):
             toggle_favorite(group, screen, screen_title(screen))
             st.rerun()
 
-    favs = [f for f in list_favorites() if f.get("group") in nav and f.get("screen") in nav.get(f["group"], [])]
-    recents = list_recent_docs()
-    if not favs and not recents:
+    favs = [
+        f for f in list_favorites()
+        if f.get("group") in nav and f.get("screen") in nav.get(f["group"], [])
+    ]
+    recents = list_recent_screens()
+    recents = [r for r in recents if r.get("group") in nav and r.get("screen") in nav.get(r["group"], [])]
+    docs = list_recent_docs()
+
+    if not favs and not recents and not docs:
         return
-    parts = []
+
     if favs:
-        parts.append("**Pinned:** " + ", ".join(f.get("label", "") for f in favs[:4]))
-    if recents:
-        parts.append("**Recent:** " + ", ".join(r.get("doc_no", "") for r in recents[:4]))
-    st.caption(" · ".join(parts))
-    if favs:
-        cols = st.columns(min(len(favs), 4))
-        for col, f in zip(cols, favs[:4]):
+        st.caption("Pinned")
+        pcols = st.columns(min(len(favs), 6))
+        for col, f in zip(pcols, favs[:6]):
             with col:
-                if st.button(f.get("label", f.get("screen", "")), key=f"{key_prefix}_{f['group']}_{f['screen']}", use_container_width=True):
+                lbl = f.get("label") or screen_title(f.get("screen", ""))
+                if st.button(lbl, key=f"{key_prefix}_pin_{f['group']}_{f['screen']}", use_container_width=True):
                     go_screen(f["group"], f["screen"])
+
+    if recents:
+        st.caption("Recent screens")
+        rcols = st.columns(min(len(recents), 6))
+        for col, r in zip(rcols, recents[:6]):
+            with col:
+                lbl = r.get("label") or screen_title(r.get("screen", ""))
+                if st.button(lbl, key=f"{key_prefix}_rc_{r['group']}_{r['screen']}", use_container_width=True):
+                    go_screen(r["group"], r["screen"])
+
+    if docs:
+        st.caption("Recent documents")
+        dcols = st.columns(min(len(docs), 5))
+        for col, d in zip(dcols, docs[:5]):
+            with col:
+                lbl = d.get("label") or d.get("doc_no") or "Document"
+                if st.button(lbl, key=f"{key_prefix}_doc_{d.get('doc_no', lbl)}", use_container_width=True):
+                    open_recent_document(d)
+                    st.rerun()

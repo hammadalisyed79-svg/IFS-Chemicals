@@ -360,6 +360,23 @@ section[data-testid="stSidebar"] [data-testid="stBaseButton-headerNoPadding"] sv
   opacity: 0.8;
   line-height: 1.35;
 }}
+.dash-kpi-compact {{
+  min-height: 4.5rem !important;
+  padding: 0.55rem 0.65rem !important;
+  margin-bottom: 0.35rem !important;
+}}
+.dash-kpi-compact .dash-kpi-title {{
+  font-size: 0.68rem !important;
+}}
+.dash-kpi-compact .dash-kpi-value {{
+  font-size: 1.05rem !important;
+}}
+.erp-shell-sub-only {{
+  font-size: 0.88rem !important;
+  color: {BLACK} !important;
+  margin: 0.15rem 0 0.35rem 0 !important;
+  font-weight: 500 !important;
+}}
 .dash-alert {{
   background: {RED_LIGHT};
   border-left: 4px solid {RED};
