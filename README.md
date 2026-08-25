@@ -35,6 +35,12 @@ After install or upgrade, run **`reset_admin_password.bat`** and open **`ADMIN_B
 | **Finance** | Journal Voucher, Cash/Bank Books, Chart of Accounts, Ledgers, Trial Balance, P&L, Balance Sheet, Tax Report |
 | **Admin** | Users, Roles & Permissions, System Settings |
 
+## Operations (this server)
+
+- **Start / recover:** `START_ERP.bat`
+- **Redeploy after code pull:** `deploy_restart_erp.bat` (restarts Streamlit + runs `tools/_smoke_pages.py`)
+- **Archived reports/guides:** `archive/docs/` (e.g. deployment guide)
+
 ## Key Features
 
 ### Products

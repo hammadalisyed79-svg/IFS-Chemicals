@@ -14,7 +14,7 @@ Consolidated security reference for production on **138.201.139.157**.
 
 | Guide | Purpose |
 |-------|---------|
-| `DEPLOYMENT_SERVER_GUIDE.md` | End-to-end server setup |
+| `archive/docs/DEPLOYMENT_SERVER_GUIDE.md` | End-to-end server setup |
 | `NGINX_CONFIG_SAMPLE.conf` | Reverse proxy template |
 | `SYSTEMD_SERVICE_SAMPLE.service` | Service unit template |
 | `FIREWALL_SECURITY_GUIDE.md` | UFW / port rules |

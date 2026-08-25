@@ -6,4 +6,4 @@ echo "=== IFS Industrial ERP V16 Linux Install ==="
 python3 -m venv venv
 ./venv/bin/pip install -r requirements.txt
 ./venv/bin/python -c "import database as db; db.init_db(); import erp_version; print('Migrated to', erp_version.APP_VERSION)"
-echo "See DEPLOYMENT_SERVER_GUIDE.md for Nginx/systemd setup."
+echo "See archive/docs/DEPLOYMENT_SERVER_GUIDE.md for Nginx/systemd setup."
