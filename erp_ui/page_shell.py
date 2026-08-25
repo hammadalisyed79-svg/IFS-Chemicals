@@ -18,6 +18,7 @@ SHELL_STATUS_META = {
     "register": ("Register", "erp-shell-badge-shadow"),
     "settled": ("Settled", "erp-shell-badge-posted"),
     "shadow": ("Shadow", "erp-shell-badge-shadow"),
+    "locked": ("Day closed", "erp-shell-badge-rejected"),
     "cancelled": ("Cancelled", "erp-shell-badge-muted"),
     "rejected": ("Rejected", "erp-shell-badge-rejected"),
 }
