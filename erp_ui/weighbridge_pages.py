@@ -1,6 +1,6 @@
 """Weight Scale — matches modern_weight_scale_final workflow."""
 
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 import pandas as pd
 import streamlit as st
 from application import data_gateway as db
@@ -8,6 +8,86 @@ from erp_ui import form_flow as ff
 from erp_ui.helpers import uid, user_role, smart_select, std_page_header, export_buttons
 from erp_ui.document_print import document_print_toolbar
 from erp_ui.theme import inject_weighbridge_kiosk_css
+
+
+def _ws_date_page_controls(key_prefix, *, default_mode="Last 30 days"):
+    """Server-side date range + page size for Print / Edit tabs. Returns fd, td, page, page_size."""
+    today = date.today()
+    modes = ["Today", "Last 7 days", "Last 30 days", "This month", "Custom", "All dates"]
+    default_ix = modes.index(default_mode) if default_mode in modes else 2
+    c1, c2 = st.columns([3.2, 1])
+    with c1:
+        mode = st.radio(
+            "Date range",
+            modes,
+            index=default_ix,
+            horizontal=True,
+            key=f"{key_prefix}_rng",
+            help="Filters slips on the server — avoids loading the full weighbridge history.",
+        )
+    page_size = int(c2.selectbox("Rows", [25, 50, 100, 200], index=1, key=f"{key_prefix}_ps"))
+
+    if mode == "Today":
+        fd = td = today
+    elif mode == "Last 7 days":
+        fd, td = today - timedelta(days=6), today
+    elif mode == "Last 30 days":
+        fd, td = today - timedelta(days=29), today
+    elif mode == "This month":
+        fd, td = today.replace(day=1), today
+    elif mode == "Custom":
+        a, b = st.columns(2)
+        fd = a.date_input("From", value=today - timedelta(days=29), key=f"{key_prefix}_fd")
+        td = b.date_input("To", value=today, key=f"{key_prefix}_td")
+    else:
+        fd = td = None
+        st.caption("All dates — only one page is loaded from the server. Narrow the range if picking is slow.")
+
+    fd_s = str(fd) if fd else None
+    td_s = str(td) if td else None
+    sig = (mode, fd_s, td_s, page_size)
+    if st.session_state.get(f"{key_prefix}_fsig") != sig:
+        st.session_state[f"{key_prefix}_page"] = 1
+        st.session_state[f"{key_prefix}_fsig"] = sig
+    page = max(1, int(st.session_state.get(f"{key_prefix}_page") or 1))
+    return fd_s, td_s, page, page_size
+
+
+def _ws_server_page_nav(key_prefix, result):
+    """Prev/Next for server-paginated weighbridge pickers."""
+    total = int(result.get("total") or 0)
+    page = int(result.get("page") or 1)
+    pages = max(1, int(result.get("pages") or 1))
+    ps = int(result.get("page_size") or 50)
+    if total <= 0:
+        return
+    start = (page - 1) * ps + 1
+    end = min(page * ps, total)
+    c1, c2, c3 = st.columns([1.4, 1, 1])
+    c1.caption(f"Showing **{start:,}–{end:,}** of **{total:,}**")
+    if c2.button("◀ Prev", disabled=page <= 1, key=f"{key_prefix}_prev"):
+        st.session_state[f"{key_prefix}_page"] = page - 1
+        st.rerun()
+    c2.caption(f"Page {page}/{pages}")
+    if c3.button("Next ▶", disabled=page >= pages, key=f"{key_prefix}_next"):
+        st.session_state[f"{key_prefix}_page"] = page + 1
+        st.rerun()
+
+
+def _ws_ensure_slip_visible(items, slip_id):
+    """If a focused slip is outside the current page/range, prepend it for selection."""
+    if not slip_id or not items:
+        if slip_id and not items:
+            one = db.get_weight_slip_pro(int(slip_id))
+            return [one] if one else []
+        return items or []
+    sid = int(slip_id)
+    if any(int(r.get("id") or 0) == sid for r in items):
+        return items
+    one = db.get_weight_slip_pro(sid)
+    if one:
+        return [one] + list(items)
+    return items
 
 
 def _print_first_weight_slip(slip_id, key_prefix="ws1_print"):
@@ -494,23 +574,36 @@ def page_weight_entry():
         txn.weight_slip_register_list()
 
     elif tab == "Print Slip":
-        rows = db.get_weight_slips_pro()
-        pending_print = [r for r in rows if r.get("status") == "first_weigh"]
-        done = [r for r in rows if r.get("status") == "completed"]
-        if not pending_print and not done:
-            st.info("No slips to print.")
+        fd, td, page, page_size = _ws_date_page_controls("ws_print_pg")
+        pending_n = db.search_weight_slips(
+            from_date=fd, to_date=td, status="first_weigh", page=1, page_size=1,
+        )["total"]
+        done_n = db.search_weight_slips(
+            from_date=fd, to_date=td, status="completed", page=1, page_size=1,
+        )["total"]
+        if not pending_n and not done_n:
+            st.info("No slips to print in this date range.")
         else:
+            choices = []
+            if pending_n:
+                choices.append("1st weight only (pending 2nd)")
+            if done_n:
+                choices.append("Completed (final slip)")
             print_mode = st.radio(
                 "Print",
-                ["1st weight only (pending 2nd)", "Completed (final slip)"] if pending_print and done
-                else (["1st weight only (pending 2nd)"] if pending_print else ["Completed (final slip)"]),
+                choices,
                 horizontal=True,
                 key="ws_print_mode",
             )
-            pool = pending_print if "1st weight" in print_mode else done
-            from erp_ui.list_paging import page_slice
-            pool = page_slice(pool, "ws_print_pg", default_size=50)
+            status = "first_weigh" if "1st weight" in print_mode else "completed"
+            result = db.search_weight_slips(
+                from_date=fd, to_date=td, status=status, page=page, page_size=page_size,
+            )
+            st.session_state["ws_print_pg_page"] = result["page"]
+            _ws_server_page_nav("ws_print_pg", result)
+            pool = list(result.get("items") or [])
             pre = st.session_state.get("ws_print_id")
+            pool = _ws_ensure_slip_visible(pool, pre)
             labels = []
             for r in pool:
                 party = _party_label(r)
@@ -545,7 +638,6 @@ def page_weight_entry():
             "only when the invoice is **draft**. Approved invoices: **unapprove** → detach → fix slip → "
             "re-attach on invoice → save → submit → approve again."
         )
-        rows = db.get_weight_slips_pro()
         from db_commercial import (
             weight_slip_is_linked,
             list_weight_slip_invoice_attachments,
@@ -554,21 +646,22 @@ def page_weight_entry():
         from db_invoice_workflow import WEIGHT_SLIP_CANCELLED, _infer_reopen_status
         from erp_ui.helpers import admin_unapprove_panel
 
-        editable = [
-            r for r in rows
-            if r.get("status") in ("first_weigh", "completed", WEIGHT_SLIP_CANCELLED)
-        ]
-        # Pending first, then completed, cancelled last (newest within each group)
-        _rank = {"first_weigh": 0, "completed": 1, WEIGHT_SLIP_CANCELLED: 2}
-        editable.sort(
-            key=lambda r: (_rank.get(r.get("status"), 9), -(int(r.get("id") or 0))),
+        fd, td, page, page_size = _ws_date_page_controls("ws_ed_pg")
+        result = db.search_weight_slips(
+            from_date=fd,
+            to_date=td,
+            statuses=["first_weigh", "completed", WEIGHT_SLIP_CANCELLED],
+            page=page,
+            page_size=page_size,
         )
-        if not editable:
-            st.info("No slips available for edit/delete.")
+        st.session_state["ws_ed_pg_page"] = result["page"]
+        editable = list(result.get("items") or [])
+        if not editable and not st.session_state.get("ws_ed_focus_id"):
+            st.info("No slips available for edit/delete in this date range.")
         else:
-            from erp_ui.list_paging import page_slice
-            page_rows = page_slice(editable, "ws_ed_pg", default_size=50)
+            _ws_server_page_nav("ws_ed_pg", result)
             keep_id = st.session_state.get("ws_ed_focus_id")
+            page_rows = _ws_ensure_slip_visible(editable, keep_id)
             opts = {}
             for r in page_rows:
                 st_lbl = r.get("status", "")
@@ -596,6 +689,9 @@ def page_weight_entry():
                 return
             slip = opts[sel]
             sid = slip["id"]
+            # Full slip row for edit (search list is leaner than get_weight_slips_pro)
+            full = db.get_weight_slip_pro(sid) or slip
+            slip = full
             is_admin = user_role() == "admin"
             attachments = list_weight_slip_invoice_attachments(sid) if weight_slip_is_linked(slip) else []
             is_linked = bool(attachments) or weight_slip_is_linked(slip)
