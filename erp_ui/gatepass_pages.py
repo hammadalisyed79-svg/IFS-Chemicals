@@ -1,6 +1,6 @@
 """Gate Pass — material in/out linked to purchase/sales invoices."""
 
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 import pandas as pd
 import streamlit as st
 from application import data_gateway as db
@@ -14,36 +14,70 @@ def _apply_prefill(defaults):
             st.session_state[f"gp_{k}"] = v
 
 
-def _invoice_status_map(kind):
-    """id -> status for sales or purchase invoices (gate pass requires approved)."""
-    table = "sales_invoices" if kind == "sales" else "purchase_invoices"
-    with db.get_connection() as conn:
-        return {int(r["id"]): (r["status"] or "") for r in conn.execute(f"SELECT id, status FROM {table}").fetchall()}
+def _invoice_picker_range(key_prefix, default="Last 90 days"):
+    """Server-side date window for gate-pass invoice pickers (avoids loading full history)."""
+    today = date.today()
+    modes = ["Last 30 days", "Last 90 days", "This year", "All dates"]
+    ix = modes.index(default) if default in modes else 1
+    mode = st.radio(
+        "Invoice date range",
+        modes,
+        index=ix,
+        horizontal=True,
+        key=f"{key_prefix}_inv_rng",
+        help="Limits the invoice list on the server — type in Search to find older bills.",
+    )
+    if mode == "Last 30 days":
+        return str(today - timedelta(days=29)), str(today)
+    if mode == "Last 90 days":
+        return str(today - timedelta(days=89)), str(today)
+    if mode == "This year":
+        return str(today.replace(month=1, day=1)), str(today)
+    return None, None
 
 
-def _sales_invoice_rows(order_id=None):
-    invs = db.get_sales()
-    status_by_id = _invoice_status_map("sales")
+def _sales_invoice_rows(order_id=None, from_date=None, to_date=None, q=None):
+    """Approved (and recent) sales invoices for gate pass — server filtered."""
     if order_id:
         with db.get_connection() as conn:
-            allowed = {
-                int(r["id"]) for r in conn.execute(
-                    "SELECT id FROM sales_invoices WHERE order_id=? ORDER BY id DESC",
+            invs = [
+                dict(r) for r in conn.execute(
+                    """SELECT s.id, s.document_no AS invoice_no, s.invoice_date AS sale_date,
+                              COALESCE(s.status,'draft') AS status, c.name AS customer_name
+                       FROM sales_invoices s
+                       JOIN customers c ON c.id=s.customer_id
+                       WHERE s.order_id=?
+                       ORDER BY CASE COALESCE(s.status,'draft') WHEN 'approved' THEN 0 ELSE 1 END,
+                                s.id DESC""",
                     (int(order_id),),
                 ).fetchall()
-            }
-        invs = [r for r in invs if r["id"] in allowed]
+            ]
+    else:
+        # Prefer approved; fall back to a wider page if none in range
+        result = db.search_sales_invoices(
+            q=(q or None),
+            from_date=from_date,
+            to_date=to_date,
+            status="approved",
+            page=1,
+            page_size=200,
+        )
+        invs = list(result.get("items") or [])
+        if not invs and not q:
+            result = db.search_sales_invoices(
+                from_date=from_date, to_date=to_date, page=1, page_size=100,
+            )
+            invs = list(result.get("items") or [])
     rows = []
     for r in invs:
-        st_lbl = (status_by_id.get(int(r["id"])) or "—").replace("_", " ")
+        st_lbl = (r.get("status") or "—").replace("_", " ")
         rows.append({
             "id": r["id"],
             "code": r["invoice_no"],
-            "name": r["customer_name"],
-            "status": status_by_id.get(int(r["id"])) or "",
-            "label": f"{r['invoice_no']} — {r['customer_name']} ({r['sale_date']}) [{st_lbl}]",
+            "name": r.get("customer_name") or "",
+            "status": r.get("status") or "",
+            "label": f"{r['invoice_no']} — {r.get('customer_name', '')} ({r.get('sale_date')}) [{st_lbl}]",
         })
-    # Approved first so operators land on usable invoices
     rows.sort(key=lambda x: (0 if x.get("status") == "approved" else 1, -(x["id"] or 0)))
     return rows
 
@@ -64,17 +98,31 @@ def _sales_order_rows():
     ]
 
 
-def _purchase_invoice_rows():
-    status_by_id = _invoice_status_map("purchase")
+def _purchase_invoice_rows(from_date=None, to_date=None, q=None):
+    """Approved (and recent) purchase invoices for gate pass — server filtered."""
+    result = db.search_purchases(
+        q=(q or None),
+        from_date=from_date,
+        to_date=to_date,
+        status="approved",
+        page=1,
+        page_size=200,
+    )
+    invs = list(result.get("items") or [])
+    if not invs and not q:
+        result = db.search_purchases(
+            from_date=from_date, to_date=to_date, page=1, page_size=100,
+        )
+        invs = list(result.get("items") or [])
     rows = []
-    for r in db.get_purchases():
-        st_lbl = (status_by_id.get(int(r["id"])) or "—").replace("_", " ")
+    for r in invs:
+        st_lbl = (r.get("status") or "—").replace("_", " ")
         rows.append({
             "id": r["id"],
             "code": r["invoice_no"],
-            "name": r["supplier_name"],
-            "status": status_by_id.get(int(r["id"])) or "",
-            "label": f"{r['invoice_no']} — {r['supplier_name']} ({r['purchase_date']}) [{st_lbl}]",
+            "name": r.get("supplier_name") or "",
+            "status": r.get("status") or "",
+            "label": f"{r['invoice_no']} — {r.get('supplier_name', '')} ({r.get('purchase_date')}) [{st_lbl}]",
         })
     rows.sort(key=lambda x: (0 if x.get("status") == "approved" else 1, -(x["id"] or 0)))
     return rows
@@ -242,12 +290,24 @@ def page_gate_pass_entry():
                 with c_so1:
                     _nav_button("Open Dispatch Planning", "Production", "Dispatch Planning", f"gp_dsp_{pass_type}")
             st.markdown("**Link to Sales Invoice** *(required for outward pass)*")
-            inv_rows = _sales_invoice_rows(order_id=sales_order_id)
+            if sales_order_id:
+                inv_rows = _sales_invoice_rows(order_id=sales_order_id)
+                st.caption("Showing sales invoices linked to the selected order.")
+            else:
+                fd_inv, td_inv = _invoice_picker_range(f"gp_out_{pass_type}")
+                inv_q = st.text_input(
+                    "Find sales invoice",
+                    key=f"gp_sales_q_{pass_type}",
+                    placeholder="Invoice no or customer…",
+                )
+                inv_rows = _sales_invoice_rows(
+                    from_date=fd_inv, to_date=td_inv, q=(inv_q or "").strip() or None,
+                )
             if not inv_rows:
                 st.warning(
                     "No sales invoices available"
-                    + (" for this sales order" if sales_order_id else "")
-                    + ". Create and **approve** an invoice before issuing a gate pass."
+                    + (" for this sales order" if sales_order_id else " in this date range")
+                    + ". Create and **approve** an invoice, widen the date range, or search by number."
                 )
                 cta1, cta2 = st.columns(2)
                 with cta1:
@@ -255,8 +315,6 @@ def page_gate_pass_entry():
                 with cta2:
                     _nav_button("Sale Approval", "Sales", "Sale Approval", f"gp_cta_sale_appr_{pass_type}")
             else:
-                if sales_order_id:
-                    st.caption("Showing sales invoices linked to the selected order.")
                 _, sales_inv_id, _ = smart_select(
                     "Sales Invoice",
                     inv_rows,
@@ -275,11 +333,19 @@ def page_gate_pass_entry():
             dn_id = dn_map.get(dn_sel) if dn_sel != "(None)" else st.session_state.get("gp_delivery_note_id")
         elif is_inward:
             st.markdown("**Link to Purchase Invoice** *(required for inward pass)*")
-            pur_rows = _purchase_invoice_rows()
+            fd_inv, td_inv = _invoice_picker_range(f"gp_in_{pass_type}")
+            pur_q = st.text_input(
+                "Find purchase invoice",
+                key=f"gp_pur_q_{pass_type}",
+                placeholder="Invoice no or supplier…",
+            )
+            pur_rows = _purchase_invoice_rows(
+                from_date=fd_inv, to_date=td_inv, q=(pur_q or "").strip() or None,
+            )
             if not pur_rows:
                 st.warning(
-                    "No purchase invoices available. Create and **approve** a purchase invoice "
-                    "before issuing an inward gate pass."
+                    "No purchase invoices in this date range. Create and **approve** a purchase invoice, "
+                    "widen the range, or search by number."
                 )
                 cta1, cta2 = st.columns(2)
                 with cta1:
@@ -310,7 +376,12 @@ def page_gate_pass_entry():
                 "",
             )
             if not inv_status:
-                inv_status = _invoice_status_map(inv_kind).get(int(linked_inv_id), "")
+                table = "sales_invoices" if inv_kind == "sales" else "purchase_invoices"
+                with db.get_connection() as conn:
+                    row = conn.execute(
+                        f"SELECT status FROM {table} WHERE id=?", (int(linked_inv_id),),
+                    ).fetchone()
+                    inv_status = (row[0] if row else "") or ""
 
         can_save = True
         block_reason = None

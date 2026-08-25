@@ -642,7 +642,7 @@ def transaction_picker(key_prefix, search_fn, row_label_fn, party_label=None, pa
     if pending_key in st.session_state:
         st.session_state[pick_key] = st.session_state.pop(pending_key)
 
-    st.caption("Search and pick a record (server-side search).")
+    st.caption("Search and pick a record (server-side search). Empty search shows the last 30 days.")
     q = st.text_input("Find", placeholder=placeholder, key=f"{key_prefix}_pick_q")
     party_id = None
     status = "All"
@@ -653,6 +653,11 @@ def transaction_picker(key_prefix, search_fn, row_label_fn, party_label=None, pa
         if status_filter:
             status = c2.selectbox("Status", STATUS_OPTIONS, key=f"{key_prefix}_pick_st")
     kw = {"q": (q or "").strip() or None, "page": 1, "page_size": 30}
+    # Without a search term, limit to recent invoices so Edit doesn't scan full history
+    if not kw["q"]:
+        today = date.today()
+        kw["from_date"] = str(today - timedelta(days=29))
+        kw["to_date"] = str(today)
     if party_kw and party_id:
         kw[party_kw] = party_id
     if status_filter and status != "All":
@@ -660,7 +665,7 @@ def transaction_picker(key_prefix, search_fn, row_label_fn, party_label=None, pa
     result = search_fn(**kw)
     items = result["items"]
     if not items:
-        st.info("No match — refine search.")
+        st.info("No match — refine search or clear filters (search works across all dates).")
         return None, None
     ids = [int(r["id"]) for r in items]
     id_to_label = {int(r["id"]): row_label_fn(r) for r in items}
