@@ -36,6 +36,16 @@ PERIOD_PRESETS = {
 }
 
 
+@st.cache_data(ttl=60, show_spinner=False)
+def _cached_customer_party_opts():
+    return {f"{r['code']} - {r['name']}": r["id"] for r in db.get_customers()}
+
+
+@st.cache_data(ttl=60, show_spinner=False)
+def _cached_supplier_party_opts():
+    return {f"{r['code']} - {r['name']}": r["id"] for r in db.get_suppliers()}
+
+
 def _period_dates(preset):
     today = date.today()
     if preset == "today":
@@ -586,6 +596,9 @@ def document_register(
     status_options=None,
     kpi_labels=("Records (filtered)", "Total Amount", None),
     open_handler=None,
+    empty_message: str | None = None,
+    empty_cta_label: str | None = None,
+    empty_cta_fn=None,
 ):
     filters = _filter_bar(
         key_prefix, party_label, party_options, default_period,
@@ -597,6 +610,7 @@ def document_register(
         key_prefix, search_fn, columns, row_label_fn, export_name, export_title,
         filters, party_kw, action_panel, kpi_labels=kpi_labels, show_kpi_paid=False,
         open_handler=open_handler,
+        empty_message=empty_message, empty_cta_label=empty_cta_label, empty_cta_fn=empty_cta_fn,
     )
 
 
@@ -674,7 +688,7 @@ def linked_invoice_picker(key_prefix, search_fn, party_id, party_kw, row_label_f
 def sales_register_list(action_panel=None, open_handler=None):
     from erp_ui.doc_workflow import go_sale_new, open_sale_from_register
 
-    party_opts = {f"{r['code']} - {r['name']}": r["id"] for r in db.get_customers()}
+    party_opts = _cached_customer_party_opts()
     cols = [
         {"field": "invoice_no", "label": "Invoice"},
         {"field": "sale_date", "label": "Date / Time", "format": "datetime"},
@@ -709,7 +723,7 @@ def sales_register_list(action_panel=None, open_handler=None):
 def purchase_register_list(action_panel=None, open_handler=None):
     from erp_ui.doc_workflow import go_purchase_new, open_purchase_from_register
 
-    party_opts = {f"{r['code']} - {r['name']}": r["id"] for r in db.get_suppliers()}
+    party_opts = _cached_supplier_party_opts()
     cols = [
         {"field": "invoice_no", "label": "Invoice"},
         {"field": "purchase_date", "label": "Date / Time", "format": "datetime"},

@@ -790,6 +790,9 @@ def render_ceo_desktop(nav: dict, user: dict, company: str) -> None:
     from erp_ui.home_kpis import render_home_kpi_strip
     render_home_kpi_strip(nav, user)
 
+    from erp_ui.home_health import render_books_health_strip
+    render_books_health_strip(nav, user)
+
     pending = _pending_count()
     if pending:
         st.markdown(

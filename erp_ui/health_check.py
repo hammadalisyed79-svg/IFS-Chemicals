@@ -44,6 +44,11 @@ def page_erp_health_check():
         rep = run_health_check_2()
         st.session_state["hc_results"] = rep.results
         st.session_state["hc_score"] = rep.score
+        # Surface GL flag for home Books Health strip
+        for row in (rep.results or []):
+            label = " ".join(str(x) for x in (row if isinstance(row, (list, tuple)) else [row])).lower()
+            if "trial" in label or "gl " in label or "general ledger" in label:
+                st.session_state["hc_gl_ok"] = "fail" not in label and "error" not in label and "imbalance" not in label
         write_all_reports(rep)
         st.rerun()
 

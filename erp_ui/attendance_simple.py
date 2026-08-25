@@ -305,8 +305,16 @@ def _register_tab():
         emps = {e["id"] for e in _load_employees(department=dept)}
         rows = [r for r in rows if r.get("employee_id") in emps]
     if not rows:
-        st.info("No attendance records for this period.")
+        st.markdown(
+            '<div class="erp-empty-state"><p>No attendance records for this period.</p></div>',
+            unsafe_allow_html=True,
+        )
+        if st.button("Open Daily Sheet", type="primary", key="att_reg_empty_cta"):
+            st.session_state["att_simple_tab"] = "Daily Sheet"
+            st.rerun()
         return
+    from erp_ui.list_paging import page_slice
+    page_rows = page_slice(rows, "att_reg", default_size=100)
     df = pd.DataFrame([{
         "Date": r["att_date"],
         "Code": r.get("emp_code", ""),
@@ -315,12 +323,19 @@ def _register_tab():
         "OT (hrs)": float(r.get("overtime_hrs") or 0),
         "Late (min)": float(r.get("late_mins") or 0),
         "Notes": r.get("notes") or "",
-    } for r in rows])
-    export_df = _render_attendance_register_table(rows)
+    } for r in page_rows])
+    export_df = _render_attendance_register_table(page_rows)
     export_buttons(export_df if export_df is not None else df, "attendance_register", "Attendance Register")
+    st.caption(f"Showing paged rows — full period has **{len(rows):,}** records (export uses current page table styling; use period filter to narrow).")
     st.divider()
     st.subheader("Summary by employee")
-    summary = df.groupby("Employee").agg(
+    full_df = pd.DataFrame([{
+        "Date": r["att_date"],
+        "Employee": r.get("employee_name", ""),
+        "Status": STATUS_LABELS.get(r.get("status"), r.get("status", "")),
+        "OT (hrs)": float(r.get("overtime_hrs") or 0),
+    } for r in rows])
+    summary = full_df.groupby("Employee").agg(
         Days=("Date", "count"),
         Present=("Status", lambda s: (s == "Present").sum()),
         Absent=("Status", lambda s: (s == "Absent").sum()),

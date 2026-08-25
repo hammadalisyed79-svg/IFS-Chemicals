@@ -128,8 +128,15 @@ def page_stock_revaluation():
         from erp_ui.helpers import render_dataframe_html_table
         rows = db.get_stock_revaluations()
         if not rows:
-            st.info("No revaluations yet.")
+            st.markdown(
+                '<div class="erp-empty-state"><p>No revaluations yet.</p></div>',
+                unsafe_allow_html=True,
+            )
+            if st.button("New Revaluation", type="primary", key="srv_hist_empty_cta"):
+                st.session_state["srv_tab"] = "New Revaluation"
+                st.rerun()
             return
+        from erp_ui.list_paging import page_slice
         k1, k2 = st.columns(2, gap="small")
         k1.markdown(
             f"<div class='txn-kpi-card'><p class='txn-kpi'>Revaluations</p>"
@@ -142,6 +149,7 @@ def page_stock_revaluation():
             f"<p class='txn-kpi-val'>{posted_n:,}</p></div>",
             unsafe_allow_html=True,
         )
+        page_rows = page_slice(rows, "srv_hist", default_size=50)
         hist_df = pd.DataFrame([{
             "Document": r["document_no"],
             "Date": r["reval_date"],
@@ -149,7 +157,7 @@ def page_stock_revaluation():
             "Mode": r.get("rate_mode"),
             "Delta": r.get("total_delta"),
             "Status": r.get("status"),
-        } for r in rows])
+        } for r in page_rows])
         render_dataframe_html_table(hist_df)
         drafts = [r for r in rows if r.get("status") == "draft"]
         if drafts:

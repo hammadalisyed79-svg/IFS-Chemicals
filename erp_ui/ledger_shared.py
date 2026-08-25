@@ -115,10 +115,13 @@ def render_party_ledger(
         party, entries = get_summary(party_id, fd_s, td_s, include_linked=include_linked)
         _ledger_kpis(party, entries, detailed=False)
         if entries:
+            from erp_ui.list_paging import page_slice
             import pandas as pd
+            page_entries = page_slice(entries, f"{tab_state_key}_sum", default_size=100)
             df = pd.DataFrame(entries)[["date", "ref", "description", "debit", "credit", "balance"]]
             df = attach_ledger_party_fn(df, party, party_kind)
-            render_ledger_summary_table(entries)
+            render_ledger_summary_table(page_entries)
+            st.caption(f"Table shows current page — export includes all **{len(entries):,}** lines.")
             filters = {party_label: f"{party.get('code')} - {party.get('name')}"}
             if include_linked and party.get("linked_party"):
                 lp = party["linked_party"]
@@ -137,7 +140,9 @@ def render_party_ledger(
         party, entries = get_detailed(party_id, fd_s, td_s, include_linked=include_linked)
         _ledger_kpis(party, entries, detailed=True)
         if entries:
+            from erp_ui.list_paging import page_slice
             from erp_ui.reports_pages import _detailed_ledger_dataframe
+            page_entries = page_slice(entries, f"{tab_state_key}_det", default_size=100)
             df = _detailed_ledger_dataframe(entries)
             df = attach_ledger_party_fn(df, party, party_kind)
             try:
@@ -146,7 +151,8 @@ def render_party_ledger(
                 df.attrs["ledger_summary"] = ls
             except Exception:
                 pass
-            render_ledger_detailed_table(entries)
+            render_ledger_detailed_table(page_entries)
+            st.caption(f"Table shows current page — export includes all **{len(entries):,}** lines.")
             filters = {party_label: f"{party.get('code')} - {party.get('name')}"}
             if include_linked and party.get("linked_party"):
                 lp = party["linked_party"]
