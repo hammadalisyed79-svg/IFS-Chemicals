@@ -57,6 +57,9 @@ from erp_ui import purchase_pages as purch_pg
 from erp_ui import master_pages as master_pg
 from erp_ui import inventory_pages as inv_pg
 from erp_ui import return_pages as ret_pg
+from erp_ui import ledger_pages as led_pg
+from erp_ui import finance_report_pages as fin_rpt
+from erp_ui import admin_pages as admin_pg
 from erp_ui import plant_shift_dashboard as plant_shift
 from erp_ui.nav import (
     apply_pending_nav,
@@ -388,95 +391,27 @@ def page_sale_return():
 # Customer Ledger
 # ---------------------------------------------------------------------------
 def page_customer_ledger():
-    from erp_ui.ledger_shared import render_party_ledger
+    from erp_ui.ledger_pages import page_customer_ledger as _page
+    return _page()
 
-    render_party_ledger(
-        "customer",
-        page_title="Customer Ledger",
-        party_select_key="cl_cust",
-        from_key="cl_from",
-        to_key="cl_to",
-        tab_state_key="cl_ledger_tab",
-        split_books_key="cl_split_books",
-        export_summary_name="customer_ledger",
-        export_detailed_name="customer_ledger_detailed",
-        export_summary_title="Customer Ledger",
-        export_detailed_title="Customer Ledger (Detailed)",
-        attach_ledger_party_fn=_attach_ledger_party,
-        export_df_fn=export_df,
-    )
 
 
 # ---------------------------------------------------------------------------
 # Supplier Ledger
 # ---------------------------------------------------------------------------
 def page_supplier_ledger():
-    from erp_ui.ledger_shared import render_party_ledger
+    from erp_ui.ledger_pages import page_supplier_ledger as _page
+    return _page()
 
-    render_party_ledger(
-        "supplier",
-        page_title="Supplier Ledger",
-        party_select_key="sl_sup",
-        from_key="sl_from",
-        to_key="sl_to",
-        tab_state_key="sl_ledger_tab",
-        split_books_key="sl_split_books",
-        export_summary_name="supplier_ledger",
-        export_detailed_name="supplier_ledger_detailed",
-        export_summary_title="Supplier Ledger",
-        export_detailed_title="Supplier Ledger (Detailed)",
-        attach_ledger_party_fn=_attach_ledger_party,
-        export_df_fn=export_df,
-    )
 
 
 # ---------------------------------------------------------------------------
 # Account Ledger (any GL — income, expense, tax, bank, etc.)
 # ---------------------------------------------------------------------------
 def page_account_ledger():
-    from erp_ui.helpers import render_ledger_summary_table
+    from erp_ui.ledger_pages import page_account_ledger as _page
+    return _page()
 
-    hlp.std_page_header("Account Ledger", status="posted", status_kind="shell")
-    st.caption(
-        "Opening, period debit/credit, and closing for any chart account "
-        "(income, expense, tax, cash, bank, and other GL heads)."
-    )
-    if not db.get_accounts(active_only=False):
-        st.info("Add accounts in Chart of Accounts first.")
-        return
-    c1, c2, c3 = st.columns(3)
-    with c1:
-        acc_id = hlp.account_select("al_acc")
-    fd = c2.date_input("From", value=None, key="al_from")
-    td = c3.date_input("To", value=None, key="al_to")
-    if not acc_id:
-        st.info("Select an account.")
-        return
-    fd_s = str(fd) if fd else None
-    td_s = str(td) if td else None
-    account, entries = db.get_account_ledger(acc_id, fd_s, td_s)
-    if not account:
-        st.warning("Account not found.")
-        return
-    summary = (account or {}).get("ledger_summary") or {}
-    opening = float(summary.get("opening") or 0)
-    pdeb = float(summary.get("period_debit") or 0)
-    pcred = float(summary.get("period_credit") or 0)
-    closing = float(summary.get("closing") if summary else (
-        entries[-1]["balance"] if entries else account.get("balance") or 0
-    ))
-    type_lbl = (account.get("account_type") or "").title()
-    st.subheader(f"{account['code']} — {account['name']}")
-    if type_lbl:
-        st.caption(f"Type: {type_lbl}")
-    hlp.render_ledger_kpi_strip(opening, pdeb, pcred, closing, signed_open_close=False)
-    if entries:
-        df = pd.DataFrame(entries)[["date", "ref", "description", "debit", "credit", "balance"]]
-        df.columns = ["Date", "Ref", "Description", "Debit", "Credit", "Balance"]
-        render_ledger_summary_table(entries)
-        export_df(df, "account_ledger", f"Account Ledger — {account['code']} {account['name']}")
-    else:
-        st.info("No ledger entries.")
 
 
 # ---------------------------------------------------------------------------
@@ -492,135 +427,18 @@ def page_stock_report():
 # Profit & Loss
 # ---------------------------------------------------------------------------
 def page_profit_loss():
-    hlp.std_page_header("Profit & Loss Report", status="posted", status_kind="shell")
-    c1, c2 = st.columns(2)
-    fd = c1.date_input("From", value=date(date.today().year, 1, 1), key="pl_from")
-    td = c2.date_input("To", value=date.today(), key="pl_to")
-    pl = db.get_profit_loss(str(fd), str(td))
+    from erp_ui.finance_report_pages import page_profit_loss as _page
+    return _page()
 
-    k1, k2, k3, k4 = st.columns(4, gap="small")
-    k1.markdown(
-        f"<div class='txn-kpi-card'><p class='txn-kpi'>Net Sales</p>"
-        f"<p class='txn-kpi-val'>{fmt_money(pl['net_sales'])}</p></div>",
-        unsafe_allow_html=True,
-    )
-    k2.markdown(
-        f"<div class='txn-kpi-card'><p class='txn-kpi'>Net Purchases</p>"
-        f"<p class='txn-kpi-val'>{fmt_money(pl['net_purchases'])}</p></div>",
-        unsafe_allow_html=True,
-    )
-    k3.markdown(
-        f"<div class='txn-kpi-card'><p class='txn-kpi'>Gross Profit</p>"
-        f"<p class='txn-kpi-val'>{fmt_money(pl['gross_profit'])}</p></div>",
-        unsafe_allow_html=True,
-    )
-    net_cls = "inv-badge-approved" if pl["net_profit"] >= 0 else "inv-badge-rejected"
-    k4.markdown(
-        f"<div class='txn-kpi-card'><p class='txn-kpi'>Net Profit</p>"
-        f"<p class='txn-kpi-val'>{fmt_money(pl['net_profit'])}</p>"
-        f"<p><span class='inv-badge {net_cls}'>"
-        f"{'Profit' if pl['net_profit'] >= 0 else 'Loss'}</span></p></div>",
-        unsafe_allow_html=True,
-    )
-
-    with st.container(border=True):
-        st.markdown("**Income**")
-        st.write(f"Gross Sales: **{fmt_money(pl['gross_sales'])}**")
-        st.write(f"Less: Sale Returns: **({fmt_money(pl['sale_returns'])})**")
-        st.write(f"**Net Sales: {fmt_money(pl['net_sales'])}**")
-        st.markdown("**Cost of Goods**")
-        st.write(f"Gross Purchases: **{fmt_money(pl['gross_purchases'])}**")
-        st.write(f"Less: Purchase Returns: **({fmt_money(pl['purchase_returns'])})**")
-        st.write(f"**Net Purchases: {fmt_money(pl['net_purchases'])}**")
-        st.markdown("**Operating**")
-        st.write(f"Operating Expenses: **{fmt_money(pl['operating_expenses'])}**")
-    export_df(pd.DataFrame([pl]), "profit_loss", f"Profit & Loss {fd} to {td}")
 
 
 # ---------------------------------------------------------------------------
 # User Management
 # ---------------------------------------------------------------------------
 def page_users():
-    from erp_ui.helpers import sticky_page_tabs
-    from html import escape
+    from erp_ui.admin_pages import page_users as _page
+    return _page()
 
-    hlp.std_page_header("User Management")
-    tab = sticky_page_tabs(["Users", "Add User", "Edit / Delete"], "users_page_tab")
-
-    if tab == "Users":
-        rows = db.get_users()
-        if rows:
-            ths = "".join(f"<th>{h}</th>" for h in ("Username", "Full Name", "Role", "Active"))
-            body = []
-            for r in rows:
-                active = bool(r.get("is_active"))
-                badge = (
-                    '<span class="inv-badge inv-badge-approved">Active</span>'
-                    if active
-                    else '<span class="inv-badge inv-badge-cancelled">Inactive</span>'
-                )
-                body.append(
-                    "<tr>"
-                    f"<td>{escape(str(r.get('username') or ''))}</td>"
-                    f"<td>{escape(str(r.get('full_name') or ''))}</td>"
-                    f"<td>{escape(str(r.get('role') or ''))}</td>"
-                    f"<td class='txn-status-cell'>{badge}</td>"
-                    "</tr>"
-                )
-            st.markdown(
-                f"<div class='txn-kpi-card'><p class='txn-kpi'>Users</p>"
-                f"<p class='txn-kpi-val'>{len(rows):,}</p></div>",
-                unsafe_allow_html=True,
-            )
-            st.markdown(
-                '<div class="txn-reg-wrap"><table class="txn-reg-table">'
-                f"<thead><tr>{ths}</tr></thead><tbody>{''.join(body)}</tbody></table></div>",
-                unsafe_allow_html=True,
-            )
-        else:
-            st.info("No users.")
-
-    elif tab == "Add User":
-        if st.session_state.pop("user_add_success", None):
-            st.success("User created. Add another below.")
-        form_key = f"add_user_{st.session_state.get('user_add_form_id', 0)}"
-        with st.form(form_key):
-            username = st.text_input("Username *")
-            full_name = st.text_input("Full Name *")
-            password = st.text_input("Password *", type="password")
-            role = st.selectbox("Role", ["admin", "user"])
-            if st.form_submit_button("Create User", type="primary"):
-                if not username or not full_name or not password:
-                    st.error("All fields required.")
-                else:
-                    try:
-                        db.add_user(username, password, full_name, role)
-                        st.session_state["user_add_success"] = True
-                        st.session_state["user_add_form_id"] = st.session_state.get("user_add_form_id", 0) + 1
-                        st.rerun()
-                    except Exception as e:
-                        st.error(str(e))
-
-    elif tab == "Edit / Delete":
-        rows = db.get_users()
-        if not rows:
-            st.info("No users.")
-            return
-        opts = {f"{r['username']} - {r['full_name']}": r for r in rows}
-        sel = st.selectbox("Select User", list(opts.keys()))
-        u = opts[sel]
-        with st.form("edit_user"):
-            full_name = st.text_input("Full Name", value=u["full_name"])
-            role = st.selectbox("Role", ["admin", "user"], index=0 if u["role"] == "admin" else 1)
-            active = st.checkbox("Active", value=bool(u["is_active"]))
-            new_pass = st.text_input("New Password (leave blank to keep)", type="password")
-            c1, c2 = st.columns(2)
-            if c1.form_submit_button("Update"):
-                db.update_user(u["id"], full_name, role, int(active), new_pass or None)
-                ff.action_done("User updated.")
-            if c2.form_submit_button("Delete") and u["username"] != "admin":
-                db.delete_user(u["id"])
-                ff.action_done("User deleted.")
 
 
 def page_stock():
@@ -642,24 +460,9 @@ def page_stock_transfers():
 
 
 def page_backup_restore():
-    hlp.std_page_header("Backup & Restore")
-    c1, c2 = st.columns(2)
-    with c1:
-        st.subheader("Backup Database")
-        if st.button("Create Backup Now"):
-            path = db.backup_database()
-            st.success(f"Backup saved: {path}")
-    with c2:
-        st.subheader("Restore Database")
-        st.warning("Restore will overwrite the current database. Restart the app after restore.")
-        uploaded = st.file_uploader("Select backup .db file", type=["db"])
-        if uploaded and st.button("Restore from Upload"):
-            import tempfile, os
-            tmp = os.path.join(tempfile.gettempdir(), uploaded.name)
-            with open(tmp, "wb") as f:
-                f.write(uploaded.getbuffer())
-            db.restore_database(tmp)
-            st.success("Database restored. Please restart the application.")
+    from erp_ui.admin_pages import page_backup_restore as _page
+    return _page()
+
 
 
 # ---------------------------------------------------------------------------
