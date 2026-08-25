@@ -234,9 +234,11 @@ def _second_weight_form_body(slip_id: int, *, key_prefix: str = "ws2"):
             )
             st.session_state["ws_print_id"] = slip_id
             st.session_state.pop("ws_edit_slip_id", None)
+            st.session_state["ws_entry_tab"] = "Completed Slips"
             ff.action_done(
                 f"Slip completed — **{slip.get('document_no', '')}**. "
-                "Open **Sales Invoices** or **Purchase Invoices**, choose this slip on the invoice, then save."
+                "Use **Completed Slips → Create draft invoice** wizard below, "
+                "or attach this slip on Sales/Purchase Invoices."
             )
         except Exception as e:
             st.error(str(e))
@@ -370,16 +372,29 @@ def page_weight_entry():
                     ff.finish_post_new_form(
                         fid,
                         msg,
-                        retain={"ws_edit_slip_id": slip_id, "ws_print_id": slip_id},
+                        retain={"ws_print_id": slip_id, "ws_entry_tab": "Weight Entry"},
                     )
                 except Exception as e:
                     st.error(str(e))
+
+        print_id = st.session_state.get("ws_print_id")
+        if print_id:
+            with st.container(border=True):
+                st.markdown("**Last saved 1st weight — print ticket**")
+                c1, c2 = st.columns(2)
+                if c1.button("Go to Pending 2nd Weight", type="primary", key="ws1_goto_pend"):
+                    st.session_state["ws_entry_tab"] = "Pending 2nd Weight"
+                    st.rerun()
+                _print_first_weight_slip(int(print_id), "ws1_after_save")
 
     elif tab == "Pending 2nd Weight":
         st.markdown("**Slips awaiting second weight**")
         pending = db.get_all_pending_weight_slips()
         if not pending:
             st.info("No pending slips.")
+            if st.button("New first weight", type="primary", key="ws_pend_empty_cta"):
+                st.session_state["ws_entry_tab"] = "Weight Entry"
+                st.rerun()
         else:
             k1, k2 = st.columns(2, gap="small")
             k1.markdown(
@@ -421,6 +436,13 @@ def page_weight_entry():
         completed = db.get_completed_unlinked_slips()
         if not completed:
             st.caption("No completed slips waiting to be picked on an invoice.")
+            c1, c2 = st.columns(2)
+            if c1.button("Pending 2nd Weight", key="ws_comp_empty_pend"):
+                st.session_state["ws_entry_tab"] = "Pending 2nd Weight"
+                st.rerun()
+            if c2.button("New first weight", type="primary", key="ws_comp_empty_new"):
+                st.session_state["ws_entry_tab"] = "Weight Entry"
+                st.rerun()
         else:
             from db_commercial import weight_slip_is_linked
             linked_n = sum(1 for r in completed if weight_slip_is_linked(r))
@@ -486,6 +508,8 @@ def page_weight_entry():
                 key="ws_print_mode",
             )
             pool = pending_print if "1st weight" in print_mode else done
+            from erp_ui.list_paging import page_slice
+            pool = page_slice(pool, "ws_print_pg", default_size=50)
             pre = st.session_state.get("ws_print_id")
             labels = []
             for r in pool:
@@ -500,6 +524,9 @@ def page_weight_entry():
                         f"{r['document_no']} — {party} — {r.get('vehicle_no', '')} — "
                         f"net {float(r.get('net_weight') or 0):,.0f} kg"
                     )
+            if not labels:
+                st.info("No slips on this page.")
+                return
             default_idx = 0
             if pre:
                 for i, r in enumerate(pool):
@@ -507,6 +534,8 @@ def page_weight_entry():
                         default_idx = i
                         break
             sel = st.selectbox("Slip", labels, index=default_idx, key="ws3_sel")
+            if not sel:
+                return
             sid = pool[labels.index(sel)]["id"]
             document_print_toolbar("Weight Slip", sid, key_prefix="ws_print")
 
@@ -537,9 +566,11 @@ def page_weight_entry():
         if not editable:
             st.info("No slips available for edit/delete.")
         else:
+            from erp_ui.list_paging import page_slice
+            page_rows = page_slice(editable, "ws_ed_pg", default_size=50)
             keep_id = st.session_state.get("ws_ed_focus_id")
             opts = {}
-            for r in editable:
+            for r in page_rows:
                 st_lbl = r.get("status", "")
                 if st_lbl == WEIGHT_SLIP_CANCELLED:
                     st_lbl = f"cancelled → {_infer_reopen_status(r)}"
@@ -550,14 +581,19 @@ def page_weight_entry():
                     st_lbl = f"{st_lbl} | on {inv_ref}"
                 opts[f"{r['document_no']} | {_party_label(r)} | {r.get('vehicle_no','')} | {st_lbl}"] = r
             labels = list(opts.keys())
+            if not labels:
+                st.info("No slips on this page.")
+                return
             default_ix = 0
             if keep_id:
-                for i, r in enumerate(editable):
+                for i, r in enumerate(page_rows):
                     if r["id"] == keep_id:
                         default_ix = i
                         break
                 st.session_state.pop("ws_ed_focus_id", None)
             sel = st.selectbox("Select slip", labels, index=default_ix, key="ws_ed_sel")
+            if not sel:
+                return
             slip = opts[sel]
             sid = slip["id"]
             is_admin = user_role() == "admin"

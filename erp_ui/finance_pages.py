@@ -667,10 +667,10 @@ def _entry_form(book, sel_date, bank_account_id=None, key_prefix="cb"):
 
 def _edit_delete_tab(book, key_prefix="cb", sel_date=None):
     rows = db.get_cash_book() if book == "cash" else db.get_bank_book()
-    if book == "cash" and sel_date:
+    if sel_date:
         ds = str(sel_date)
         rows = [r for r in rows if r.get("entry_date") == ds]
-        if db.is_cash_day_closed(ds):
+        if book == "cash" and db.is_cash_day_closed(ds):
             st.error(f"**{ds}** is closed — cash entries for this day cannot be edited or deleted.")
             if rows:
                 st.caption(f"{len(rows)} voucher(s) on this day (view only).")
@@ -686,15 +686,19 @@ def _edit_delete_tab(book, key_prefix="cb", sel_date=None):
                 st.info("No entries on this day.")
             return
     if not rows:
-        st.info("No entries to edit or delete.")
+        st.info("No entries to edit or delete" + (f" for **{sel_date}**." if sel_date else "."))
         return
+    from erp_ui.list_paging import page_slice
+    view = page_slice(rows, f"{key_prefix}_ed_pg", default_size=50)
     opts = {
         f"{r['entry_date']} | {r.get('document_no','')} | "
         f"{(r.get('account_title') or r['description'] or '')[:40]} | "
         f"{'Receipt' if r['entry_type']=='credit' else 'Payment'} {float(r['amount']):,.2f}": r
-        for r in rows
+        for r in view
     }
     sel = st.selectbox("Select entry", list(opts.keys()), key=f"{key_prefix}_esel")
+    if not sel:
+        return
     e = opts[sel]
     if book == "cash" and db.is_cash_day_closed(e.get("entry_date")):
         st.error(f"Cannot change voucher on closed day **{e['entry_date']}**.")
@@ -809,7 +813,7 @@ def _edit_delete_tab(book, key_prefix="cb", sel_date=None):
 
 
 def _bank_accounts_for_book():
-    """Bank accounts for Bank Book selector — Bank Al Habib first (default)."""
+    """Bank accounts for Bank Book selector — Bank Al Habib first (default), full list."""
     accts = db.get_accounts_by_type("asset") if hasattr(db, "get_accounts_by_type") else db.get_accounts()
     bank_accts = [a for a in accts if "bank" in (a.get("name") or "").lower() or str(a.get("code") or "").startswith("11")]
     if not bank_accts:
@@ -825,39 +829,45 @@ def _bank_accounts_for_book():
             return (1, name)
         return (2, name)
 
-    bank_accts = sorted(bank_accts, key=_habib_rank)
-    # Show Bank Al Habib in the Bank Book list (replacing Alfalah-only preference)
-    habib = [
-        a for a in bank_accts
-        if "habib" in (a.get("name") or "").lower() or str(a.get("code") or "") == "100068"
-    ]
-    if habib:
-        return habib
-    return bank_accts
+    return sorted(bank_accts, key=_habib_rank)
 
 
 def _interactive_book(book="cash"):
     prefix = "cashbk" if book == "cash" else "bankbk"
     title = "Cash Book" if book == "cash" else "Bank Book"
     subtitle = "Daily receipts & payments with opening and closing balance"
-    peek = st.session_state.get(f"{prefix}_book_tab") or "Daily Book"
-    std_page_header(
-        title,
-        subtitle=subtitle,
-        status="posted" if peek == "Daily Book" else None,
-        status_kind="shell",
-    )
 
     bank_account_id = None
     if book == "bank":
         bank_accts = _bank_accounts_for_book()
         acct_opts = {f"{a['code']} - {a['name']}": a["id"] for a in bank_accts}
+        if not acct_opts:
+            std_page_header(title, subtitle=subtitle, status="register", status_kind="shell")
+            st.error("No bank accounts found in Chart of Accounts. Add an asset account with “Bank” in the name.")
+            return
         acct_lbl = st.selectbox("Bank Account", list(acct_opts.keys()), key=f"{prefix}_acct")
+        if not acct_lbl:
+            return
         bank_account_id = acct_opts[acct_lbl]
 
     _date_nav_bar(prefix, title)
     sel_date = _selected_date(prefix)
     ds = str(sel_date)
+
+    cash_closed = book == "cash" and db.is_cash_day_closed(ds)
+    peek = st.session_state.get(f"{prefix}_book_tab") or "Daily Book"
+    hdr_status = None
+    if peek == "Daily Book":
+        hdr_status = "locked" if cash_closed else "posted"
+    std_page_header(
+        title,
+        subtitle=subtitle,
+        status=hdr_status,
+        status_kind="shell",
+    )
+
+    if book == "cash":
+        _cash_day_status_bar(sel_date, prefix)
 
     raw = db.get_cash_book(ds, ds) if book == "cash" else db.get_bank_book(ds, ds)
     if book == "bank" and bank_account_id:
@@ -884,6 +894,11 @@ def _interactive_book(book="cash"):
         strip_bits = [
             f'{shell_status_badge("posted", kind="shell")}&nbsp;<strong>Book</strong>',
         ]
+        if book == "cash" and cash_closed:
+            strip_bits.insert(
+                0,
+                f'{shell_status_badge("locked", kind="shell")}&nbsp;<strong>Day closed</strong>',
+            )
         if book == "cash" and adv_out > 0.01:
             strip_bits.append(
                 f'{shell_status_badge("shadow", kind="shell")}&nbsp;'
@@ -997,6 +1012,10 @@ def _interactive_book(book="cash"):
                         empty_caption="No payments today.",
                         key=f"{prefix}_pay_grid",
                     )
+            if not receipts and not payments and not (book == "cash" and cash_closed):
+                if st.button("Post voucher", type="primary", key=f"{prefix}_empty_post"):
+                    st.session_state[f"{prefix}_book_tab"] = "Post Voucher"
+                    st.rerun()
             all_rows = receipts + payments
             all_rows.sort(key=lambda r: (r.get("voucher", ""), r["particulars"]))
             if all_rows:
@@ -1023,7 +1042,7 @@ def _interactive_book(book="cash"):
             _entry_form(book, sel_date, bank_account_id, key_prefix=f"{prefix}_new")
 
         elif bk_tab == "Edit / Delete":
-            _edit_delete_tab(book, key_prefix=f"{prefix}_ed", sel_date=sel_date if book == "cash" else None)
+            _edit_delete_tab(book, key_prefix=f"{prefix}_ed", sel_date=sel_date)
 
         elif bk_tab == "Print Voucher":
             _cashbook_print_tab(
@@ -1037,10 +1056,6 @@ def _interactive_book(book="cash"):
                 preset=preset,
                 title="Bank slips",
             )
-
-    if book == "cash":
-        with st.container(key=f"{prefix}_cash_footer"):
-            _cash_day_status_bar(sel_date, prefix)
 
 
 def page_cash_book():
