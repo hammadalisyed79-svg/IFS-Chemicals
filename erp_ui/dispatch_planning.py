@@ -16,7 +16,9 @@ from erp_ui.helpers import std_page_header, export_buttons, render_dataframe_htm
 def _sales_order_view_dialog(so_id: int):
     """Full SO view + print (opened from Dispatch Planning)."""
     from erp_ui.document_print import document_print_toolbar
+    from erp_ui.dialog_shell import dialog_shell_marker
 
+    dialog_shell_marker()
     order = db.get_sales_order(so_id)
     if not order:
         st.error("Sales order not found.")

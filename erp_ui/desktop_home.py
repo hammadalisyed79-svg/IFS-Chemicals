@@ -578,8 +578,10 @@ def render_module_screen_chips(nav: dict, group: str, screen: str) -> None:
         chip_cols = st.columns(min(len(primary), max_chips) + 1)
         for col, scr in zip(chip_cols[:len(primary)], primary):
             with col:
+                icon = _icon_for(scr, SCREEN_ICONS)
+                chip_label = f"{icon} {screen_title(scr)}"
                 if st.button(
-                    screen_title(scr),
+                    chip_label,
                     key=f"mod_chip_{group}_{scr}",
                     use_container_width=True,
                     type="primary" if scr == screen else "secondary",
@@ -605,8 +607,9 @@ def render_module_screen_chips(nav: dict, group: str, screen: str) -> None:
                     st.caption("No screens match.")
                 for scr in shown:
                     mark = "▸ " if scr == screen else ""
+                    icon = _icon_for(scr, SCREEN_ICONS)
                     if st.button(
-                        f"{mark}{screen_title(scr)}",
+                        f"{mark}{icon} {screen_title(scr)}",
                         key=f"mod_scr_all_{group}_{scr}",
                         use_container_width=True,
                         type="primary" if scr == screen else "secondary",

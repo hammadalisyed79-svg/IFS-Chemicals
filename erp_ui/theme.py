@@ -393,14 +393,20 @@ section[data-testid="stSidebar"] [data-testid="stBaseButton-headerNoPadding"] sv
   border-left: 4px solid {BLUE};
 }}
 
-/* Buttons */
+/* Buttons — WCAG: white text on red primary */
 .stButton > button[kind="primary"],
 .stButton > button[data-testid="baseButton-primary"] {{
   background: {RED} !important;
-  color: {BLACK} !important;
+  color: {WHITE} !important;
   border: 2px solid {RED_DARK} !important;
   font-weight: 700 !important;
   border-radius: 8px !important;
+}}
+.stButton > button[kind="primary"] *,
+.stButton > button[data-testid="baseButton-primary"] *,
+.stButton > button[kind="primary"] p,
+.stButton > button[data-testid="baseButton-primary"] p {{
+  color: {WHITE} !important;
 }}
 .stButton > button[kind="secondary"],
 .stButton > button:not([kind="primary"]) {{
@@ -412,6 +418,10 @@ section[data-testid="stSidebar"] [data-testid="stBaseButton-headerNoPadding"] sv
 }}
 .stButton > button:hover {{
   border-color: {RED} !important;
+}}
+.stButton > button:focus-visible {{
+  outline: 3px solid {BLUE} !important;
+  outline-offset: 2px !important;
 }}
 
 /* Tabs */
@@ -428,7 +438,7 @@ section[data-testid="stSidebar"] [data-testid="stBaseButton-headerNoPadding"] sv
 }}
 [data-testid="stTabs"] [data-baseweb="tab"][aria-selected="true"] {{
   background-color: {RED} !important;
-  color: {BLACK} !important;
+  color: {WHITE} !important;
   border-color: {RED_DARK} !important;
   border-bottom: 2px solid {RED} !important;
   font-weight: 700 !important;
@@ -875,6 +885,73 @@ div[class*="st-key-rpt_nav_sidebar"] h5 {{
   padding: 0 !important;
   margin: 0.5rem 0 0.2rem 0 !important;
   font-size: 0.82rem !important;
+}}
+
+/* Internal ERP dialogs — light card, dark text (matches portal readability) */
+body:not(:has(.erp-portal-root)) [data-testid="stDialog"],
+body:not(:has(.erp-portal-root)) div[role="dialog"],
+[data-testid="stDialog"]:has(.erp-dialog-card),
+div[role="dialog"]:has(.erp-dialog-card) {{
+  color: {BLACK} !important;
+}}
+body:not(:has(.erp-portal-root)) [data-testid="stDialog"] > div,
+body:not(:has(.erp-portal-root)) div[role="dialog"] > div,
+[data-testid="stDialog"]:has(.erp-dialog-card) > div,
+div[role="dialog"]:has(.erp-dialog-card) > div,
+[data-testid="stDialog"]:has(.erp-dialog-card) [data-testid="stVerticalBlockBorderWrapper"],
+div[role="dialog"]:has(.erp-dialog-card) [data-testid="stVerticalBlockBorderWrapper"] {{
+  background: {WHITE} !important;
+  background-color: {WHITE} !important;
+  color: {BLACK} !important;
+  border-color: {BORDER} !important;
+}}
+body:not(:has(.erp-portal-root)) [data-testid="stDialog"] [data-testid="stMarkdownContainer"],
+body:not(:has(.erp-portal-root)) div[role="dialog"] [data-testid="stMarkdownContainer"],
+[data-testid="stDialog"]:has(.erp-dialog-card) [data-testid="stMarkdownContainer"],
+div[role="dialog"]:has(.erp-dialog-card) [data-testid="stMarkdownContainer"],
+body:not(:has(.erp-portal-root)) [data-testid="stDialog"] [data-testid="stMarkdownContainer"] p,
+body:not(:has(.erp-portal-root)) [data-testid="stDialog"] [data-testid="stMarkdownContainer"] span,
+body:not(:has(.erp-portal-root)) [data-testid="stDialog"] [data-testid="stMarkdownContainer"] strong,
+body:not(:has(.erp-portal-root)) div[role="dialog"] [data-testid="stMarkdownContainer"] p,
+body:not(:has(.erp-portal-root)) div[role="dialog"] [data-testid="stMarkdownContainer"] span,
+body:not(:has(.erp-portal-root)) div[role="dialog"] [data-testid="stMarkdownContainer"] strong,
+[data-testid="stDialog"]:has(.erp-dialog-card) *,
+div[role="dialog"]:has(.erp-dialog-card) * {{
+  color: {BLACK} !important;
+}}
+body:not(:has(.erp-portal-root)) [data-testid="stDialog"] h1,
+body:not(:has(.erp-portal-root)) [data-testid="stDialog"] h2,
+body:not(:has(.erp-portal-root)) [data-testid="stDialog"] h3,
+body:not(:has(.erp-portal-root)) div[role="dialog"] h1,
+body:not(:has(.erp-portal-root)) div[role="dialog"] h2,
+body:not(:has(.erp-portal-root)) div[role="dialog"] h3,
+[data-testid="stDialog"]:has(.erp-dialog-card) h1,
+[data-testid="stDialog"]:has(.erp-dialog-card) h2,
+[data-testid="stDialog"]:has(.erp-dialog-card) h3 {{
+  color: {BLUE_DARK} !important;
+}}
+body:not(:has(.erp-portal-root)) [data-testid="stDialog"] .stButton > button[kind="primary"],
+body:not(:has(.erp-portal-root)) div[role="dialog"] .stButton > button[kind="primary"],
+body:not(:has(.erp-portal-root)) div[role="dialog"] .stButton > button[data-testid="baseButton-primary"],
+[data-testid="stDialog"]:has(.erp-dialog-card) .stButton > button[kind="primary"],
+[data-testid="stDialog"]:has(.erp-dialog-card) .stButton > button[data-testid="baseButton-primary"] {{
+  background: {RED} !important;
+  border: 2px solid {RED_DARK} !important;
+  color: {WHITE} !important;
+}}
+body:not(:has(.erp-portal-root)) [data-testid="stDialog"] .stButton > button[kind="primary"] *,
+body:not(:has(.erp-portal-root)) div[role="dialog"] .stButton > button[kind="primary"] *,
+[data-testid="stDialog"]:has(.erp-dialog-card) .stButton > button[kind="primary"] * {{
+  color: {WHITE} !important;
+}}
+body:not(:has(.erp-portal-root)) [data-testid="stDialog"] input,
+body:not(:has(.erp-portal-root)) [data-testid="stDialog"] textarea,
+body:not(:has(.erp-portal-root)) div[role="dialog"] input,
+body:not(:has(.erp-portal-root)) div[role="dialog"] textarea,
+[data-testid="stDialog"]:has(.erp-dialog-card) input,
+[data-testid="stDialog"]:has(.erp-dialog-card) textarea {{
+  background: {WHITE} !important;
+  color: {BLACK} !important;
 }}
 </style>
 """

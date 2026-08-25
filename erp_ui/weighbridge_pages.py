@@ -247,6 +247,9 @@ def _second_weight_form_body(slip_id: int, *, key_prefix: str = "ws2"):
 @st.dialog("Complete Second Weight", width="large")
 def _second_weight_dialog(slip_id: int):
     """Modal popup for 2nd weight — call only while ws_edit_slip_id is set (no tabs underneath)."""
+    from erp_ui.dialog_shell import dialog_shell_marker
+
+    dialog_shell_marker()
     _second_weight_form_body(int(slip_id), key_prefix="ws2_dlg")
 
 

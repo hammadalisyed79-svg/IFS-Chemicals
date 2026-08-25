@@ -735,12 +735,9 @@ def _render_nav_icon_grid(
                 with col:
                     icon = _icon_for(item, icons_map)
                     label = label_fn(item) if label_fn else item
-                    st.markdown(
-                        f'<p class="erp-nav-ico">{icon}</p>',
-                        unsafe_allow_html=True,
-                    )
+                    btn_label = f"{icon}  {label}" if icon else label
                     if st.button(
-                        label,
+                        btn_label,
                         key=f"{key_prefix}_{item}",
                         use_container_width=True,
                         type="primary" if item == current else "secondary",
