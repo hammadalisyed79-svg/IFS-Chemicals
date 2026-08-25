@@ -510,8 +510,7 @@ def _register_core(
 
     labels = [row_label_fn(r) for r in items]
     id_map = {labels[i]: items[i] for i in range(len(labels))}
-    with sel_col:
-        sel = st.selectbox("Select record for actions", labels, key=f"{key_prefix}_sel")
+    sel = st.selectbox("Select record for actions", labels, key=f"{key_prefix}_sel")
     selected = id_map.get(sel)
 
     if selected:
