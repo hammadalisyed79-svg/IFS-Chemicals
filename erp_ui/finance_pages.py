@@ -1076,7 +1076,10 @@ def _bank_account_opts():
     return {f"{a['code']} - {a['name']}": a["id"] for a in bank}
 
 
-def _party_receipt_register(search_fn, party_label, key_prefix):
+def _party_receipt_register(
+    search_fn, party_label, key_prefix,
+    *, empty_tab_key=None, empty_tab_value=None, empty_cta_label=None,
+):
     from html import escape
 
     party_opts = (
@@ -1163,6 +1166,14 @@ def _party_receipt_register(search_fn, party_label, key_prefix):
             st.caption("For bank slip attachments, search the voucher no under **Bank Book → Bank Slips**.")
     else:
         st.info("No receipts/payments found.")
+        if empty_tab_key and empty_tab_value:
+            if st.button(
+                empty_cta_label or "New entry",
+                type="primary",
+                key=f"{key_prefix}_empty_cta",
+            ):
+                st.session_state[empty_tab_key] = empty_tab_value
+                st.rerun()
 
 
 def page_customer_receipt():
@@ -1175,7 +1186,12 @@ def page_customer_receipt():
     )
     tab = sticky_page_tabs(["Register", "New Receipt"], "cr_page_tab")
     if tab == "Register":
-        _party_receipt_register(db.search_customer_receipts, "Customer", "cust_rcpt")
+        _party_receipt_register(
+            db.search_customer_receipts, "Customer", "cust_rcpt",
+            empty_tab_key="cr_page_tab",
+            empty_tab_value="New Receipt",
+            empty_cta_label="New Receipt",
+        )
     else:
         fid = "cust_rcpt"
         wk = lambda n: ff.widget_key(fid, n)
@@ -1203,9 +1219,14 @@ def page_customer_receipt():
             with c4:
                 amt = money_input("Amount *", value=0.01, min_value=0.01, key=wk("amt"))
             desc = c5.text_input("Description", value=f"Receipt from {cust['name']}", key=wk("desc"))
-            if mode == "Cash" and db.is_cash_day_closed(str(rdate)):
-                st.warning(f"Cash book for **{rdate}** is closed — choose another date or ask admin to reopen the day.")
-            if st.button("Post Customer Receipt", type="primary", key="cr_post"):
+            cash_blocked = mode == "Cash" and db.is_cash_day_closed(str(rdate))
+            if cash_blocked:
+                st.warning(
+                    f"Cash book for **{rdate}** is closed — choose another date or ask admin to reopen the day."
+                )
+            if st.button(
+                "Post Customer Receipt", type="primary", key="cr_post", disabled=cash_blocked,
+            ):
                 try:
                     res = db.record_customer_receipt(
                         cust["id"], str(rdate), amt, ref, desc,
@@ -1249,7 +1270,12 @@ def page_supplier_payment():
     )
     tab = sticky_page_tabs(["Register", "New Payment"], "sp_page_tab")
     if tab == "Register":
-        _party_receipt_register(db.search_supplier_payments, "Supplier", "sup_pay")
+        _party_receipt_register(
+            db.search_supplier_payments, "Supplier", "sup_pay",
+            empty_tab_key="sp_page_tab",
+            empty_tab_value="New Payment",
+            empty_cta_label="New Payment",
+        )
     else:
         fid = "sup_pay"
         wk = lambda n: ff.widget_key(fid, n)
@@ -1277,9 +1303,14 @@ def page_supplier_payment():
             with c4:
                 amt = money_input("Amount *", value=0.01, min_value=0.01, key=wk("amt"))
             desc = c5.text_input("Description", value=f"Payment to {sup['name']}", key=wk("desc"))
-            if mode == "Cash" and db.is_cash_day_closed(str(pdate)):
-                st.warning(f"Cash book for **{pdate}** is closed — choose another date or ask admin to reopen the day.")
-            if st.button("Post Supplier Payment", type="primary", key="sp_post"):
+            cash_blocked = mode == "Cash" and db.is_cash_day_closed(str(pdate))
+            if cash_blocked:
+                st.warning(
+                    f"Cash book for **{pdate}** is closed — choose another date or ask admin to reopen the day."
+                )
+            if st.button(
+                "Post Supplier Payment", type="primary", key="sp_post", disabled=cash_blocked,
+            ):
                 try:
                     res = db.record_supplier_payment(
                         sup["id"], str(pdate), amt, ref, desc,
@@ -1395,6 +1426,9 @@ def _expense_payment_register(key_prefix):
         )
     else:
         st.info("No expense payments found.")
+        if st.button("New Expense Payment", type="primary", key=f"{key_prefix}_empty_cta"):
+            st.session_state["ep_page_tab"] = "New Payment"
+            st.rerun()
 
 
 def page_expense_payment():
@@ -1432,9 +1466,14 @@ def page_expense_payment():
             with c4:
                 amt = money_input("Amount *", value=0.01, min_value=0.01, key=wk("amt"))
             desc = c5.text_input("Description", value=exp_lbl.split(" - ", 1)[-1], key=wk("desc"))
-            if mode == "Cash" and db.is_cash_day_closed(str(pdate)):
-                st.warning(f"Cash book for **{pdate}** is closed — choose another date or ask admin to reopen the day.")
-            if st.button("Post Expense Payment", type="primary", key="ep_post"):
+            cash_blocked = mode == "Cash" and db.is_cash_day_closed(str(pdate))
+            if cash_blocked:
+                st.warning(
+                    f"Cash book for **{pdate}** is closed — choose another date or ask admin to reopen the day."
+                )
+            if st.button(
+                "Post Expense Payment", type="primary", key="ep_post", disabled=cash_blocked,
+            ):
                 try:
                     res = db.record_expense_payment(
                         exp_opts[exp_lbl], str(pdate), amt, ref, desc,
@@ -2051,7 +2090,7 @@ def page_cash_advance():
         f'<strong>{fmt_money(open_amt)}</strong> outstanding</div>',
         unsafe_allow_html=True,
     )
-    c1, c2 = st.columns(2)
+    c1, c2, c3 = st.columns([1, 1, 1])
     c1.markdown(
         f"<div class='txn-kpi-card'><p class='txn-kpi'>Open advances</p>"
         f"<p class='txn-kpi-val'>{len(open_items)}</p></div>",
@@ -2062,6 +2101,17 @@ def page_cash_advance():
         f"<p class='txn-kpi-val'>{fmt_money(open_amt)}</p></div>",
         unsafe_allow_html=True,
     )
+    with c3:
+        if open_items:
+            st.markdown("<div style='height:0.55rem'></div>", unsafe_allow_html=True)
+            if st.button("Settle outstanding", type="primary", key="ca_hdr_settle", use_container_width=True):
+                st.session_state["ca_page_tab"] = "Settle Bills"
+                st.rerun()
+        else:
+            st.markdown("<div style='height:0.55rem'></div>", unsafe_allow_html=True)
+            if st.button("Issue Advance", type="primary", key="ca_hdr_issue", use_container_width=True):
+                st.session_state["ca_page_tab"] = "Issue Advance"
+                st.rerun()
 
     tab = sticky_page_tabs(
         ["Register", "Issue Advance", "Settle Bills"],
@@ -2104,6 +2154,9 @@ def _cash_advance_register(key_prefix):
     rows = result.get("items") or []
     if not rows:
         st.info("No cash advances found.")
+        if st.button("Issue Advance", type="primary", key=f"{key_prefix}_empty_cta"):
+            st.session_state["ca_page_tab"] = "Issue Advance"
+            st.rerun()
         return
     ths = "".join(
         f"<th>{h}</th>"
@@ -2158,6 +2211,11 @@ def _cash_advance_register(key_prefix):
     settlements = adv.get("settlements") or []
     if not settlements:
         st.caption("No settlements yet.")
+        if float(adv.get("outstanding_amount") or 0) > 0.01:
+            if st.button("Settle this advance", type="primary", key=f"{key_prefix}_settle_cta"):
+                st.session_state["ca_page_tab"] = "Settle Bills"
+                st.session_state["ca_set_adv"] = str(adv["id"])
+                st.rerun()
         return
     for s in settlements:
         with st.expander(
@@ -2240,6 +2298,9 @@ def _cash_advance_settle_form(key_prefix):
     opens = open_res.get("items") or []
     if not opens:
         st.info("No open advances to settle. Issue an advance first.")
+        if st.button("Issue Advance", type="primary", key=f"{key_prefix}_empty_iss"):
+            st.session_state["ca_page_tab"] = "Issue Advance"
+            st.rerun()
         return
 
     opts = {
@@ -2258,10 +2319,16 @@ def _cash_advance_settle_form(key_prefix):
     if not adv:
         return
     outstanding = float(adv.get("outstanding_amount") or 0)
-    st.info(
-        f"**{adv['document_no']}** · {adv.get('person_name')} · "
-        f"purpose: {adv.get('purpose') or '—'} · outstanding **{fmt_money(outstanding)}**"
+    from html import escape as _esc
+    st.markdown(
+        f'<div class="txn-status-strip">'
+        f'<span class="erp-shell-badge erp-shell-badge-shadow">Outstanding</span>&nbsp;'
+        f'<strong>{_esc(str(adv.get("document_no") or ""))}</strong> · '
+        f'{_esc(str(adv.get("person_name") or ""))} · '
+        f'<strong>{fmt_money(outstanding)}</strong></div>',
+        unsafe_allow_html=True,
     )
+    st.caption(f"Purpose: {adv.get('purpose') or '—'} · Issued {fmt_money(adv.get('amount'))} on {adv.get('issue_date')}")
 
     gl_rows = _cash_advance_settle_account_rows(adv.get("advance_account_id"))
     if not gl_rows:
@@ -2336,6 +2403,19 @@ def _cash_advance_settle_form(key_prefix):
         m3.metric("Clearing", fmt_money(cleared))
         m4.metric("Left after settle", fmt_money(max(0, rem)))
 
+        pay_mode = (adv.get("payment_mode") or "cash").lower()
+        cash_day_blocked = (
+            bills_total > 0.005
+            and pay_mode == "cash"
+            and db.is_cash_day_closed(str(sdate))
+        )
+        if cash_day_blocked:
+            st.warning(
+                f"Cash book for **{sdate}** is closed — bill lines post a CP voucher. "
+                f"Choose another settle date, reopen the day, or use **cash returned** only "
+                f"(GL, no Cash Book)."
+            )
+
         b1, b2, b3 = st.columns(3)
         if b1.button("Add line", key=f"{key_prefix}_add"):
             lines.append({
@@ -2350,7 +2430,7 @@ def _cash_advance_settle_form(key_prefix):
             ]
             st.rerun()
 
-        can_post = cleared > 0 and cleared <= outstanding + 0.01
+        can_post = cleared > 0 and cleared <= outstanding + 0.01 and not cash_day_blocked
         if rem < -0.01:
             st.error("Settlement lines + cash return exceed outstanding advance.")
         if b3.button("Post Settlement", type="primary", key=f"{key_prefix}_post", disabled=not can_post):
