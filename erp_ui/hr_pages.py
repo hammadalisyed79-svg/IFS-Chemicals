@@ -136,7 +136,13 @@ def page_hr_employees():
             df = pd.DataFrame(rows)[[c for c in cols if c in rows[0]]]
             export_df(df, "employee_list")
         else:
-            st.info("No employees.")
+            st.markdown(
+                '<div class="erp-empty-state"><p>No employees yet.</p></div>',
+                unsafe_allow_html=True,
+            )
+            if st.button("Add Employee", type="primary", key="hr_emp_empty_cta"):
+                st.session_state["hr_emp_tab"] = "Add Employee"
+                st.rerun()
     elif tab == "Add Employee":
         if not db.user_can_hr(st.session_state.user, "add"):
             st.warning("You do not have permission to add employees.")

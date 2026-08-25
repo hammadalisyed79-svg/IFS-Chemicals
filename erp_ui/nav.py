@@ -133,6 +133,7 @@ SCREEN_TITLES = {
     "Draft Center": "Drafts",
     "Approval Designer": "Approvals Setup",
     "Mobile Approvals": "Mobile Approve",
+    "Approval Inbox": "Approval Inbox",
     "Download App": "Download App",
     "ERP Health Check": "Health Check",
     "Audit Log": "Audit Log",
@@ -142,6 +143,7 @@ SCREEN_TITLES = {
 SCREEN_TAGLINES = {
     "Dashboard": "Main workspace",
     "Business Overview": "Live KPIs and alerts",
+    "Approval Inbox": "Pending sales, purchases & portal orders",
     "Customers": "Create and maintain records",
     "Suppliers": "Create and maintain records",
     "Products": "Items, rates and codes",
@@ -372,6 +374,7 @@ SCREEN_ICONS = {
     "Draft Center": "📋",
     "ERP Health Check": "🩺",
     "Download App": "⬇️",
+    "Approval Inbox": "✅",
     "Approval Designer": "✅",
     "Mobile Approvals": "📱",
     "Price Lists": "💲",
@@ -380,12 +383,12 @@ SCREEN_ICONS = {
 }
 
 NAV_GROUPS = {
-    "Overview": ["Dashboard", "Business Overview", "Download App"],
+    "Overview": ["Dashboard", "Business Overview", "Approval Inbox", "Download App"],
     "Masters": ["Customers", "Suppliers", "Products", "Account & Item Groups", "Warehouses", "Employees", "Price Lists"],
     "Sales": ["Sales Invoices", "Sale Approval", "Sales Returns", "Sales Orders", "Quotations", "Distributor Orders", "Distribution"],
     "Purchases": ["Purchase Invoices", "Purchase Approval", "Purchase Returns", "GRN", "Purchase Orders"],
     "Inventory": ["Stock", "Stock Adjustments", "Stock Revaluation", "Stock Report"],
-    "Production": ["BOM", "Daily Production", "Production Orders", "Job Cards",
+    "Production": ["BOM", "Daily Production", "Plant Shift", "Production Orders", "Job Cards",
                    "Corrugated Production", "Gravure / Packaging", "PET Bottle Blowing",
                    "Plant Maintenance", "Industrial Warehouse", "Dispatch Planning",
                    "Industrial Dashboards", "Industrial Reports"],
@@ -408,6 +411,7 @@ NAV_GROUPS = {
 SCREEN_PERMISSION = {
     "Dashboard": "Dashboard",
     "Business Overview": "Dashboard",
+    "Approval Inbox": "Dashboard",
     "Download App": "Dashboard",
     "Customers": "Masters", "Suppliers": "Masters", "Products": "Masters", "Items / Products": "Masters",
     "Product Categories": "Masters", "Account & Item Groups": "Masters", "Custom Groups": "Masters",
@@ -431,6 +435,7 @@ SCREEN_PERMISSION = {
     "Batch Stock": "Inventory", "Stock Report": "Reports",
     "Weight Slips": "Inventory",
     "BOM": "Production", "BOM / Formula": "Production", "Daily Production": "Production",
+    "Plant Shift": "Production",
     "Production Orders": "Production", "Batch Manufacturing": "Production",
     "Job Cards": "Production", "Machines": "Production",
     "Formula Master": "Production", "Spray Dryer": "Production",
@@ -730,12 +735,9 @@ def _render_nav_icon_grid(
                 with col:
                     icon = _icon_for(item, icons_map)
                     label = label_fn(item) if label_fn else item
-                    st.markdown(
-                        f'<p class="erp-nav-ico">{icon}</p>',
-                        unsafe_allow_html=True,
-                    )
+                    btn_label = f"{icon}  {label}" if icon else label
                     if st.button(
-                        label,
+                        btn_label,
                         key=f"{key_prefix}_{item}",
                         use_container_width=True,
                         type="primary" if item == current else "secondary",

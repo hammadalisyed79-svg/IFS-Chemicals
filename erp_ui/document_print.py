@@ -1872,7 +1872,7 @@ def document_print_toolbar(doc_type, doc_id, key_prefix="doc", vch_source=None, 
     if suffix:
         pdf_fname = pdf_fname.replace(".pdf", f"{suffix}.pdf")
 
-    c1, c2, c3 = st.columns(3)
+    c1, c2, c3, c4 = st.columns(4)
     c1.download_button("Print (HTML)", html.encode("utf-8"), f"{fname}.html", "text/html", key=f"{key_prefix}_h{suffix}")
     if c2.button("Open Print Dialog", key=f"{key_prefix}_pr{suffix}"):
         components.html(html.replace("</body>", "<script>window.onload=function(){window.print();}</script></body>"), height=0)
@@ -1914,6 +1914,16 @@ def document_print_toolbar(doc_type, doc_id, key_prefix="doc", vch_source=None, 
         )
         if pdf_err:
             st.caption(f"PDF unavailable: {pdf_err}")
+
+    try:
+        from urllib.parse import quote
+        share_bits = [preview_title]
+        if party_name:
+            share_bits.append(str(party_name).strip())
+        wa_url = f"https://wa.me/?text={quote(' — '.join(share_bits))}"
+        c4.link_button("WhatsApp", wa_url, use_container_width=True)
+    except Exception:
+        c4.caption("—")
 
     # Gate Pass: one-click duplicate / dual print on the same screen
     if doc_type == "Gate Pass" and not duplicate and not dual:

@@ -360,6 +360,23 @@ section[data-testid="stSidebar"] [data-testid="stBaseButton-headerNoPadding"] sv
   opacity: 0.8;
   line-height: 1.35;
 }}
+.dash-kpi-compact {{
+  min-height: 4.5rem !important;
+  padding: 0.55rem 0.65rem !important;
+  margin-bottom: 0.35rem !important;
+}}
+.dash-kpi-compact .dash-kpi-title {{
+  font-size: 0.68rem !important;
+}}
+.dash-kpi-compact .dash-kpi-value {{
+  font-size: 1.05rem !important;
+}}
+.erp-shell-sub-only {{
+  font-size: 0.88rem !important;
+  color: {BLACK} !important;
+  margin: 0.15rem 0 0.35rem 0 !important;
+  font-weight: 500 !important;
+}}
 .dash-alert {{
   background: {RED_LIGHT};
   border-left: 4px solid {RED};
@@ -376,14 +393,20 @@ section[data-testid="stSidebar"] [data-testid="stBaseButton-headerNoPadding"] sv
   border-left: 4px solid {BLUE};
 }}
 
-/* Buttons */
+/* Buttons — WCAG: white text on red primary */
 .stButton > button[kind="primary"],
 .stButton > button[data-testid="baseButton-primary"] {{
   background: {RED} !important;
-  color: {BLACK} !important;
+  color: {WHITE} !important;
   border: 2px solid {RED_DARK} !important;
   font-weight: 700 !important;
   border-radius: 8px !important;
+}}
+.stButton > button[kind="primary"] *,
+.stButton > button[data-testid="baseButton-primary"] *,
+.stButton > button[kind="primary"] p,
+.stButton > button[data-testid="baseButton-primary"] p {{
+  color: {WHITE} !important;
 }}
 .stButton > button[kind="secondary"],
 .stButton > button:not([kind="primary"]) {{
@@ -395,6 +418,10 @@ section[data-testid="stSidebar"] [data-testid="stBaseButton-headerNoPadding"] sv
 }}
 .stButton > button:hover {{
   border-color: {RED} !important;
+}}
+.stButton > button:focus-visible {{
+  outline: 3px solid {BLUE} !important;
+  outline-offset: 2px !important;
 }}
 
 /* Tabs */
@@ -411,7 +438,7 @@ section[data-testid="stSidebar"] [data-testid="stBaseButton-headerNoPadding"] sv
 }}
 [data-testid="stTabs"] [data-baseweb="tab"][aria-selected="true"] {{
   background-color: {RED} !important;
-  color: {BLACK} !important;
+  color: {WHITE} !important;
   border-color: {RED_DARK} !important;
   border-bottom: 2px solid {RED} !important;
   font-weight: 700 !important;
@@ -743,6 +770,21 @@ div[class*="st-key-mod_chips_row"] .stButton > button:not([kind="primary"]) {{
 .txn-reg-table .txn-status-cell {{
   white-space: nowrap;
 }}
+section.main:has(.erp-density-compact) .txn-reg-table thead th,
+section.main:has(.erp-density-compact) .txn-reg-table tbody td {{
+  padding: 0.28rem 0.45rem !important;
+  font-size: 0.78rem !important;
+  line-height: 1.25 !important;
+}}
+section.main:has(.erp-density-compact) .txn-kpi-card {{
+  padding: 0.35rem 0.55rem !important;
+}}
+section.main:has(.erp-density-compact) .txn-kpi-val {{
+  font-size: 1rem !important;
+}}
+section.main:has(.erp-density-compact) .txn-filter-box {{
+  margin-bottom: 0.35rem !important;
+}}
 .erp-section-tabs {{
   margin: 0.25rem 0 0.65rem 0;
 }}
@@ -795,6 +837,60 @@ div[class*="st-key-mod_chips_row"] .stButton > button:not([kind="primary"]) {{
   font-size: 0.75rem !important;
 }}
 
+.erp-shell-crumb-active {{
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: {BLUE_DARK} !important;
+  margin: 0.15rem 0;
+  padding: 0.35rem 0.5rem;
+  background: {BLUE_LIGHT};
+  border-radius: 6px;
+  text-align: center;
+}}
+.erp-empty-state {{
+  background: {WHITE};
+  border: 2px dashed {BLUE};
+  border-radius: 10px;
+  padding: 1.25rem 1rem;
+  margin: 0.5rem 0 0.75rem 0;
+  text-align: center;
+}}
+.erp-empty-state p {{
+  color: {BLACK} !important;
+  margin: 0;
+  font-size: 0.92rem;
+}}
+.erp-field-error {{
+  color: {RED_DARK} !important;
+  background: {RED_LIGHT};
+  border-left: 4px solid {RED};
+  padding: 0.45rem 0.65rem;
+  border-radius: 6px;
+  margin: 0.35rem 0;
+  font-size: 0.88rem;
+  font-weight: 600;
+}}
+.erp-stock-policy-banner {{
+  background: #FEF3C7;
+  border: 1px solid #F59E0B;
+  border-left: 4px solid #D97706;
+  color: {BLACK} !important;
+  padding: 0.5rem 0.75rem;
+  border-radius: 8px;
+  margin: 0.35rem 0 0.55rem 0;
+  font-size: 0.86rem;
+}}
+.erp-shell-action-bar-marker + div[data-testid="stVerticalBlock"] {{
+  position: sticky;
+  bottom: 0;
+  z-index: 40;
+  background: {WHITE};
+  border-top: 2px solid {BLUE};
+  padding: 0.5rem 0.25rem 0.25rem;
+  margin-top: 0.5rem;
+  box-shadow: 0 -4px 12px rgba(15, 23, 42, 0.08);
+}}
+
 div[class*="st-key-rpt_nav_sidebar"] h5 {{
   text-transform: none !important;
   letter-spacing: normal !important;
@@ -804,6 +900,73 @@ div[class*="st-key-rpt_nav_sidebar"] h5 {{
   padding: 0 !important;
   margin: 0.5rem 0 0.2rem 0 !important;
   font-size: 0.82rem !important;
+}}
+
+/* Internal ERP dialogs — light card, dark text (matches portal readability) */
+body:not(:has(.erp-portal-root)) [data-testid="stDialog"],
+body:not(:has(.erp-portal-root)) div[role="dialog"],
+[data-testid="stDialog"]:has(.erp-dialog-card),
+div[role="dialog"]:has(.erp-dialog-card) {{
+  color: {BLACK} !important;
+}}
+body:not(:has(.erp-portal-root)) [data-testid="stDialog"] > div,
+body:not(:has(.erp-portal-root)) div[role="dialog"] > div,
+[data-testid="stDialog"]:has(.erp-dialog-card) > div,
+div[role="dialog"]:has(.erp-dialog-card) > div,
+[data-testid="stDialog"]:has(.erp-dialog-card) [data-testid="stVerticalBlockBorderWrapper"],
+div[role="dialog"]:has(.erp-dialog-card) [data-testid="stVerticalBlockBorderWrapper"] {{
+  background: {WHITE} !important;
+  background-color: {WHITE} !important;
+  color: {BLACK} !important;
+  border-color: {BORDER} !important;
+}}
+body:not(:has(.erp-portal-root)) [data-testid="stDialog"] [data-testid="stMarkdownContainer"],
+body:not(:has(.erp-portal-root)) div[role="dialog"] [data-testid="stMarkdownContainer"],
+[data-testid="stDialog"]:has(.erp-dialog-card) [data-testid="stMarkdownContainer"],
+div[role="dialog"]:has(.erp-dialog-card) [data-testid="stMarkdownContainer"],
+body:not(:has(.erp-portal-root)) [data-testid="stDialog"] [data-testid="stMarkdownContainer"] p,
+body:not(:has(.erp-portal-root)) [data-testid="stDialog"] [data-testid="stMarkdownContainer"] span,
+body:not(:has(.erp-portal-root)) [data-testid="stDialog"] [data-testid="stMarkdownContainer"] strong,
+body:not(:has(.erp-portal-root)) div[role="dialog"] [data-testid="stMarkdownContainer"] p,
+body:not(:has(.erp-portal-root)) div[role="dialog"] [data-testid="stMarkdownContainer"] span,
+body:not(:has(.erp-portal-root)) div[role="dialog"] [data-testid="stMarkdownContainer"] strong,
+[data-testid="stDialog"]:has(.erp-dialog-card) *,
+div[role="dialog"]:has(.erp-dialog-card) * {{
+  color: {BLACK} !important;
+}}
+body:not(:has(.erp-portal-root)) [data-testid="stDialog"] h1,
+body:not(:has(.erp-portal-root)) [data-testid="stDialog"] h2,
+body:not(:has(.erp-portal-root)) [data-testid="stDialog"] h3,
+body:not(:has(.erp-portal-root)) div[role="dialog"] h1,
+body:not(:has(.erp-portal-root)) div[role="dialog"] h2,
+body:not(:has(.erp-portal-root)) div[role="dialog"] h3,
+[data-testid="stDialog"]:has(.erp-dialog-card) h1,
+[data-testid="stDialog"]:has(.erp-dialog-card) h2,
+[data-testid="stDialog"]:has(.erp-dialog-card) h3 {{
+  color: {BLUE_DARK} !important;
+}}
+body:not(:has(.erp-portal-root)) [data-testid="stDialog"] .stButton > button[kind="primary"],
+body:not(:has(.erp-portal-root)) div[role="dialog"] .stButton > button[kind="primary"],
+body:not(:has(.erp-portal-root)) div[role="dialog"] .stButton > button[data-testid="baseButton-primary"],
+[data-testid="stDialog"]:has(.erp-dialog-card) .stButton > button[kind="primary"],
+[data-testid="stDialog"]:has(.erp-dialog-card) .stButton > button[data-testid="baseButton-primary"] {{
+  background: {RED} !important;
+  border: 2px solid {RED_DARK} !important;
+  color: {WHITE} !important;
+}}
+body:not(:has(.erp-portal-root)) [data-testid="stDialog"] .stButton > button[kind="primary"] *,
+body:not(:has(.erp-portal-root)) div[role="dialog"] .stButton > button[kind="primary"] *,
+[data-testid="stDialog"]:has(.erp-dialog-card) .stButton > button[kind="primary"] * {{
+  color: {WHITE} !important;
+}}
+body:not(:has(.erp-portal-root)) [data-testid="stDialog"] input,
+body:not(:has(.erp-portal-root)) [data-testid="stDialog"] textarea,
+body:not(:has(.erp-portal-root)) div[role="dialog"] input,
+body:not(:has(.erp-portal-root)) div[role="dialog"] textarea,
+[data-testid="stDialog"]:has(.erp-dialog-card) input,
+[data-testid="stDialog"]:has(.erp-dialog-card) textarea {{
+  background: {WHITE} !important;
+  color: {BLACK} !important;
 }}
 </style>
 """
@@ -827,3 +990,44 @@ GROUP_TILE_STYLE = {
     "Reports": TILE_WHITE,
     "Administration": TILE_RED,
 }
+
+
+_WEIGHBRIDGE_KIOSK_CSS = """
+<style>
+section.main:has(.erp-wb-kiosk) button[kind="primary"],
+section.main:has(.erp-wb-kiosk) button[data-testid="baseButton-primary"] {
+  min-height: 3.25rem !important;
+  font-size: 1.05rem !important;
+  font-weight: 700 !important;
+  padding: 0.65rem 1.35rem !important;
+}
+section.main:has(.erp-wb-kiosk) button[kind="secondary"],
+section.main:has(.erp-wb-kiosk) button[data-testid="baseButton-secondary"] {
+  min-height: 2.85rem !important;
+  font-size: 1rem !important;
+  padding: 0.55rem 1.1rem !important;
+}
+section.main:has(.erp-wb-kiosk) input,
+section.main:has(.erp-wb-kiosk) textarea {
+  font-size: 1.05rem !important;
+  min-height: 2.75rem !important;
+}
+section.main:has(.erp-wb-kiosk) [data-baseweb="select"] {
+  font-size: 1.05rem !important;
+}
+section.main:has(.erp-wb-kiosk) .stNumberInput input {
+  font-size: 1.2rem !important;
+  font-weight: 700 !important;
+}
+</style>
+"""
+
+
+def inject_weighbridge_kiosk_css() -> None:
+    import streamlit as st
+
+    st.markdown(
+        _WEIGHBRIDGE_KIOSK_CSS
+        + '<div class="erp-wb-kiosk erp-css-inject" aria-hidden="true">&#8203;</div>',
+        unsafe_allow_html=True,
+    )

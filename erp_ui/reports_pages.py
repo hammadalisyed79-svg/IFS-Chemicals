@@ -290,6 +290,29 @@ def _period_preset_bar(key_prefix: str = "rpt"):
             st.session_state.pop("rpt_result", None)
             st.session_state.pop("rpt_meta", None)
             st.rerun()
+    s1, s2, s3 = st.columns([1, 1, 3])
+    if s1.button("Save period", key=f"{key_prefix}_save_period", help="Remember From/To for next visit"):
+        st.session_state["rpt_saved_period"] = {
+            "fd": st.session_state.get("rpt_fd"),
+            "td": st.session_state.get("rpt_td"),
+            "report": st.session_state.get("rpt_report"),
+        }
+        st.toast("Period preset saved.")
+    if s2.button("Load saved", key=f"{key_prefix}_load_period", disabled="rpt_saved_period" not in st.session_state):
+        saved = st.session_state.get("rpt_saved_period") or {}
+        if saved.get("fd") is not None:
+            st.session_state["rpt_fd"] = saved["fd"]
+        if saved.get("td") is not None:
+            st.session_state["rpt_td"] = saved["td"]
+        if saved.get("report"):
+            st.session_state["rpt_nav_to"] = saved["report"]
+        st.rerun()
+    saved = st.session_state.get("rpt_saved_period")
+    if saved:
+        s3.caption(
+            f"Saved preset: **{saved.get('report') or 'current'}** "
+            f"{saved.get('fd') or '…'} → {saved.get('td') or '…'}"
+        )
 
 
 def _report_search_matches(query: str) -> list[str]:

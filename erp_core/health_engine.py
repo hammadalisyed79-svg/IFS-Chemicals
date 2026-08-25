@@ -103,7 +103,16 @@ def _run_v15_checks(rep: HealthReport) -> None:
     _check(rep, "V15 Mobile", "Streamlit config exists", lambda: _assert_file(os.path.join(root, ".streamlit", "config.toml")))
     _check(rep, "V15 Portal", "portal_app.py exists", lambda: _assert_file(os.path.join(root, "portal_app.py")))
     _check(rep, "V15 Portal", "Portal routes module", lambda: __import__("erp_ui.portal_pages"))
-    _check(rep, "V15 Security", "Deployment guides exist", lambda: _assert_file(os.path.join(root, "DEPLOYMENT_SERVER_GUIDE.md")))
+    _check(
+        rep,
+        "V15 Security",
+        "Deployment guides exist",
+        lambda: _assert_file_any(
+            os.path.join(root, "DEPLOYMENT_SERVER_GUIDE.md"),
+            os.path.join(root, "archive", "docs", "DEPLOYMENT_SERVER_GUIDE.md"),
+            os.path.join(root, "SECURITY_DEPLOYMENT_GUIDE.md"),
+        ),
+    )
     _check(rep, "V15 Database", "Notification table", lambda: _assert_table("erp_notifications"))
     _check(rep, "V15 Database", "Portal orders table", lambda: _assert_table("portal_orders"))
     _check(rep, "V15 Database", "Price lists table", lambda: _assert_table("price_lists"))
@@ -116,6 +125,13 @@ def _run_v15_checks(rep: HealthReport) -> None:
 
 def _assert_file(path: str) -> None:
     assert os.path.isfile(path), f"Missing {path}"
+
+
+def _assert_file_any(*paths: str) -> None:
+    for path in paths:
+        if os.path.isfile(path):
+            return
+    assert False, f"Missing any of: {', '.join(paths)}"
 
 
 def _assert_table(name: str) -> None:

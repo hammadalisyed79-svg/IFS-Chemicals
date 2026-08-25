@@ -139,6 +139,8 @@ def invoice_status_banner(kind: str, doc: dict | None):
         """,
         unsafe_allow_html=True,
     )
+    from erp_ui.voucher_validation import render_document_audit_meta
+    render_document_audit_meta(doc)
 
 
 def weight_status_badge(status: str | None) -> str:
@@ -175,6 +177,8 @@ def render_invoice_review(kind: str, inv_id: int, *, show_print: bool = True, ke
 
     # Unique widget namespace for this review instance (print buttons, etc.)
     kp = key_prefix or f"{kind}_rev_{inv_id}"
+    from erp_ui.voucher_validation import render_stock_policy_banner
+    render_stock_policy_banner()
     invoice_status_banner(kind, inv)
 
     st.markdown("##### Invoice Lines")

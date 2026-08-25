@@ -17,6 +17,15 @@ STATUS_OPTIONS = ["All", "draft", "pending_approval", "approved", "rejected", "c
 DOC_STATUS_OPTIONS = ["All", "draft", "open", "partial", "posted", "approved", "converted", "sent", "closed", "cancelled", "rejected", "pending_approval"]
 PAYMENT_OPTIONS = ["All", "credit", "cash", "bank"]
 PAGE_SIZES = [25, 50, 100, 200]
+REGISTER_SORT_OPTIONS = {
+    "Workflow (pending first)": "workflow",
+    "Date ↓ newest": "date_desc",
+    "Date ↑ oldest": "date_asc",
+    "Amount ↓ high": "amount_desc",
+    "Amount ↑ low": "amount_asc",
+    "Party A–Z": "party",
+    "Status": "status",
+}
 PERIOD_PRESETS = {
     "Today": "today",
     "This Month": "month",
@@ -25,6 +34,31 @@ PERIOD_PRESETS = {
     "This Year": "year",
     "All Time": "all",
 }
+
+
+@st.cache_data(ttl=60, show_spinner=False)
+def _cached_customer_party_opts():
+    # Return list of tuples (pickle-safe); callers convert with dict(...).
+    return [
+        (f"{r['code']} - {r['name']}", int(r["id"]))
+        for r in db.get_customers()
+    ]
+
+
+@st.cache_data(ttl=60, show_spinner=False)
+def _cached_supplier_party_opts():
+    return [
+        (f"{r['code']} - {r['name']}", int(r["id"]))
+        for r in db.get_suppliers()
+    ]
+
+
+def customer_party_opts():
+    return dict(_cached_customer_party_opts())
+
+
+def supplier_party_opts():
+    return dict(_cached_supplier_party_opts())
 
 
 def _period_dates(preset):
@@ -138,6 +172,78 @@ def _build_df(items, columns):
     return pd.DataFrame(rows)
 
 
+def _sort_items_client(items: list, sort_key: str | None) -> list:
+    """Sort register rows (current page / export batch) when SQL sort is unavailable."""
+    key = (sort_key or "workflow").strip().lower()
+    if not items or key == "workflow":
+        status_rank = {
+            "pending_approval": 0,
+            "draft": 1,
+            "rejected": 2,
+            "open": 3,
+            "partial": 4,
+        }
+        return sorted(
+            items,
+            key=lambda r: (
+                status_rank.get((r.get("status") or "draft").lower(), 9),
+                str(_row_date(r)),
+                int(r.get("id") or 0),
+            ),
+        )
+
+    def amount(r):
+        return float(r.get("total") or 0)
+
+    if key == "date_asc":
+        return sorted(items, key=lambda r: (str(_row_date(r)), int(r.get("id") or 0)))
+    if key == "date_desc":
+        return sorted(
+            items,
+            key=lambda r: (str(_row_date(r)), int(r.get("id") or 0)),
+            reverse=True,
+        )
+    if key == "amount_desc":
+        return sorted(items, key=lambda r: (amount(r), int(r.get("id") or 0)), reverse=True)
+    if key == "amount_asc":
+        return sorted(items, key=lambda r: (amount(r), int(r.get("id") or 0)))
+    if key == "party":
+        return sorted(
+            items,
+            key=lambda r: (_row_party(r).lower(), str(_row_date(r)), int(r.get("id") or 0)),
+        )
+    if key == "status":
+        return sorted(
+            items,
+            key=lambda r: (
+                str(r.get("status") or "").lower(),
+                str(_row_date(r)),
+                int(r.get("id") or 0),
+            ),
+        )
+    return items
+
+
+def _row_date(row: dict) -> str:
+    for field in (
+        "sale_date", "purchase_date", "order_date", "invoice_date",
+        "document_date", "dn_date", "grn_date", "quotation_date",
+    ):
+        val = row.get(field)
+        if val:
+            return str(val)[:10]
+    return ""
+
+
+def _row_party(row: dict) -> str:
+    return (
+        row.get("customer_name")
+        or row.get("supplier_name")
+        or row.get("party_name")
+        or ""
+    )
+
+
 def _filter_bar(key_prefix, party_label, party_options, default_period="Today",
                 show_payment=True, show_status=True, status_options=None):
     status_options = status_options or STATUS_OPTIONS
@@ -214,6 +320,52 @@ def _filter_bar(key_prefix, party_label, party_options, default_period="Today",
         page_size = c6.selectbox("Rows", PAGE_SIZES, index=1, key=f"{key_prefix}_ps")
         c7.caption("")
 
+    sort_labels = list(REGISTER_SORT_OPTIONS.keys())
+    from erp_ui.register_prefs import (
+        apply_register_filter,
+        capture_filter_widgets,
+        is_density_compact,
+        list_saved_filters,
+        save_register_filter,
+        set_density_compact,
+    )
+
+    r1, r2, r3, r4, r5, r6 = st.columns([1.6, 0.9, 1.2, 1.0, 1.0, 1.0])
+    sort_label = r1.selectbox("Sort", sort_labels, key=f"{key_prefix}_sort_label")
+    sort_key = REGISTER_SORT_OPTIONS[sort_label]
+    compact = r2.checkbox(
+        "Compact",
+        value=is_density_compact(),
+        key=f"{key_prefix}_compact",
+        help="Dense register rows — more lines on screen",
+    )
+    set_density_compact(compact)
+    saved = list_saved_filters(key_prefix)
+    save_name = r3.text_input(
+        "Save filter as",
+        key=f"{key_prefix}_save_name",
+        placeholder="e.g. This month + customer",
+        label_visibility="collapsed",
+    )
+    r3.caption("Save filter")
+    if r4.button("Save", key=f"{key_prefix}_save_btn", use_container_width=True):
+        snap = capture_filter_widgets(key_prefix)
+        save_register_filter(key_prefix, save_name or "Saved filter", snap)
+        st.toast("Filter saved for this register.")
+    load_labels = ["— Load saved —"] + [s.get("label") or "Saved" for s in saved]
+    load_sel = r5.selectbox(
+        "Saved",
+        load_labels,
+        key=f"{key_prefix}_load_sel",
+        label_visibility="collapsed",
+    )
+    r5.caption("Saved filters")
+    if r6.button("Load", key=f"{key_prefix}_load_btn", use_container_width=True, disabled=load_sel == "— Load saved —"):
+        match = next((s for s in saved if s.get("label") == load_sel), None)
+        if match:
+            apply_register_filter(key_prefix, match.get("snapshot") or {})
+            st.rerun()
+
     st.markdown("</div>", unsafe_allow_html=True)
 
     return {
@@ -224,6 +376,8 @@ def _filter_bar(key_prefix, party_label, party_options, default_period="Today",
         "status": status,
         "payment_mode": payment,
         "page_size": page_size,
+        "sort": sort_key,
+        "compact": compact,
     }
 
 
@@ -265,6 +419,9 @@ def _register_core(
     kpi_labels=("Records (filtered)", "Total Amount", "Paid / Received"),
     show_kpi_paid=True,
     open_handler=None,
+    empty_message: str | None = None,
+    empty_cta_label: str | None = None,
+    empty_cta_fn=None,
 ):
     filter_sig = tuple(sorted((k, str(v)) for k, v in filters.items()))
     if st.session_state.get(f"{key_prefix}_fsig") != filter_sig:
@@ -283,11 +440,40 @@ def _register_core(
         kw[party_kw] = filters["party_id"]
     if filters.get("payment_mode") and filters["payment_mode"] != "All":
         kw["payment_mode"] = filters["payment_mode"]
-    result = search_fn(**kw)
+    if filters.get("sort"):
+        kw["sort"] = filters["sort"]
+    try:
+        result = search_fn(**kw)
+    except TypeError:
+        kw.pop("sort", None)
+        result = search_fn(**kw)
     st.session_state[f"{key_prefix}_page"] = result["page"]
+
+    items = _sort_items_client(result["items"], filters.get("sort"))
+    result = dict(result)
+    result["items"] = items
+
+    if filters.get("compact"):
+        st.markdown(
+            '<div class="erp-density-compact erp-css-inject" aria-hidden="true">&#8203;</div>',
+            unsafe_allow_html=True,
+        )
 
     items = result["items"]
     _status_counts_strip(items)
+
+    tb1, tb2 = st.columns([1, 4])
+    with tb1:
+        if st.button("Export all filtered", key=f"{key_prefix}_tb_export", use_container_width=True):
+            full_kw = {k: v for k, v in kw.items() if k not in ("page", "page_size")}
+            try:
+                full = search_fn(**full_kw, export_all=True)
+            except TypeError:
+                full_kw.pop("sort", None)
+                full = search_fn(**full_kw, export_all=True)
+            full_items = _sort_items_client(full["items"], filters.get("sort"))
+            _export_df(_build_df(full_items, columns), export_name, export_title)
+    tb2.caption("Excel, PDF, and print — all rows matching filters (not just this page).")
 
     has_status_col = any(c.get("format") == "status" for c in columns)
     k1, k2, k3 = st.columns(3)
@@ -311,26 +497,45 @@ def _register_core(
         k3.markdown("")
 
     if not items:
-        st.info("No records match your filters.")
+        msg = empty_message or "No records match your filters."
+        st.markdown(
+            f'<div class="erp-empty-state"><p>{msg}</p></div>',
+            unsafe_allow_html=True,
+        )
+        if empty_cta_label and empty_cta_fn:
+            if st.button(empty_cta_label, type="primary", key=f"{key_prefix}_empty_cta"):
+                empty_cta_fn()
+                st.rerun()
         return None
 
     if has_status_col:
         _render_register_html_table(items, columns)
     else:
         hlp.render_dataframe_html_table(_build_df(items, columns))
-    _pagination(key_prefix, result)
 
-    exp_col, sel_col = st.columns([1, 2])
-    with exp_col:
-        if st.button("Export filtered (all pages)", key=f"{key_prefix}_export"):
-            full_kw = {k: v for k, v in kw.items() if k not in ("page", "page_size")}
-            full = search_fn(**full_kw, export_all=True)
-            _export_df(_build_df(full["items"], columns), export_name, export_title)
+    if open_handler:
+        quick_n = min(len(items), 10)
+        if quick_n:
+            st.caption("Quick open (current page)")
+            for r in items[:quick_n]:
+                oc1, oc2 = st.columns([1, 5])
+                with oc1:
+                    if st.button(
+                        "Open",
+                        key=f"{key_prefix}_qopen_{r.get('id', r.get('invoice_no', ''))}",
+                        use_container_width=True,
+                    ):
+                        open_handler(r)
+                        st.rerun()
+                with oc2:
+                    st.markdown(f"**{row_label_fn(r)}**")
+            if len(items) > quick_n:
+                st.caption(f"Showing quick open for first {quick_n} rows — use selector below for others.")
+    _pagination(key_prefix, result)
 
     labels = [row_label_fn(r) for r in items]
     id_map = {labels[i]: items[i] for i in range(len(labels))}
-    with sel_col:
-        sel = st.selectbox("Select record for actions", labels, key=f"{key_prefix}_sel")
+    sel = st.selectbox("Select record for actions", labels, key=f"{key_prefix}_sel")
     selected = id_map.get(sel)
 
     if selected:
@@ -378,12 +583,16 @@ def transaction_register(
     action_panel=None,
     default_period="Today",
     open_handler=None,
+    empty_message: str | None = None,
+    empty_cta_label: str | None = None,
+    empty_cta_fn=None,
 ):
     filters = _filter_bar(key_prefix, party_label, party_options, default_period, show_payment=True)
     party_kw = "customer_id" if party_label == "Customer" else "supplier_id"
     return _register_core(
         key_prefix, search_fn, columns, row_label_fn, export_name, export_title,
         filters, party_kw, action_panel, open_handler=open_handler,
+        empty_message=empty_message, empty_cta_label=empty_cta_label, empty_cta_fn=empty_cta_fn,
     )
 
 
@@ -402,6 +611,9 @@ def document_register(
     status_options=None,
     kpi_labels=("Records (filtered)", "Total Amount", None),
     open_handler=None,
+    empty_message: str | None = None,
+    empty_cta_label: str | None = None,
+    empty_cta_fn=None,
 ):
     filters = _filter_bar(
         key_prefix, party_label, party_options, default_period,
@@ -413,6 +625,7 @@ def document_register(
         key_prefix, search_fn, columns, row_label_fn, export_name, export_title,
         filters, party_kw, action_panel, kpi_labels=kpi_labels, show_kpi_paid=False,
         open_handler=open_handler,
+        empty_message=empty_message, empty_cta_label=empty_cta_label, empty_cta_fn=empty_cta_fn,
     )
 
 
@@ -487,8 +700,10 @@ def linked_invoice_picker(key_prefix, search_fn, party_id, party_kw, row_label_f
     return opts[sel]
 
 
-def sales_register_list(action_panel=None):
-    party_opts = {f"{r['code']} - {r['name']}": r["id"] for r in db.get_customers()}
+def sales_register_list(action_panel=None, open_handler=None):
+    from erp_ui.doc_workflow import go_sale_new, open_sale_from_register
+
+    party_opts = customer_party_opts()
     cols = [
         {"field": "invoice_no", "label": "Invoice"},
         {"field": "sale_date", "label": "Date / Time", "format": "datetime"},
@@ -498,6 +713,7 @@ def sales_register_list(action_panel=None):
         {"field": "paid_amount", "label": "Paid", "format": "money"},
         {"field": "payment_mode", "label": "Payment"},
     ]
+    handler = open_handler or open_sale_from_register
     return transaction_register(
         "sal_reg",
         db.search_sales_invoices,
@@ -512,11 +728,17 @@ def sales_register_list(action_panel=None):
         "Sales Register",
         _export_df,
         action_panel=action_panel,
+        open_handler=handler,
+        empty_message="No sales invoices match your filters.",
+        empty_cta_label="New Sale",
+        empty_cta_fn=go_sale_new,
     )
 
 
-def purchase_register_list(action_panel=None):
-    party_opts = {f"{r['code']} - {r['name']}": r["id"] for r in db.get_suppliers()}
+def purchase_register_list(action_panel=None, open_handler=None):
+    from erp_ui.doc_workflow import go_purchase_new, open_purchase_from_register
+
+    party_opts = supplier_party_opts()
     cols = [
         {"field": "invoice_no", "label": "Invoice"},
         {"field": "purchase_date", "label": "Date / Time", "format": "datetime"},
@@ -526,6 +748,7 @@ def purchase_register_list(action_panel=None):
         {"field": "paid_amount", "label": "Paid", "format": "money"},
         {"field": "payment_mode", "label": "Payment"},
     ]
+    handler = open_handler or open_purchase_from_register
     return transaction_register(
         "pur_reg",
         db.search_purchases,
@@ -540,6 +763,10 @@ def purchase_register_list(action_panel=None):
         "Purchase Register",
         _export_df,
         action_panel=action_panel,
+        open_handler=handler,
+        empty_message="No purchase invoices match your filters.",
+        empty_cta_label="New Purchase",
+        empty_cta_fn=go_purchase_new,
     )
 
 
