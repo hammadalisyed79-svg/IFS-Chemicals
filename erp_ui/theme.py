@@ -835,6 +835,26 @@ div[class*="st-key-mod_chips_row"] .stButton > button:not([kind="primary"]) {{
   margin: 0;
   font-size: 0.92rem;
 }}
+.erp-field-error {{
+  color: {RED_DARK} !important;
+  background: {RED_LIGHT};
+  border-left: 4px solid {RED};
+  padding: 0.45rem 0.65rem;
+  border-radius: 6px;
+  margin: 0.35rem 0;
+  font-size: 0.88rem;
+  font-weight: 600;
+}}
+.erp-stock-policy-banner {{
+  background: #FEF3C7;
+  border: 1px solid #F59E0B;
+  border-left: 4px solid #D97706;
+  color: {BLACK} !important;
+  padding: 0.5rem 0.75rem;
+  border-radius: 8px;
+  margin: 0.35rem 0 0.55rem 0;
+  font-size: 0.86rem;
+}}
 .erp-shell-action-bar-marker + div[data-testid="stVerticalBlock"] {{
   position: sticky;
   bottom: 0;

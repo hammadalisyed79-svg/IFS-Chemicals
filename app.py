@@ -32,7 +32,7 @@ from erp_ui import job_card_pages as jc
 from erp_ui import attendance_simple as att
 from erp_ui import weighbridge_pages as wb
 from erp_ui import gatepass_pages as gp
-from erp_ui import invoice_workflow_pages as iwf
+from erp_ui import approval_inbox as appr_inbox
 from erp_ui import reports_pages as reports
 from erp_ui import audit_pages as audit
 from erp_ui import holiday_pages as hol
@@ -1206,6 +1206,19 @@ def page_purchases():
         st.write(f"**Net Invoice:** {fmt_money(totals['total'])}")
         st.session_state["pur_header"] = header
 
+        from erp_ui.voucher_validation import (
+            collect_purchase_issues,
+            render_validation_panel,
+            render_stock_policy_banner,
+        )
+        if ws_id and not direct_pur:
+            header["weight_slip_id"] = ws_id
+        render_stock_policy_banner()
+        pur_vr = collect_purchase_issues(
+            header, lines, totals, direct_purchase=direct_pur,
+        )
+        render_validation_panel(pur_vr)
+
         st.markdown('<div class="erp-shell-action-bar-marker"></div>', unsafe_allow_html=True)
         with st.container(key="pur_new_act_bar"):
             c_save, c_tot = st.columns([1, 2])
@@ -1216,7 +1229,12 @@ def page_purchases():
 
         section_step("Save", 4)
         if save_clicked:
-            if not lines:
+            pur_vr = collect_purchase_issues(
+                header, lines, totals, direct_purchase=direct_pur,
+            )
+            if not pur_vr.ok:
+                render_validation_panel(pur_vr)
+            elif not lines:
                 st.error("Add at least one line item.")
             elif not direct_pur and not ws_id:
                 st.error("Complete weight on **Weight Scale**, then create invoice — weight slip is required.")
@@ -1364,8 +1382,23 @@ def page_purchases():
                 if gps:
                     st.caption(f"Linked inward gate pass: **{gps[0].get('document_no')}**")
             c1, c2, c3 = st.columns(3)
+            from erp_ui.voucher_validation import (
+                collect_purchase_issues,
+                render_validation_panel,
+                render_stock_policy_banner,
+            )
+            render_stock_policy_banner()
+            pur_edit_vr = collect_purchase_issues(
+                header, lines, totals, direct_purchase=direct_edit,
+            )
+            render_validation_panel(pur_edit_vr)
             if c1.button("Update Purchase", key="upd_pur", type="primary"):
-                if not lines:
+                pur_edit_vr = collect_purchase_issues(
+                    header, lines, totals, direct_purchase=direct_edit,
+                )
+                if not pur_edit_vr.ok:
+                    render_validation_panel(pur_edit_vr)
+                elif not lines:
                     st.error("Add at least one line item.")
                 elif not direct_edit and not header.get("weight_slip_id"):
                     st.error("Weight slip is required for this purchase.")
@@ -1379,17 +1412,23 @@ def page_purchases():
                     except Exception as e:
                         st.error(str(e))
             if c2.button("Submit for Approval", key="sub_pur"):
-                try:
-                    ff.run_with_loading(
-                        lambda: (
-                            db.save_purchase(header, lines, purchase_id=pid, user_id=hlp.uid()),
-                            db.submit_purchase_invoice(pid, hlp.uid()),
-                        ),
-                        "Submitting for approval…",
-                    )
-                    ff.finish_edit_refresh("pur_edit", pid, "pur_edit", "Submitted for approval.")
-                except Exception as e:
-                    st.error(str(e))
+                pur_edit_vr = collect_purchase_issues(
+                    header, lines, totals, direct_purchase=direct_edit, stage="approve",
+                )
+                if not pur_edit_vr.ok:
+                    render_validation_panel(pur_edit_vr)
+                else:
+                    try:
+                        ff.run_with_loading(
+                            lambda: (
+                                db.save_purchase(header, lines, purchase_id=pid, user_id=hlp.uid()),
+                                db.submit_purchase_invoice(pid, hlp.uid()),
+                            ),
+                            "Submitting for approval…",
+                        )
+                        ff.finish_edit_refresh("pur_edit", pid, "pur_edit", "Submitted for approval.")
+                    except Exception as e:
+                        st.error(str(e))
             if c3.button("Delete Purchase", key="del_pur"):
                 db.delete_purchase(pid)
                 ff.finish_after_delete("pur_edit", "pur_edit", "Purchase deleted.")
@@ -1748,6 +1787,17 @@ def page_sales():
         header["paid_amount"] = paid
         st.session_state["sal_header"] = header
 
+        from erp_ui.voucher_validation import (
+            collect_sale_issues,
+            render_validation_panel,
+            render_stock_policy_banner,
+        )
+        if ws_id and flow["show_weight"]:
+            header["weight_slip_id"] = ws_id
+        render_stock_policy_banner()
+        sal_vr = collect_sale_issues(header, lines, totals, flow=flow)
+        render_validation_panel(sal_vr)
+
         st.markdown('<div class="erp-shell-action-bar-marker"></div>', unsafe_allow_html=True)
         with st.container(key="sal_new_act_bar"):
             c_save, c_tot = st.columns([1, 2])
@@ -1758,7 +1808,10 @@ def page_sales():
 
         section_step("Save", 4)
         if save_clicked:
-            if not lines:
+            sal_vr = collect_sale_issues(header, lines, totals, flow=flow)
+            if not sal_vr.ok:
+                render_validation_panel(sal_vr)
+            elif not lines:
                 st.error("Add at least one line item.")
             elif flow["show_weight"] and not ws_id:
                 st.error("Complete weight on **Weight Scale**, then create invoice — weight slip is required.")
@@ -1942,8 +1995,19 @@ def page_sales():
                     if pay_cap:
                         st.markdown(pay_cap)
             c1, c2, c3 = st.columns(3)
+            from erp_ui.voucher_validation import (
+                collect_sale_issues,
+                render_validation_panel,
+                render_stock_policy_banner,
+            )
+            render_stock_policy_banner()
+            sal_edit_vr = collect_sale_issues(header, lines, totals, flow=flow_edit)
+            render_validation_panel(sal_edit_vr)
             if c1.button("Update Sale", key="upd_sal", type="primary"):
-                if not lines:
+                sal_edit_vr = collect_sale_issues(header, lines, totals, flow=flow_edit)
+                if not sal_edit_vr.ok:
+                    render_validation_panel(sal_edit_vr)
+                elif not lines:
                     st.error("Add at least one line item.")
                 elif flow_edit["show_weight"] and not header.get("weight_slip_id"):
                     st.error("Weight slip is required for this sale.")
@@ -1957,17 +2021,23 @@ def page_sales():
                     except Exception as e:
                         st.error(str(e))
             if c2.button("Submit for Approval", key="sub_sal"):
-                try:
-                    ff.run_with_loading(
-                        lambda: (
-                            db.save_sale(header, lines, sale_id=sid, user_id=hlp.uid()),
-                            db.submit_sale_invoice(sid, hlp.uid()),
-                        ),
-                        "Submitting for approval…",
-                    )
-                    ff.finish_edit_refresh("sal_edit", sid, "sal_edit", "Submitted for approval.")
-                except Exception as e:
-                    st.error(str(e))
+                sal_edit_vr = collect_sale_issues(
+                    header, lines, totals, flow=flow_edit, stage="approve",
+                )
+                if not sal_edit_vr.ok:
+                    render_validation_panel(sal_edit_vr)
+                else:
+                    try:
+                        ff.run_with_loading(
+                            lambda: (
+                                db.save_sale(header, lines, sale_id=sid, user_id=hlp.uid()),
+                                db.submit_sale_invoice(sid, hlp.uid()),
+                            ),
+                            "Submitting for approval…",
+                        )
+                        ff.finish_edit_refresh("sal_edit", sid, "sal_edit", "Submitted for approval.")
+                    except Exception as e:
+                        st.error(str(e))
             if c3.button("Delete Sale", key="del_sal"):
                 db.delete_sale(sid)
                 ff.finish_after_delete("sal_edit", "sal_edit", "Sale deleted.")
@@ -3072,6 +3142,7 @@ def page_backup_restore():
 PAGES = {
     "Dashboard": page_dashboard,
     "Business Overview": page_business_overview,
+    "Approval Inbox": appr_inbox.page_approval_inbox,
     "Customers": page_customers,
     "Suppliers": page_suppliers,
     "Products": page_items,

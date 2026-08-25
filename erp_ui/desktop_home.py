@@ -318,6 +318,7 @@ QUICK_ACTIONS = [
     ("Business Intelligence", "Overview", "Business Overview"),
     ("Reports", "Reports", "Reports Center"),
     ("Sale Approval", "Sales", "Sale Approval"),
+    ("Approval Inbox", "Overview", "Approval Inbox"),
     ("Purchase Approval", "Purchases", "Purchase Approval"),
     ("Sale", "Sales", "Sales Invoices"),
     ("Purchase", "Purchases", "Purchase Invoices"),

@@ -133,6 +133,7 @@ SCREEN_TITLES = {
     "Draft Center": "Drafts",
     "Approval Designer": "Approvals Setup",
     "Mobile Approvals": "Mobile Approve",
+    "Approval Inbox": "Approval Inbox",
     "Download App": "Download App",
     "ERP Health Check": "Health Check",
     "Audit Log": "Audit Log",
@@ -142,6 +143,7 @@ SCREEN_TITLES = {
 SCREEN_TAGLINES = {
     "Dashboard": "Main workspace",
     "Business Overview": "Live KPIs and alerts",
+    "Approval Inbox": "Pending sales, purchases & portal orders",
     "Customers": "Create and maintain records",
     "Suppliers": "Create and maintain records",
     "Products": "Items, rates and codes",
@@ -372,6 +374,7 @@ SCREEN_ICONS = {
     "Draft Center": "📋",
     "ERP Health Check": "🩺",
     "Download App": "⬇️",
+    "Approval Inbox": "✅",
     "Approval Designer": "✅",
     "Mobile Approvals": "📱",
     "Price Lists": "💲",
@@ -380,7 +383,7 @@ SCREEN_ICONS = {
 }
 
 NAV_GROUPS = {
-    "Overview": ["Dashboard", "Business Overview", "Download App"],
+    "Overview": ["Dashboard", "Business Overview", "Approval Inbox", "Download App"],
     "Masters": ["Customers", "Suppliers", "Products", "Account & Item Groups", "Warehouses", "Employees", "Price Lists"],
     "Sales": ["Sales Invoices", "Sale Approval", "Sales Returns", "Sales Orders", "Quotations", "Distributor Orders", "Distribution"],
     "Purchases": ["Purchase Invoices", "Purchase Approval", "Purchase Returns", "GRN", "Purchase Orders"],
@@ -408,6 +411,7 @@ NAV_GROUPS = {
 SCREEN_PERMISSION = {
     "Dashboard": "Dashboard",
     "Business Overview": "Dashboard",
+    "Approval Inbox": "Dashboard",
     "Download App": "Dashboard",
     "Customers": "Masters", "Suppliers": "Masters", "Products": "Masters", "Items / Products": "Masters",
     "Product Categories": "Masters", "Account & Item Groups": "Masters", "Custom Groups": "Masters",
