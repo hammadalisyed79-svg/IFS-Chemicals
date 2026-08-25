@@ -1751,6 +1751,7 @@ def search_purchases(
     page=1,
     page_size=50,
     export_all=False,
+    sort=None,
 ):
     """Paginated purchase register — server-side filters for large datasets."""
     page = max(1, int(page or 1))
@@ -1796,13 +1797,12 @@ def search_purchases(
         agg = conn.execute(
             f"SELECT COALESCE(SUM(p.total),0), COALESCE(SUM(p.paid_amount),0) {base}", params
         ).fetchone()
-        order_by = (
-            "CASE COALESCE(p.status,'draft') "
-            "WHEN 'pending_approval' THEN 0 "
-            "WHEN 'draft' THEN 1 "
-            "WHEN 'rejected' THEN 2 "
-            "ELSE 3 END, "
-            "p.invoice_date DESC, p.id DESC"
+        order_by = _invoice_register_order_by(
+            sort,
+            date_col="p.invoice_date",
+            party_col="s.name",
+            status_col="p.status",
+            id_col="p.id",
         )
         if export_all:
             rows = conn.execute(
@@ -2103,6 +2103,39 @@ def get_sales():
     return cached_read("sales", _load, ttl=_LIST_TTL)
 
 
+def _invoice_register_order_by(
+    sort: str | None,
+    *,
+    date_col: str,
+    party_col: str,
+    status_col: str,
+    id_col: str,
+) -> str:
+    """SQL ORDER BY for sales/purchase registers."""
+    key = (sort or "workflow").strip().lower()
+    if key == "date_asc":
+        return f"{date_col} ASC, {id_col} ASC"
+    if key == "amount_desc":
+        return f"total DESC, {id_col} DESC"
+    if key == "amount_asc":
+        return f"total ASC, {id_col} ASC"
+    if key == "party":
+        return f"{party_col} ASC, {date_col} DESC, {id_col} DESC"
+    if key == "status":
+        return f"{status_col} ASC, {date_col} DESC, {id_col} DESC"
+    if key == "date_desc":
+        return f"{date_col} DESC, {id_col} DESC"
+    # workflow — pending/draft first (sales/purchase approval queues)
+    return (
+        f"CASE COALESCE({status_col},'draft') "
+        "WHEN 'pending_approval' THEN 0 "
+        "WHEN 'draft' THEN 1 "
+        "WHEN 'rejected' THEN 2 "
+        "ELSE 3 END, "
+        f"{date_col} DESC, {id_col} DESC"
+    )
+
+
 def search_sales_invoices(
     q=None,
     from_date=None,
@@ -2113,8 +2146,8 @@ def search_sales_invoices(
     page=1,
     page_size=50,
     export_all=False,
+    sort=None,
 ):
-    """Paginated sales register — server-side filters for large datasets."""
     page = max(1, int(page or 1))
     page_size = min(500, max(10, int(page_size or 50)))
     where = ["1=1"]
@@ -2158,13 +2191,12 @@ def search_sales_invoices(
         agg = conn.execute(
             f"SELECT COALESCE(SUM(s.total),0), COALESCE(SUM(s.paid_amount),0) {base}", params
         ).fetchone()
-        order_by = (
-            "CASE COALESCE(s.status,'draft') "
-            "WHEN 'pending_approval' THEN 0 "
-            "WHEN 'draft' THEN 1 "
-            "WHEN 'rejected' THEN 2 "
-            "ELSE 3 END, "
-            "s.invoice_date DESC, s.id DESC"
+        order_by = _invoice_register_order_by(
+            sort,
+            date_col="s.invoice_date",
+            party_col="c.name",
+            status_col="s.status",
+            id_col="s.id",
         )
         if export_all:
             rows = conn.execute(

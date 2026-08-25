@@ -770,6 +770,21 @@ div[class*="st-key-mod_chips_row"] .stButton > button:not([kind="primary"]) {{
 .txn-reg-table .txn-status-cell {{
   white-space: nowrap;
 }}
+section.main:has(.erp-density-compact) .txn-reg-table thead th,
+section.main:has(.erp-density-compact) .txn-reg-table tbody td {{
+  padding: 0.28rem 0.45rem !important;
+  font-size: 0.78rem !important;
+  line-height: 1.25 !important;
+}}
+section.main:has(.erp-density-compact) .txn-kpi-card {{
+  padding: 0.35rem 0.55rem !important;
+}}
+section.main:has(.erp-density-compact) .txn-kpi-val {{
+  font-size: 1rem !important;
+}}
+section.main:has(.erp-density-compact) .txn-filter-box {{
+  margin-bottom: 0.35rem !important;
+}}
 .erp-section-tabs {{
   margin: 0.25rem 0 0.65rem 0;
 }}
