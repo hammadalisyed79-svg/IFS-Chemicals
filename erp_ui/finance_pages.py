@@ -502,12 +502,44 @@ def _cashbook_print_tab(book, key_prefix, sel_date=None, bank_account_id=None):
     )
 
 
+def _expense_system_account_codes():
+    """Year-end / control heads that must never be picked as an expense bill line."""
+    codes = {"3999"}
+    try:
+        from db_v3 import gl_account_code
+        clr = (gl_account_code("pl_clearing") or "").strip()
+        if clr:
+            codes.add(clr)
+    except Exception:
+        pass
+    return codes
+
+
 def _expense_account_opts():
-    return {
-        f"{a['code']} - {a['name']}": a["id"]
-        for a in db.get_accounts(active_only=True)
+    """Operating expense heads only — exclude P&L clearing and similar system accounts."""
+    blocked = _expense_system_account_codes()
+    preferred = ("400003", "400015", "400029", "400036")  # misc / mess / stationery / bank charges
+    pref_rank = {c: i for i, c in enumerate(preferred)}
+    rows = [
+        a for a in db.get_accounts(active_only=True)
         if a.get("account_type") == "expense"
-    }
+        and str(a.get("code") or "") not in blocked
+        and "clearing" not in str(a.get("name") or "").lower()
+        and "profit & loss" not in str(a.get("name") or "").lower()
+    ]
+    rows.sort(
+        key=lambda a: (
+            pref_rank.get(str(a.get("code") or ""), 99),
+            str(a.get("code") or ""),
+        )
+    )
+    return {f"{a['code']} - {a['name']}": a["id"] for a in rows}
+
+
+def _default_expense_account_id(exp_opts: dict):
+    if not exp_opts:
+        return None
+    return list(exp_opts.values())[0]
 
 
 def _cash_advance_settle_account_rows(advance_account_id=None):
@@ -1500,6 +1532,7 @@ def page_expense_bill():
     peek = st.session_state.get("eb_page_tab") or "Register"
     std_page_header(
         "Expense Bill",
+        subtitle="Multi expense heads / one bill",
         status="register" if peek == "Register" else "draft",
         status_kind="shell" if peek == "Register" else "invoice",
     )
@@ -1603,21 +1636,27 @@ def _expense_bill_form(key_prefix):
         st.warning("Add expense accounts in Chart of Accounts first.")
         return
 
+    default_aid = _default_expense_account_id(exp_opts)
     sk = f"{key_prefix}_lines"
     if sk not in st.session_state:
         st.session_state[sk] = [
-            {"expense_account_id": list(exp_opts.values())[0], "narration": "", "amount": 0.0},
+            {"expense_account_id": default_aid, "narration": "", "amount": 0.0},
         ]
 
     with form_compact(f"{key_prefix}_bill"):
+        st.caption(
+            "Credit books the **party ledger**. Cash/Bank pays now and posts to Cash/Bank Book. "
+            "Each expense head must be its own line."
+        )
         c1, c2 = st.columns([1.4, 1.2])
         party_kind = c1.radio("Party type *", ["Supplier", "Customer"], horizontal=True, key=wk("ptype"))
         with c2:
             bdate = st.date_input("Bill date *", value=date.today(), key=wk("date"))
+        # Separate keys so switching Supplier ↔ Customer does not keep a stale selection.
         if party_kind == "Supplier":
-            party_id = supplier_select(wk("party"))
+            party_id = supplier_select(wk("sup"))
         else:
-            party_id = customer_select(wk("party"))
+            party_id = customer_select(wk("cust"))
 
         settle = st.radio(
             "Settlement *",
@@ -1645,6 +1684,9 @@ def _expense_bill_form(key_prefix):
             with form_line(f"{key_prefix}_el{i}"):
                 cols = st.columns([2.6, 2.8, 1.15, 0.4])
                 cur_id = ln.get("expense_account_id")
+                if cur_id not in exp_opts.values():
+                    cur_id = default_aid
+                    lines[i]["expense_account_id"] = cur_id
                 idx = 0
                 for j, (_, aid) in enumerate(exp_opts.items()):
                     if aid == cur_id:
@@ -1654,8 +1696,11 @@ def _expense_bill_form(key_prefix):
                     "Expense account", exp_keys, index=min(idx, len(exp_keys) - 1), key=f"{key_prefix}_ea_{i}",
                 )
                 lines[i]["expense_account_id"] = exp_opts[ak]
+                narr_key = f"{key_prefix}_en_{i}"
+                if narr_key not in st.session_state:
+                    st.session_state[narr_key] = ln.get("narration") or ""
                 lines[i]["narration"] = cols[1].text_input(
-                    "Narration", value=ln.get("narration") or "", key=f"{key_prefix}_en_{i}",
+                    "Narration", key=narr_key,
                     placeholder="Narration for this expense only",
                 )
                 with cols[2]:
@@ -1668,25 +1713,39 @@ def _expense_bill_form(key_prefix):
 
         tot = sum(float(l.get("amount") or 0) for l in lines)
         st.metric("Bill total", fmt_money(tot))
+
+        blockers = []
+        if not party_id:
+            blockers.append(f"select a **{party_kind}**")
+        if tot <= 0 or any(float(l.get("amount") or 0) <= 0 for l in lines):
+            blockers.append("enter an **amount greater than zero** on every line")
+        if settle == "Cash" and db.is_cash_day_closed(str(bdate)):
+            st.warning(f"Cash book for **{bdate}** is closed — choose another date or reopen the day.")
+            blockers.append("cash day is closed")
+        if blockers:
+            st.info("To post: " + " · ".join(blockers) + ".")
+
         b1, b2, b3 = st.columns(3)
-        if b1.button("Add expense line", key=f"{key_prefix}_add"):
+        if b1.button("Add expense line", key=f"{key_prefix}_add", use_container_width=True):
             lines.append({
-                "expense_account_id": list(exp_opts.values())[0],
+                "expense_account_id": default_aid,
                 "narration": "",
                 "amount": 0.0,
             })
             st.rerun()
-        if b2.button("Clear lines", key=f"{key_prefix}_clr"):
+        if b2.button("Clear lines", key=f"{key_prefix}_clr", use_container_width=True):
             st.session_state[sk] = [
-                {"expense_account_id": list(exp_opts.values())[0], "narration": "", "amount": 0.0},
+                {"expense_account_id": default_aid, "narration": "", "amount": 0.0},
             ]
             st.rerun()
 
-        if settle == "Cash" and db.is_cash_day_closed(str(bdate)):
-            st.warning(f"Cash book for **{bdate}** is closed — choose another date or reopen the day.")
-
         can_post = party_id and tot > 0 and all(float(l.get("amount") or 0) > 0 for l in lines)
-        if b3.button("Post Expense Bill", type="primary", key=f"{key_prefix}_post", disabled=not can_post):
+        if settle == "Cash" and db.is_cash_day_closed(str(bdate)):
+            can_post = False
+        if b3.button(
+            "Post Expense Bill", type="primary", key=f"{key_prefix}_post",
+            disabled=not can_post, use_container_width=True,
+        ):
             try:
                 res = db.record_expense_bill(
                     party_kind.lower(),
