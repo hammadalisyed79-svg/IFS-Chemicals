@@ -4275,6 +4275,14 @@ def record_expense_bill(
                 raise ValueError(f"Expense account not found (line {ln['line_no']}).")
             if acc["group_type"] != "expense":
                 raise ValueError(f"{acc['code']} is not an expense account (line {ln['line_no']}).")
+            code = str(acc["code"] or "")
+            name_l = str(acc["name"] or "").lower()
+            clearing = (gl_account_code("pl_clearing") or "3999").strip()
+            if code == clearing or code == "3999" or "clearing" in name_l or "profit & loss" in name_l:
+                raise ValueError(
+                    f"{acc['code']} — {acc['name']} is a system / year-end clearing account "
+                    f"(line {ln['line_no']}). Choose an operating expense head."
+                )
             ln["account_code"] = acc["code"]
             ln["account_name"] = acc["name"]
 
