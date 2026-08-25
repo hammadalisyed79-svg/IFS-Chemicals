@@ -3679,12 +3679,13 @@ def repair_dual_role_opening_balances(conn=None) -> dict:
             ctx.__exit__(None, None, None)
 
 
-def audit_fix_party_ledgers(*, apply_dual_role_repair: bool = True, restore_fmye_openings: bool = True) -> dict:
+def audit_fix_party_ledgers(*, apply_dual_role_repair: bool = True, restore_fmye_openings: bool = False) -> dict:
     """
     Full party-ledger repair:
-      1) Restore openings from FMYE (OpeningDr − OpeningCr → +Dr / −Cr)
-      2) De-duplicate openings on dual-role codes (keep signed value)
-      3) Recalculate every customer/supplier current_balance from ledger
+      1) Optional: restore openings from FMYE (off by default — preserves manual openings)
+      2) De-duplicate openings on dual-role codes (keep signed value on one side)
+      3) Recalculate every customer/supplier current_balance from **own-book** ledger
+         (not combined — dual-role net = customer + supplier on Outstanding)
     """
     report = {
         "supplier_ob_flipped": 0,
@@ -3706,16 +3707,16 @@ def audit_fix_party_ledgers(*, apply_dual_role_repair: bool = True, restore_fmye
         if apply_dual_role_repair:
             report["dual_role"] = repair_dual_role_opening_balances(conn)
 
-    # Spot mismatches before full write (uses repaired openings)
+    # Spot mismatches before full write (own-book vs master)
     bad = []
     for row in get_customers(active_only=False):
-        _, entries = get_customer_ledger(row["id"])
+        _, entries = get_customer_ledger(row["id"], include_linked=False)
         closing = float(entries[-1]["balance"]) if entries else float(row.get("opening_balance") or 0)
         stored = float(row.get("current_balance") or 0)
         if abs(closing - stored) > 0.05:
             bad.append(("customer", row.get("code"), stored, closing))
     for row in get_suppliers(active_only=False):
-        _, entries = get_supplier_ledger(row["id"])
+        _, entries = get_supplier_ledger(row["id"], include_linked=False)
         closing = float(entries[-1]["balance"]) if entries else _normalize_supplier_opening(
             float(row.get("opening_balance") or 0)
         )
@@ -3729,18 +3730,24 @@ def audit_fix_party_ledgers(*, apply_dual_role_repair: bool = True, restore_fmye
     report["customers_updated"] = bal.get("customers", 0)
     report["suppliers_updated"] = bal.get("suppliers", 0)
 
-    # Verify after
+    # Verify after (re-read masters from DB)
     bad2 = 0
     for row in get_customers(active_only=False):
-        _, entries = get_customer_ledger(row["id"])
+        _, entries = get_customer_ledger(row["id"], include_linked=False)
         closing = float(entries[-1]["balance"]) if entries else 0.0
-        stored = float(row.get("current_balance") or 0)
+        with get_connection() as conn:
+            stored = float(conn.execute(
+                "SELECT COALESCE(current_balance,0) FROM customers WHERE id=?", (row["id"],)
+            ).fetchone()[0] or 0)
         if abs(closing - stored) > 0.05:
             bad2 += 1
     for row in get_suppliers(active_only=False):
-        _, entries = get_supplier_ledger(row["id"])
+        _, entries = get_supplier_ledger(row["id"], include_linked=False)
         closing = float(entries[-1]["balance"]) if entries else 0.0
-        stored = float(row.get("current_balance") or 0)
+        with get_connection() as conn:
+            stored = float(conn.execute(
+                "SELECT COALESCE(current_balance,0) FROM suppliers WHERE id=?", (row["id"],)
+            ).fetchone()[0] or 0)
         if abs(closing - stored) > 0.05:
             bad2 += 1
     report["mismatches_after"] = bad2
@@ -3761,12 +3768,17 @@ def audit_fix_party_ledgers(*, apply_dual_role_repair: bool = True, restore_fmye
 
 
 def recalculate_party_balances():
-    """Sync party current_balance fields from full ledger (invoices, receipts, FMYE vouchers)."""
+    """Sync party current_balance from each party's **own** ledger book.
+
+    Dual-role (same code on customer + supplier): store book-only closings on each
+    master so Outstanding can net them (customer + supplier). Never store the
+    combined statement closing on both masters — that doubles exposure.
+    """
     with get_connection() as conn:
         _ensure_fmye_party_entries_table(conn)
     updated_c, updated_s = 0, 0
     for row in get_customers(active_only=False):
-        _, entries = get_customer_ledger(row["id"])
+        _, entries = get_customer_ledger(row["id"], include_linked=False)
         closing = float(entries[-1]["balance"]) if entries else float(row.get("opening_balance") or 0)
         with get_connection() as conn:
             conn.execute(
@@ -3775,7 +3787,7 @@ def recalculate_party_balances():
             )
         updated_c += 1
     for row in get_suppliers(active_only=False):
-        _, entries = get_supplier_ledger(row["id"])
+        _, entries = get_supplier_ledger(row["id"], include_linked=False)
         closing = float(entries[-1]["balance"]) if entries else float(row.get("opening_balance") or 0)
         with get_connection() as conn:
             conn.execute(
@@ -3901,12 +3913,12 @@ def _resolve_cash_bank_party(conn, account_id, account_code, group_type):
 
 
 def sync_party_current_balance(party_type, party_id):
-    """Recompute one party's current_balance from its live ledger."""
+    """Recompute one party's current_balance from its own-book ledger (not dual combined)."""
     if not party_type or not party_id:
         return
     party_type = str(party_type).strip().lower()
     if party_type == "customer":
-        party, entries = get_customer_ledger(int(party_id), include_linked=True)
+        party, entries = get_customer_ledger(int(party_id), include_linked=False)
         if not party:
             return
         closing = float(entries[-1]["balance"]) if entries else float(party.get("opening_balance") or 0)
@@ -3916,7 +3928,7 @@ def sync_party_current_balance(party_type, party_id):
                 (closing, _now(), int(party_id)),
             )
     elif party_type == "supplier":
-        party, entries = get_supplier_ledger(int(party_id), include_linked=True)
+        party, entries = get_supplier_ledger(int(party_id), include_linked=False)
         if not party:
             return
         closing = float(entries[-1]["balance"]) if entries else float(party.get("opening_balance") or 0)

@@ -54,13 +54,23 @@ def page_erp_health_check():
 
     section_header("Party ledger repair")
     st.caption(
-        "Restores openings from FMYE (**OpeningDr − OpeningCr**: + = Dr, − = Cr) for customers "
-        "and suppliers, de-duplicates dual-code parties (keeps the signed amount), then "
-        "recalculates all current balances from the ledger."
+        "Syncs master **current_balance** from each party’s **own ledger book** "
+        "(dual-role: customer + supplier net correctly on Outstanding). "
+        "Optional FMYE opening restore is separate — off by default so manual openings stay."
     )
-    if st.button("Audit & Fix All Customer/Supplier Ledgers", key="hc_ledger_fix"):
-        with st.spinner("Auditing and recalculating all party ledgers…"):
-            rep = db.audit_fix_party_ledgers()
+    c_fix1, c_fix2 = st.columns(2)
+    if c_fix1.button("Sync masters from ledgers (safe)", type="primary", key="hc_ledger_fix"):
+        with st.spinner("Dual-role opening check + recalculating all party balances…"):
+            rep = db.audit_fix_party_ledgers(
+                apply_dual_role_repair=True, restore_fmye_openings=False,
+            )
+        st.session_state["hc_ledger_fix"] = rep
+        st.rerun()
+    if c_fix2.button("Full repair (also restore FMYE openings)", key="hc_ledger_fix_fmye"):
+        with st.spinner("Restoring FMYE openings and recalculating…"):
+            rep = db.audit_fix_party_ledgers(
+                apply_dual_role_repair=True, restore_fmye_openings=True,
+            )
         st.session_state["hc_ledger_fix"] = rep
         st.rerun()
     rep = st.session_state.get("hc_ledger_fix")
