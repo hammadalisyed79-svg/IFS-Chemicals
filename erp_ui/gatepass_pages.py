@@ -14,11 +14,37 @@ def _apply_prefill(defaults):
             st.session_state[f"gp_{k}"] = v
 
 
-def _sales_invoice_rows():
+def _sales_invoice_rows(order_id=None):
+    invs = db.get_sales()
+    if order_id:
+        with db.get_connection() as conn:
+            allowed = {
+                int(r["id"]) for r in conn.execute(
+                    "SELECT id FROM sales_invoices WHERE order_id=? ORDER BY id DESC",
+                    (int(order_id),),
+                ).fetchall()
+            }
+        invs = [r for r in invs if r["id"] in allowed]
     return [
         {"id": r["id"], "code": r["invoice_no"], "name": r["customer_name"],
          "label": f"{r['invoice_no']} — {r['customer_name']} ({r['sale_date']})"}
-        for r in db.get_sales()
+        for r in invs
+    ]
+
+
+def _sales_order_rows():
+    from erp_core.dispatch_planning import list_dispatch_sales_orders
+    from erp_ui.helpers import sales_order_picker_label
+
+    return [
+        {
+            "id": int(o["id"]),
+            "code": o.get("document_no") or "",
+            "name": o.get("customer_name") or "",
+            "label": sales_order_picker_label(o, show_pending=True),
+            "_order": o,
+        }
+        for o in list_dispatch_sales_orders()
     ]
 
 
@@ -151,10 +177,50 @@ def page_gate_pass_entry():
         is_inward = pass_type in db.GATE_PASS_INWARD
 
         sales_inv_id = purchase_inv_id = dn_id = grn_id = None
+        sales_order_id = None
         if is_outward:
+            st.markdown("**Dispatch link** *(sales order optional, invoice required)*")
+            so_rows = _sales_order_rows()
+            if so_rows:
+                _, sales_order_id, _ = smart_select(
+                    "Sales Order (dispatch plan)",
+                    so_rows,
+                    f"gp_so_{pass_type}",
+                    "id",
+                    lambda r: r["label"],
+                )
+                if sales_order_id and st.session_state.get(f"gp_last_so_{pass_type}") != sales_order_id:
+                    order = db.get_sales_order(sales_order_id)
+                    from erp_ui.helpers import sales_order_dispatch_to
+                    dest = sales_order_dispatch_to(order)
+                    note = f"SO {order.get('document_no') or sales_order_id}"
+                    if dest:
+                        note += f" | Dispatch to {dest}"
+                    st.session_state["gp_remarks"] = note
+                    st.session_state[f"gp_last_so_{pass_type}"] = sales_order_id
+                    st.rerun()
+                c_so1, c_so2 = st.columns([3, 1])
+                with c_so2:
+                    if st.button("Clear SO", key=f"gp_so_clear_{pass_type}", use_container_width=True):
+                        for k in list(st.session_state.keys()):
+                            if k.startswith(f"gp_so_{pass_type}"):
+                                st.session_state.pop(k, None)
+                        st.session_state.pop(f"gp_last_so_{pass_type}", None)
+                        st.rerun()
+                with c_so1:
+                    from erp_ui.nav import request_nav
+                    if st.button("Open Dispatch Planning", key=f"gp_dsp_{pass_type}"):
+                        request_nav("Production", "Dispatch Planning")
+                        st.rerun()
             st.markdown("**Link to Sales Invoice** *(required for outward pass)*")
+            inv_rows = _sales_invoice_rows(order_id=sales_order_id)
+            if sales_order_id and not inv_rows:
+                st.caption("No sales invoices linked to this order yet — create one from Sales Invoices.")
             _, sales_inv_id, _ = smart_select(
-                "Sales Invoice", _sales_invoice_rows(), f"gp_sales_inv_{pass_type}", "id",
+                "Sales Invoice",
+                inv_rows,
+                f"gp_sales_inv_{pass_type}",
+                "id",
                 lambda r: r["label"],
             )
             if sales_inv_id and st.session_state.get("gp_last_sales_inv") != sales_inv_id:

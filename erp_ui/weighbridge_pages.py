@@ -7,6 +7,7 @@ from application import data_gateway as db
 from erp_ui import form_flow as ff
 from erp_ui.helpers import uid, user_role, smart_select, std_page_header, export_buttons
 from erp_ui.document_print import document_print_toolbar
+from erp_ui.theme import inject_weighbridge_kiosk_css
 
 
 def _print_first_weight_slip(slip_id, key_prefix="ws1_print"):
@@ -277,6 +278,15 @@ def page_weight_entry():
     tab = sticky_page_tabs([
         "Weight Entry", "Pending 2nd Weight", "Completed Slips", "All Slips Register", "Print Slip", "Edit / Delete",
     ], "ws_entry_tab")
+    kiosk = st.toggle(
+        "Kiosk mode (large touch targets)",
+        value=bool(st.session_state.get("erp_wb_kiosk")),
+        key="erp_wb_kiosk_toggle",
+        help="For weighbridge operators — larger buttons and inputs.",
+    )
+    st.session_state["erp_wb_kiosk"] = kiosk
+    if kiosk:
+        inject_weighbridge_kiosk_css()
     now = datetime.now()
     ts = now.strftime("%Y-%m-%d %H:%M:%S")
 
@@ -399,10 +409,10 @@ def page_weight_entry():
 
     elif tab == "Completed Slips":
         st.markdown("**Completed slips**")
-        st.info(
-            "Weight slips are **not** attached here. On **Sales Invoices** or **Purchase Invoices**, "
-            "select the slip in **Weight Slip *** and save the invoice."
-        )
+        from erp_ui.weighbridge_wizard import render_slip_to_invoice_wizard
+
+        with st.container(border=True):
+            render_slip_to_invoice_wizard(key_prefix="wb_completed_wiz")
         completed = db.get_completed_unlinked_slips()
         if not completed:
             st.caption("No completed slips waiting to be picked on an invoice.")

@@ -898,3 +898,44 @@ GROUP_TILE_STYLE = {
     "Reports": TILE_WHITE,
     "Administration": TILE_RED,
 }
+
+
+_WEIGHBRIDGE_KIOSK_CSS = """
+<style>
+section.main:has(.erp-wb-kiosk) button[kind="primary"],
+section.main:has(.erp-wb-kiosk) button[data-testid="baseButton-primary"] {
+  min-height: 3.25rem !important;
+  font-size: 1.05rem !important;
+  font-weight: 700 !important;
+  padding: 0.65rem 1.35rem !important;
+}
+section.main:has(.erp-wb-kiosk) button[kind="secondary"],
+section.main:has(.erp-wb-kiosk) button[data-testid="baseButton-secondary"] {
+  min-height: 2.85rem !important;
+  font-size: 1rem !important;
+  padding: 0.55rem 1.1rem !important;
+}
+section.main:has(.erp-wb-kiosk) input,
+section.main:has(.erp-wb-kiosk) textarea {
+  font-size: 1.05rem !important;
+  min-height: 2.75rem !important;
+}
+section.main:has(.erp-wb-kiosk) [data-baseweb="select"] {
+  font-size: 1.05rem !important;
+}
+section.main:has(.erp-wb-kiosk) .stNumberInput input {
+  font-size: 1.2rem !important;
+  font-weight: 700 !important;
+}
+</style>
+"""
+
+
+def inject_weighbridge_kiosk_css() -> None:
+    import streamlit as st
+
+    st.markdown(
+        _WEIGHBRIDGE_KIOSK_CSS
+        + '<div class="erp-wb-kiosk erp-css-inject" aria-hidden="true">&#8203;</div>',
+        unsafe_allow_html=True,
+    )

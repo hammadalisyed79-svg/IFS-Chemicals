@@ -33,6 +33,7 @@ from erp_ui import attendance_simple as att
 from erp_ui import weighbridge_pages as wb
 from erp_ui import gatepass_pages as gp
 from erp_ui import approval_inbox as appr_inbox
+from erp_ui import invoice_workflow_pages as iwf
 from erp_ui import reports_pages as reports
 from erp_ui import audit_pages as audit
 from erp_ui import holiday_pages as hol
@@ -51,6 +52,7 @@ from erp_ui import transaction_list as txn
 from erp_ui import form_flow as ff
 from erp_ui import industrial_pages as ind
 from erp_ui import dispatch_planning as dsp
+from erp_ui import plant_shift_dashboard as plant_shift
 from erp_ui.nav import (
     apply_pending_nav,
     filtered_nav_groups,
@@ -3193,6 +3195,7 @@ PAGES = {
     "BOM": prod.page_bom_composition,
     "BOM / Formula": prod.page_bom_composition,
     "Daily Production": prod.page_daily_production,
+    "Plant Shift": plant_shift.page_plant_shift,
     "Production Orders": prod.page_production_orders,
     "Job Cards": jc.page_job_cards,
     "Formula Master": ind.page_formulation,

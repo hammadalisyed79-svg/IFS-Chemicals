@@ -200,7 +200,7 @@ def page_dispatch_planning():
         for _, r in edit_df.iterrows()
     }
     labels = list(id_by_label.keys())
-    oc1, oc2, oc3 = st.columns([3, 1, 1])
+    oc1, oc2, oc3, oc4 = st.columns([3, 1, 1, 1])
     choice = oc1.selectbox("Sales order", labels, key="dsp_so_open_sel")
     if oc2.button("Open SO", type="primary", key="dsp_so_open_btn", use_container_width=True):
         if choice in id_by_label:
@@ -220,6 +220,36 @@ def page_dispatch_planning():
     ):
         if choice in id_by_label:
             _sales_order_view_dialog(id_by_label[choice])
+    if oc4.button(
+        "Gate Pass",
+        key="dsp_so_gp_btn",
+        use_container_width=True,
+        disabled=not sel_order,
+        help="Prefill gate pass from this sales order (or its invoice)",
+    ):
+        if sel_order:
+            from db_commercial import gate_pass_defaults_from_sales_invoice
+            from erp_ui.helpers import sales_order_dispatch_to
+            from erp_ui.nav import request_nav
+
+            prefill = {}
+            with db.get_connection() as conn:
+                inv = conn.execute(
+                    "SELECT id FROM sales_invoices WHERE order_id=? ORDER BY id DESC LIMIT 1",
+                    (int(sel_order["id"]),),
+                ).fetchone()
+            if inv:
+                prefill = gate_pass_defaults_from_sales_invoice(int(inv["id"]))
+            else:
+                dest = sales_order_dispatch_to(sel_order)
+                prefill = {
+                    "customer_id": sel_order.get("customer_id"),
+                    "party_name": sel_order.get("customer_name"),
+                    "remarks": f"SO {sel_order.get('document_no')} | Dispatch to {dest}" if dest else f"SO {sel_order.get('document_no')}",
+                }
+            st.session_state["gp_prefill"] = prefill
+            request_nav("Gate Pass", "Gate Pass Entry")
+            st.rerun()
 
     selected_ids = [
         int(r["_id"]) for _, r in edit_df.iterrows() if bool(r.get("Include"))
