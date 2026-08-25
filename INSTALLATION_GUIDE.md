@@ -32,7 +32,7 @@ chmod +x install/linux_install.sh
 ./install/linux_install.sh
 ```
 
-Production: follow `DEPLOYMENT_SERVER_GUIDE.md` (Nginx, systemd, UFW, SSL).
+Production: follow `archive/docs/DEPLOYMENT_SERVER_GUIDE.md` (Nginx, systemd, UFW, SSL).
 
 ## First login
 
