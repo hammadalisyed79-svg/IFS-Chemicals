@@ -2889,11 +2889,25 @@ def _add_bank_payment(conn, entry_date, description, reference_no, amount, accou
 
 
 def _cash_advance_return_receipt_exclude_sql():
-    """Cash-advance settlement returns are GL/advance-only — never in Cash Book."""
+    """Cash-advance settlement *returns* (CR vouchers) are GL/advance-only — not in Cash Book.
+
+    Settlements also store cash_entry_id for *payment* (CP) bill vouchers. Those IDs must not
+    be applied against cash_receipts — autoincrement collision would hide real sale receipts.
+    """
     return (
         " AND reference_no NOT GLOB 'CAS-*' "
         " AND id NOT IN ("
-        "SELECT cash_entry_id FROM cash_advance_settlements WHERE cash_entry_id IS NOT NULL"
+        "SELECT cash_entry_id FROM cash_advance_settlements "
+        "WHERE cash_entry_id IS NOT NULL "
+        "AND ("
+        " LOWER(COALESCE(cash_entry_source,'')) LIKE '%receipt%' "
+        " OR COALESCE(cash_doc_no,'') GLOB 'CR-*'"
+        ")"
+        ") "
+        " AND COALESCE(document_no,'') NOT IN ("
+        "SELECT cash_doc_no FROM cash_advance_settlements "
+        "WHERE cash_doc_no IS NOT NULL AND cash_doc_no != '' "
+        "AND cash_doc_no GLOB 'CR-*'"
         ")"
     )
 
