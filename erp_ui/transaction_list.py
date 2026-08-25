@@ -265,6 +265,9 @@ def _register_core(
     kpi_labels=("Records (filtered)", "Total Amount", "Paid / Received"),
     show_kpi_paid=True,
     open_handler=None,
+    empty_message: str | None = None,
+    empty_cta_label: str | None = None,
+    empty_cta_fn=None,
 ):
     filter_sig = tuple(sorted((k, str(v)) for k, v in filters.items()))
     if st.session_state.get(f"{key_prefix}_fsig") != filter_sig:
@@ -311,13 +314,40 @@ def _register_core(
         k3.markdown("")
 
     if not items:
-        st.info("No records match your filters.")
+        msg = empty_message or "No records match your filters."
+        st.markdown(
+            f'<div class="erp-empty-state"><p>{msg}</p></div>',
+            unsafe_allow_html=True,
+        )
+        if empty_cta_label and empty_cta_fn:
+            if st.button(empty_cta_label, type="primary", key=f"{key_prefix}_empty_cta"):
+                empty_cta_fn()
+                st.rerun()
         return None
 
     if has_status_col:
         _render_register_html_table(items, columns)
     else:
         hlp.render_dataframe_html_table(_build_df(items, columns))
+
+    if open_handler:
+        quick_n = min(len(items), 10)
+        if quick_n:
+            st.caption("Quick open (current page)")
+            for r in items[:quick_n]:
+                oc1, oc2 = st.columns([1, 5])
+                with oc1:
+                    if st.button(
+                        "Open",
+                        key=f"{key_prefix}_qopen_{r.get('id', r.get('invoice_no', ''))}",
+                        use_container_width=True,
+                    ):
+                        open_handler(r)
+                        st.rerun()
+                with oc2:
+                    st.markdown(f"**{row_label_fn(r)}**")
+            if len(items) > quick_n:
+                st.caption(f"Showing quick open for first {quick_n} rows — use selector below for others.")
     _pagination(key_prefix, result)
 
     exp_col, sel_col = st.columns([1, 2])
@@ -378,12 +408,16 @@ def transaction_register(
     action_panel=None,
     default_period="Today",
     open_handler=None,
+    empty_message: str | None = None,
+    empty_cta_label: str | None = None,
+    empty_cta_fn=None,
 ):
     filters = _filter_bar(key_prefix, party_label, party_options, default_period, show_payment=True)
     party_kw = "customer_id" if party_label == "Customer" else "supplier_id"
     return _register_core(
         key_prefix, search_fn, columns, row_label_fn, export_name, export_title,
         filters, party_kw, action_panel, open_handler=open_handler,
+        empty_message=empty_message, empty_cta_label=empty_cta_label, empty_cta_fn=empty_cta_fn,
     )
 
 
@@ -487,7 +521,9 @@ def linked_invoice_picker(key_prefix, search_fn, party_id, party_kw, row_label_f
     return opts[sel]
 
 
-def sales_register_list(action_panel=None):
+def sales_register_list(action_panel=None, open_handler=None):
+    from erp_ui.doc_workflow import go_sale_new, open_sale_from_register
+
     party_opts = {f"{r['code']} - {r['name']}": r["id"] for r in db.get_customers()}
     cols = [
         {"field": "invoice_no", "label": "Invoice"},
@@ -498,6 +534,7 @@ def sales_register_list(action_panel=None):
         {"field": "paid_amount", "label": "Paid", "format": "money"},
         {"field": "payment_mode", "label": "Payment"},
     ]
+    handler = open_handler or open_sale_from_register
     return transaction_register(
         "sal_reg",
         db.search_sales_invoices,
@@ -512,10 +549,16 @@ def sales_register_list(action_panel=None):
         "Sales Register",
         _export_df,
         action_panel=action_panel,
+        open_handler=handler,
+        empty_message="No sales invoices match your filters.",
+        empty_cta_label="New Sale",
+        empty_cta_fn=go_sale_new,
     )
 
 
-def purchase_register_list(action_panel=None):
+def purchase_register_list(action_panel=None, open_handler=None):
+    from erp_ui.doc_workflow import go_purchase_new, open_purchase_from_register
+
     party_opts = {f"{r['code']} - {r['name']}": r["id"] for r in db.get_suppliers()}
     cols = [
         {"field": "invoice_no", "label": "Invoice"},
@@ -526,6 +569,7 @@ def purchase_register_list(action_panel=None):
         {"field": "paid_amount", "label": "Paid", "format": "money"},
         {"field": "payment_mode", "label": "Payment"},
     ]
+    handler = open_handler or open_purchase_from_register
     return transaction_register(
         "pur_reg",
         db.search_purchases,
@@ -540,6 +584,10 @@ def purchase_register_list(action_panel=None):
         "Purchase Register",
         _export_df,
         action_panel=action_panel,
+        open_handler=handler,
+        empty_message="No purchase invoices match your filters.",
+        empty_cta_label="New Purchase",
+        empty_cta_fn=go_purchase_new,
     )
 
 

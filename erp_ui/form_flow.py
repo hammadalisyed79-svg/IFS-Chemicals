@@ -282,3 +282,9 @@ def finish_after_delete(
         )
     set_flash(message, title=infer_action_title(message))
     st.rerun()
+
+
+def run_with_loading(fn, message: str = "Saving…"):
+    """Run callable inside Streamlit spinner (Phase 1 loading affordance)."""
+    with st.spinner(message):
+        return fn()

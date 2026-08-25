@@ -41,15 +41,33 @@ def breadcrumb_from_session() -> list[str]:
     return ["Home", module_title(group), screen_title(screen)]
 
 
-def render_breadcrumb(crumbs: list[str] | None = None) -> None:
+def render_breadcrumb(crumbs: list[str] | None = None, *, clickable: bool = True) -> None:
     parts = crumbs if crumbs is not None else breadcrumb_from_session()
     if not parts:
         return
-    trail = " › ".join(escape(p) for p in parts)
-    st.markdown(
-        f'<p class="erp-shell-crumb">{trail}</p>',
-        unsafe_allow_html=True,
-    )
+    if not clickable:
+        trail = " › ".join(escape(p) for p in parts)
+        st.markdown(f'<p class="erp-shell-crumb">{trail}</p>', unsafe_allow_html=True)
+        return
+
+    from erp_ui.nav import go_home, go_module
+
+    group = st.session_state.get("sidebar_group")
+    cols = st.columns(len(parts))
+    for i, part in enumerate(parts):
+        with cols[i]:
+            label = part
+            if i == 0 and part == "Home":
+                if st.button(label, key=f"erp_crumb_home_{id(parts)}", use_container_width=True):
+                    go_home()
+            elif i == 1 and group and len(parts) > 2:
+                if st.button(label, key=f"erp_crumb_mod_{group}", use_container_width=True):
+                    go_module(group)
+            else:
+                st.markdown(
+                    f'<p class="erp-shell-crumb-active">{escape(label)}</p>',
+                    unsafe_allow_html=True,
+                )
 
 
 def render_page_header_block(
@@ -124,23 +142,27 @@ def render_sticky_action_bar(
     actions: list[dict],
     *,
     key_prefix: str = "shell_act",
-) -> None:
-    """Render a horizontal action row. actions: [{label, key, type?, help?, disabled?}]"""
+) -> str | None:
+    """Render a horizontal action row. Returns label of clicked button, if any."""
     if not actions:
-        return
+        return None
     st.markdown('<div class="erp-shell-action-bar-marker"></div>', unsafe_allow_html=True)
+    clicked = None
     with st.container(key=f"{key_prefix}_bar"):
         cols = st.columns(len(actions))
         for col, act in zip(cols, actions):
             with col:
-                st.button(
+                key = act.get("key") or f"{key_prefix}_{act.get('label','')}"
+                if st.button(
                     act.get("label", "Action"),
-                    key=act.get("key") or f"{key_prefix}_{act.get('label','')}",
+                    key=key,
                     type=act.get("type", "secondary"),
                     help=act.get("help"),
                     disabled=bool(act.get("disabled")),
                     use_container_width=True,
-                )
+                ):
+                    clicked = act.get("label", "Action")
+    return clicked
 
 
 def render_favorites_bar(nav: dict, *, key_prefix: str = "fav") -> None:

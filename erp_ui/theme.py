@@ -795,6 +795,40 @@ div[class*="st-key-mod_chips_row"] .stButton > button:not([kind="primary"]) {{
   font-size: 0.75rem !important;
 }}
 
+.erp-shell-crumb-active {{
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: {BLUE_DARK} !important;
+  margin: 0.15rem 0;
+  padding: 0.35rem 0.5rem;
+  background: {BLUE_LIGHT};
+  border-radius: 6px;
+  text-align: center;
+}}
+.erp-empty-state {{
+  background: {WHITE};
+  border: 2px dashed {BLUE};
+  border-radius: 10px;
+  padding: 1.25rem 1rem;
+  margin: 0.5rem 0 0.75rem 0;
+  text-align: center;
+}}
+.erp-empty-state p {{
+  color: {BLACK} !important;
+  margin: 0;
+  font-size: 0.92rem;
+}}
+.erp-shell-action-bar-marker + div[data-testid="stVerticalBlock"] {{
+  position: sticky;
+  bottom: 0;
+  z-index: 40;
+  background: {WHITE};
+  border-top: 2px solid {BLUE};
+  padding: 0.5rem 0.25rem 0.25rem;
+  margin-top: 0.5rem;
+  box-shadow: 0 -4px 12px rgba(15, 23, 42, 0.08);
+}}
+
 div[class*="st-key-rpt_nav_sidebar"] h5 {{
   text-transform: none !important;
   letter-spacing: normal !important;

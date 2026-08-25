@@ -625,39 +625,42 @@ def _entry_form(book, sel_date, bank_account_id=None, key_prefix="cb"):
             st.error("Particulars and amount are required.")
         else:
             try:
-                retain = {}
-                mode = "cash" if book == "cash" else "bank"
-                if gl_id:
-                    res = db.record_cash_bank_gl_voucher(
-                        gl_id, str(sel_date), amt,
-                        side="payment" if is_payment else "receipt",
-                        reference_no=ref, description=desc,
-                        payment_mode=mode,
-                        bank_account_id=bank_account_id if book == "bank" else None,
-                        user_id=uid(),
-                    )
-                    msg = (
-                        f"Posted **{res['document_no']}** against **{res.get('account_name', 'GL')}** — "
-                        "cash/bank book and General Ledger updated."
-                    )
-                    if book == "bank":
-                        att_type = "bank_payment" if is_payment else "bank_receipt"
-                        retain[f"{key_prefix}_slip_preset"] = preset_from_voucher(
-                            att_type, res["id"], res.get("document_no"),
+                def _post_voucher():
+                    retain = {}
+                    mode = "cash" if book == "cash" else "bank"
+                    if gl_id:
+                        res = db.record_cash_bank_gl_voucher(
+                            gl_id, str(sel_date), amt,
+                            side="payment" if is_payment else "receipt",
+                            reference_no=ref, description=desc,
+                            payment_mode=mode,
+                            bank_account_id=bank_account_id if book == "bank" else None,
+                            user_id=uid(),
                         )
-                else:
-                    et = "credit" if "Receipt" in vtype else "debit"
-                    if book == "cash":
-                        db.add_cash_entry(str(sel_date), desc, ref, et, amt, None, uid())
-                        msg = "Voucher posted."
+                        msg = (
+                            f"Posted **{res['document_no']}** against **{res.get('account_name', 'GL')}** — "
+                            "cash/bank book and General Ledger updated."
+                        )
+                        if book == "bank":
+                            att_type = "bank_payment" if is_payment else "bank_receipt"
+                            retain[f"{key_prefix}_slip_preset"] = preset_from_voucher(
+                                att_type, res["id"], res.get("document_no"),
+                            )
                     else:
-                        att_type = "bank_receipt" if "Receipt" in vtype else "bank_payment"
-                        res = db.add_bank_entry(str(sel_date), desc, ref, et, amt, bank_account_id, uid())
-                        retain[f"{key_prefix}_slip_preset"] = preset_from_voucher(
-                            att_type, res["id"], res.get("document_no"),
-                        )
-                        msg = f"Voucher posted — **{res['document_no']}**. Open **Bank Slips** tab to attach slip."
-                ff.finish_post_new_form(fid, msg, retain=retain or None)
+                        et = "credit" if "Receipt" in vtype else "debit"
+                        if book == "cash":
+                            db.add_cash_entry(str(sel_date), desc, ref, et, amt, None, uid())
+                            msg = "Voucher posted."
+                        else:
+                            att_type = "bank_receipt" if "Receipt" in vtype else "bank_payment"
+                            res = db.add_bank_entry(str(sel_date), desc, ref, et, amt, bank_account_id, uid())
+                            retain[f"{key_prefix}_slip_preset"] = preset_from_voucher(
+                                att_type, res["id"], res.get("document_no"),
+                            )
+                            msg = f"Voucher posted — **{res['document_no']}**. Open **Bank Slips** tab to attach slip."
+                    ff.finish_post_new_form(fid, msg, retain=retain or None)
+
+                ff.run_with_loading(_post_voucher, "Posting voucher…")
             except Exception as e:
                 st.error(str(e))
 

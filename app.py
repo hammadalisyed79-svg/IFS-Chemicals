@@ -1226,7 +1226,10 @@ def page_purchases():
                         header.pop("weight_slip_id", None)
                     elif ws_id:
                         header["weight_slip_id"] = ws_id
-                    pid = db.save_purchase(header, lines, user_id=hlp.uid())
+                    pid = ff.run_with_loading(
+                        lambda: db.save_purchase(header, lines, user_id=hlp.uid()),
+                        "Saving draft…",
+                    )
                     gp = db.get_gate_passes(purchase_invoice_id=pid)
                     gp_no = gp[0]["document_no"] if gp else None
                     msg = "Draft saved."
@@ -1368,14 +1371,22 @@ def page_purchases():
                     st.error("Weight slip is required for this purchase.")
                 else:
                     try:
-                        db.save_purchase(header, lines, purchase_id=pid, user_id=hlp.uid())
+                        ff.run_with_loading(
+                            lambda: db.save_purchase(header, lines, purchase_id=pid, user_id=hlp.uid()),
+                            "Updating purchase…",
+                        )
                         ff.finish_edit_refresh("pur_edit", pid, "pur_edit", "Purchase updated.")
                     except Exception as e:
                         st.error(str(e))
             if c2.button("Submit for Approval", key="sub_pur"):
                 try:
-                    db.save_purchase(header, lines, purchase_id=pid, user_id=hlp.uid())
-                    db.submit_purchase_invoice(pid, hlp.uid())
+                    ff.run_with_loading(
+                        lambda: (
+                            db.save_purchase(header, lines, purchase_id=pid, user_id=hlp.uid()),
+                            db.submit_purchase_invoice(pid, hlp.uid()),
+                        ),
+                        "Submitting for approval…",
+                    )
                     ff.finish_edit_refresh("pur_edit", pid, "pur_edit", "Submitted for approval.")
                 except Exception as e:
                     st.error(str(e))
@@ -1757,7 +1768,10 @@ def page_sales():
                         header.pop("weight_slip_id", None)
                     elif ws_id:
                         header["weight_slip_id"] = ws_id
-                    sid = db.save_sale(header, lines, user_id=hlp.uid())
+                    sid = ff.run_with_loading(
+                        lambda: db.save_sale(header, lines, user_id=hlp.uid()),
+                        "Saving draft…",
+                    )
                     gp = db.get_gate_passes(sales_invoice_id=sid)
                     gp_no = gp[0]["document_no"] if gp else None
                     if flow["show_weight"]:
@@ -1935,14 +1949,22 @@ def page_sales():
                     st.error("Weight slip is required for this sale.")
                 else:
                     try:
-                        db.save_sale(header, lines, sale_id=sid, user_id=hlp.uid())
+                        ff.run_with_loading(
+                            lambda: db.save_sale(header, lines, sale_id=sid, user_id=hlp.uid()),
+                            "Updating sale…",
+                        )
                         ff.finish_edit_refresh("sal_edit", sid, "sal_edit", "Sale updated.")
                     except Exception as e:
                         st.error(str(e))
             if c2.button("Submit for Approval", key="sub_sal"):
                 try:
-                    db.save_sale(header, lines, sale_id=sid, user_id=hlp.uid())
-                    db.submit_sale_invoice(sid, hlp.uid())
+                    ff.run_with_loading(
+                        lambda: (
+                            db.save_sale(header, lines, sale_id=sid, user_id=hlp.uid()),
+                            db.submit_sale_invoice(sid, hlp.uid()),
+                        ),
+                        "Submitting for approval…",
+                    )
                     ff.finish_edit_refresh("sal_edit", sid, "sal_edit", "Submitted for approval.")
                 except Exception as e:
                     st.error(str(e))
@@ -2338,226 +2360,46 @@ def page_sale_return():
 # Customer Ledger
 # ---------------------------------------------------------------------------
 def page_customer_ledger():
-    from erp_ui.helpers import sticky_page_tabs, render_ledger_summary_table, render_ledger_detailed_table
+    from erp_ui.ledger_shared import render_party_ledger
 
-    hlp.std_page_header("Customer Ledger", status="posted", status_kind="shell")
-    st.caption(
-        "**Summary** = one line per voucher. **Detailed** = invoice lines (Qty / Rate / Amount). "
-        "Print uses a professional ledger layout for both."
+    render_party_ledger(
+        "customer",
+        page_title="Customer Ledger",
+        party_select_key="cl_cust",
+        from_key="cl_from",
+        to_key="cl_to",
+        tab_state_key="cl_ledger_tab",
+        split_books_key="cl_split_books",
+        export_summary_name="customer_ledger",
+        export_detailed_name="customer_ledger_detailed",
+        export_summary_title="Customer Ledger",
+        export_detailed_title="Customer Ledger (Detailed)",
+        attach_ledger_party_fn=_attach_ledger_party,
+        export_df_fn=export_df,
     )
-    if not db.get_customers(active_only=False):
-        st.info("Add customers first.")
-        return
-    c1, c2, c3 = st.columns(3)
-    cust_id = hlp.customer_select("cl_cust")
-    fd = c2.date_input("From", value=None, key="cl_from")
-    td = c3.date_input("To", value=None, key="cl_to")
-    if not cust_id:
-        st.info("Select a customer.")
-        return
-    fd_s = str(fd) if fd else None
-    td_s = str(td) if td else None
-    period = f"{fd_s or 'Start'} to {td_s or 'Today'}"
-    linked = db.find_linked_counterparty("customer", cust_id)
-    include_linked = True
-    if linked:
-        st.success(
-            f"Dual-role party **{linked.get('primary_code') or linked.get('code')}** — "
-            f"Customer and Supplier **{linked['code']} — {linked['name']}** share one "
-            f"**combined ledger** (sales + purchases netted)."
-        )
-        split_books = st.checkbox(
-            "Show customer book only (not combined)",
-            value=False,
-            key="cl_split_books",
-            help="Off = combined Customer + Supplier statement (recommended). "
-                 "On = customer AR book only.",
-        )
-        include_linked = not split_books
-
-    def _ledger_kpis(party, entries, detailed=False):
-        summary = (party or {}).get("ledger_summary") or {}
-        opening = float(summary.get("opening") or 0)
-        pdeb = float(summary.get("period_debit") or 0)
-        pcred = float(summary.get("period_credit") or 0)
-        if detailed:
-            closing = db.last_detailed_ledger_balance(entries) if entries else float(party.get("balance") or 0)
-        else:
-            closing = float(summary.get("closing") if summary else (
-                entries[-1]["balance"] if entries else party.get("balance") or 0
-            ))
-        code = party.get("code") or ""
-        st.subheader(f"{code} — {party['name']}" if code else party["name"])
-        note = summary.get("note")
-        if note:
-            st.caption(note)
-        hlp.render_ledger_kpi_strip(opening, pdeb, pcred, closing)
-        st.caption("Balances use Finance Manager signs: **Dr** = Debit, **Cr** = Credit (same for customers and suppliers).")
-
-    ledger_tab = sticky_page_tabs(
-        ["Summary", "Detailed (with invoice lines)"],
-        "cl_ledger_tab",
-    )
-    if ledger_tab == "Summary":
-        customer, entries = db.get_customer_ledger(cust_id, fd_s, td_s, include_linked=include_linked)
-        _ledger_kpis(customer, entries, detailed=False)
-        if entries:
-            df = pd.DataFrame(entries)[["date", "ref", "description", "debit", "credit", "balance"]]
-            df = _attach_ledger_party(df, customer, "customer")
-            render_ledger_summary_table(entries)
-            filters = {"Customer": f"{customer.get('code')} - {customer.get('name')}"}
-            if include_linked and customer.get("linked_party"):
-                lp = customer["linked_party"]
-                filters["Combined with"] = f"Supplier {lp.get('code')} — {lp.get('name')}"
-            export_df(
-                df, "customer_ledger", "Customer Ledger",
-                period=period,
-                filters=filters,
-                summary=None,
-            )
-        else:
-            st.info("No ledger entries.")
-    elif ledger_tab == "Detailed (with invoice lines)":
-        customer, entries = db.get_customer_ledger_detailed(
-            cust_id, fd_s, td_s, include_linked=include_linked,
-        )
-        _ledger_kpis(customer, entries, detailed=True)
-        if entries:
-            from erp_ui.reports_pages import _detailed_ledger_dataframe
-            df = _detailed_ledger_dataframe(entries)
-            df = _attach_ledger_party(df, customer, "customer")
-            # Ensure print/PDF footer uses running closing (last balance line)
-            try:
-                ls = dict(df.attrs.get("ledger_summary") or customer.get("ledger_summary") or {})
-                ls["closing"] = db.last_detailed_ledger_balance(entries)
-                df.attrs["ledger_summary"] = ls
-            except Exception:
-                pass
-            render_ledger_detailed_table(entries)
-            filters = {"Customer": f"{customer.get('code')} - {customer.get('name')}"}
-            if include_linked and customer.get("linked_party"):
-                lp = customer["linked_party"]
-                filters["Combined with"] = f"Supplier {lp.get('code')} — {lp.get('name')}"
-            export_df(
-                df, "customer_ledger_detailed", "Customer Ledger (Detailed)",
-                period=period,
-                filters=filters,
-            )
-        else:
-            st.info("No ledger entries.")
 
 
 # ---------------------------------------------------------------------------
 # Supplier Ledger
 # ---------------------------------------------------------------------------
 def page_supplier_ledger():
-    from erp_ui.helpers import sticky_page_tabs, render_ledger_summary_table, render_ledger_detailed_table
+    from erp_ui.ledger_shared import render_party_ledger
 
-    hlp.std_page_header("Supplier Ledger", status="posted", status_kind="shell")
-    st.caption(
-        "**Summary** = one line per voucher. **Detailed** = invoice lines (Qty / Rate / Amount). "
-        "Print uses a professional ledger layout for both."
+    render_party_ledger(
+        "supplier",
+        page_title="Supplier Ledger",
+        party_select_key="sl_sup",
+        from_key="sl_from",
+        to_key="sl_to",
+        tab_state_key="sl_ledger_tab",
+        split_books_key="sl_split_books",
+        export_summary_name="supplier_ledger",
+        export_detailed_name="supplier_ledger_detailed",
+        export_summary_title="Supplier Ledger",
+        export_detailed_title="Supplier Ledger (Detailed)",
+        attach_ledger_party_fn=_attach_ledger_party,
+        export_df_fn=export_df,
     )
-    if not db.get_suppliers(active_only=False):
-        st.info("Add suppliers first.")
-        return
-    c1, c2, c3 = st.columns(3)
-    sup_id = hlp.supplier_select("sl_sup")
-    fd = c2.date_input("From", value=None, key="sl_from")
-    td = c3.date_input("To", value=None, key="sl_to")
-    if not sup_id:
-        st.info("Select a supplier.")
-        return
-    fd_s = str(fd) if fd else None
-    td_s = str(td) if td else None
-    period = f"{fd_s or 'Start'} to {td_s or 'Today'}"
-    linked = db.find_linked_counterparty("supplier", sup_id)
-    include_linked = True
-    if linked:
-        st.success(
-            f"Dual-role party **{linked.get('primary_code') or linked.get('code')}** — "
-            f"Supplier and Customer **{linked['code']} — {linked['name']}** share one "
-            f"**combined ledger** (purchases + sales netted)."
-        )
-        split_books = st.checkbox(
-            "Show supplier book only (not combined)",
-            value=False,
-            key="sl_split_books",
-            help="Off = combined Supplier + Customer statement (recommended). "
-                 "On = supplier AP book only.",
-        )
-        include_linked = not split_books
-
-    def _ledger_kpis(party, entries, detailed=False):
-        summary = (party or {}).get("ledger_summary") or {}
-        opening = float(summary.get("opening") or 0)
-        pdeb = float(summary.get("period_debit") or 0)
-        pcred = float(summary.get("period_credit") or 0)
-        if detailed:
-            closing = db.last_detailed_ledger_balance(entries, kind="supplier") if entries else float(
-                party.get("balance") or 0
-            )
-        else:
-            closing = float(summary.get("closing") if summary else (
-                entries[-1]["balance"] if entries else party.get("balance") or 0
-            ))
-        code = party.get("code") or ""
-        st.subheader(f"{code} — {party['name']}" if code else party["name"])
-        note = summary.get("note")
-        if note:
-            st.caption(note)
-        hlp.render_ledger_kpi_strip(opening, pdeb, pcred, closing)
-        st.caption("Balances use Finance Manager signs: **Dr** = Debit, **Cr** = Credit (same for customers and suppliers).")
-
-    ledger_tab = sticky_page_tabs(
-        ["Summary", "Detailed (with invoice lines)"],
-        "sl_ledger_tab",
-    )
-    if ledger_tab == "Summary":
-        supplier, entries = db.get_supplier_ledger(sup_id, fd_s, td_s, include_linked=include_linked)
-        _ledger_kpis(supplier, entries, detailed=False)
-        if entries:
-            df = pd.DataFrame(entries)[["date", "ref", "description", "debit", "credit", "balance"]]
-            df = _attach_ledger_party(df, supplier, "supplier")
-            render_ledger_summary_table(entries)
-            filters = {"Supplier": f"{supplier.get('code')} - {supplier.get('name')}"}
-            if include_linked and supplier.get("linked_party"):
-                lp = supplier["linked_party"]
-                filters["Combined with"] = f"Customer {lp.get('code')} — {lp.get('name')}"
-            export_df(
-                df, "supplier_ledger", "Supplier Ledger",
-                period=period,
-                filters=filters,
-            )
-        else:
-            st.info("No ledger entries.")
-    elif ledger_tab == "Detailed (with invoice lines)":
-        supplier, entries = db.get_supplier_ledger_detailed(
-            sup_id, fd_s, td_s, include_linked=include_linked,
-        )
-        _ledger_kpis(supplier, entries, detailed=True)
-        if entries:
-            from erp_ui.reports_pages import _detailed_ledger_dataframe
-            df = _detailed_ledger_dataframe(entries)
-            df = _attach_ledger_party(df, supplier, "supplier")
-            try:
-                ls = dict(df.attrs.get("ledger_summary") or supplier.get("ledger_summary") or {})
-                ls["closing"] = db.last_detailed_ledger_balance(entries, kind="supplier")
-                df.attrs["ledger_summary"] = ls
-            except Exception:
-                pass
-            render_ledger_detailed_table(entries)
-            filters = {"Supplier": f"{supplier.get('code')} - {supplier.get('name')}"}
-            if include_linked and supplier.get("linked_party"):
-                lp = supplier["linked_party"]
-                filters["Combined with"] = f"Customer {lp.get('code')} — {lp.get('name')}"
-            export_df(
-                df, "supplier_ledger_detailed", "Supplier Ledger (Detailed)",
-                period=period,
-                filters=filters,
-            )
-        else:
-            st.info("No ledger entries.")
 
 
 # ---------------------------------------------------------------------------

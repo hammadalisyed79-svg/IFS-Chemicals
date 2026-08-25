@@ -75,7 +75,5 @@ def page_mobile_approvals():
                 st.write(f"**Amount:** Rs. {float(so.get('total') or 0):,.2f}")
                 st.caption(f"Channel: {so.get('source_channel')}")
                 if st.button("Open in Sales Orders", key=f"so_{so['id']}", use_container_width=True):
-                    st.session_state.nav_group = "Sales"
-                    st.session_state.nav_screen = "Sales Orders"
-                    st.session_state.pending_nav = ("Sales", "Sales Orders")
-                    st.rerun()
+                    from erp_ui.nav import request_nav
+                    request_nav("Sales", "Sales Orders")
