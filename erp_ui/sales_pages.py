@@ -8,6 +8,20 @@ from erp_ui import helpers as hlp
 from erp_ui import form_flow as ff
 from erp_ui import transaction_list as txn
 
+
+def customer_options(active_only=True):
+    rows = db.get_customers(active_only=active_only)
+    return {f"{r['code']} - {r['name']}": r["id"] for r in rows}
+
+
+def item_options(active_only=True):
+    rows = sorted(
+        db.get_items(active_only=active_only),
+        key=lambda r: hlp.natural_code_sort_key(r.get("code")),
+    )
+    return {f"{r['code']} - {r['name']} ({r['stock_qty']} {r['unit']})": r for r in rows}
+
+
 def _seed_sal_edit(sale, cust_opts, *, cust=None, inv=None, sdate=None, notes=None, from_form=False):
     st.session_state["sal_edit_id"] = sale["id"]
     st.session_state["sal_edit_header"] = {
