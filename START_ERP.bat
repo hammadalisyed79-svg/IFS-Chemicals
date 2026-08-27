@@ -36,6 +36,12 @@ if errorlevel 1 (
   exit /b 1
 )
 
+echo [4] Start HTTPS reverse proxy (public site ports 80 + 443) ...
+powershell -NoProfile -Command "Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -and $_.CommandLine -match 'ifs_reverse_proxy' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }; Start-Process -FilePath '%PY%' -ArgumentList 'ifs_reverse_proxy.py' -WorkingDirectory '%CD%' -WindowStyle Minimized"
+
+echo [5] Wait for public health ...
+powershell -NoProfile -Command "for ($i=1; $i -le 30; $i++) { try { $r = Invoke-WebRequest -Uri 'https://erp.ifschemicals.com/_stcore/health' -UseBasicParsing -TimeoutSec 3; if ($r.Content -eq 'ok') { Write-Host ('Public site ready in ' + $i + 's'); exit 0 } } catch {}; Start-Sleep 1 }; Write-Host 'WARN: Public HTTPS not ready — run restart_https.bat as Administrator if needed.'; exit 0"
+
 echo.
 echo Running. Refresh: https://erp.ifschemicals.com/
 echo Local health: http://127.0.0.1:8501/_stcore/health
