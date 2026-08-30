@@ -3848,6 +3848,8 @@ def recalculate_party_balances():
     Dual-role (same code on customer + supplier): store book-only closings on each
     master so Outstanding can net them (customer + supplier). Never store the
     combined statement closing on both masters — that doubles exposure.
+    Shared party-code COA journals live on the customer own-book only so the
+    net (customer + supplier) does not double-count those JVs.
     """
     with get_connection() as conn:
         _ensure_fmye_party_entries_table(conn)
@@ -4844,8 +4846,12 @@ def _strip_ledger_book_prefix(text: str) -> str:
 
 
 def _dedupe_combined_ledger_movements(movements):
-    """Drop mirror rows when the same voucher was posted to both Customer and Supplier books."""
-    seen: set[tuple] = set()
+    """Drop only *cross-book* mirrors (same voucher on Customer and Supplier).
+
+    Never collapse two identical lines from the *same* book — multi-line JVRs
+    (same ref/amount/narration twice) are valid and must both stay.
+    """
+    kept: list[tuple] = []  # (key, ledger_book)
     out = []
     for e in movements or []:
         key = (
@@ -4855,17 +4861,18 @@ def _dedupe_combined_ledger_movements(movements):
             round(float(e.get("credit") or 0), 2),
             _strip_ledger_book_prefix(e.get("description")),
         )
-        if key in seen:
+        book = (e.get("ledger_book") or "").strip()
+        if book and any(k == key and b and b != book for k, b in kept):
             continue
-        seen.add(key)
+        kept.append((key, book))
         out.append(e)
     return out
 
 
 def _dedupe_combined_detailed_events(events):
-    """Detailed ledger: same voucher on both books counts once."""
+    """Detailed ledger: drop only cross-book mirrors; keep same-book multi-lines."""
     out = []
-    seen: set[tuple] = set()
+    kept: list[tuple] = []
     for e in events or []:
         if (e.get("type") or "").upper() == "OB":
             out.append(e)
@@ -4880,9 +4887,10 @@ def _dedupe_combined_detailed_events(events):
             _strip_ledger_book_prefix(e.get("narration")),
             amt_key,
         )
-        if key in seen:
+        book = (e.get("ledger_book") or "").strip()
+        if book and any(k == key and b and b != book for k, b in kept):
             continue
-        seen.add(key)
+        kept.append((key, book))
         out.append(e)
     return out
 
@@ -4910,6 +4918,7 @@ def get_customer_ledger(customer_id, from_date=None, to_date=None, include_linke
             return None, []
         master_ob = float(customer.get("opening_balance") or 0)
         opening = _party_ledger_opening_as_of(conn, "customer", customer_id, from_date, master_ob)
+        # Dual same-code: shared party-code COA journals live on the customer book.
         movements = _drop_duplicate_opening_jvr(
             _collect_customer_summary_movements(conn, customer_id, from_date, to_date),
             master_ob,
@@ -4924,11 +4933,13 @@ def get_customer_ledger(customer_id, from_date=None, to_date=None, include_linke
                 conn, "supplier", linked["id"], from_date, supp_ob,
                 skip_shared_coa_jv=same_code,
             )
-            # Both books use +Dr/−Cr — net party position = customer + supplier
+            # Both books use +Dr/−Cr — net party position = customer + supplier.
+            # Include linked-book COA/JV lines; cross-book mirrors are removed in dedupe.
+            # (skip_shared_coa_jv stays on opening_as_of only — avoids double-counting B/F.)
             opening = float(opening or 0) + float(supp_open or 0)
             smov = _drop_duplicate_opening_jvr(
                 _collect_supplier_summary_movements(
-                    conn, linked["id"], from_date, to_date, skip_shared_coa_jv=same_code,
+                    conn, linked["id"], from_date, to_date, skip_shared_coa_jv=False,
                 ),
                 supp_ob,
                 kind="supplier",
@@ -4969,26 +4980,38 @@ def get_supplier_ledger(supplier_id, from_date=None, to_date=None, include_linke
         if not supplier:
             return None, []
         master_ob = float(supplier.get("opening_balance") or 0)
-        opening = _party_ledger_opening_as_of(conn, "supplier", supplier_id, from_date, master_ob)
+        linked_probe = find_linked_counterparty("supplier", supplier_id, conn)
+        same_code = bool(
+            linked_probe and _linked_parties_same_code(conn, "supplier", supplier_id)
+        )
+        # Own-book dual: skip shared party-code COA (those stay on the customer book)
+        # so masters / Outstanding do not double-count the same JV.
+        skip_own_coa = same_code and not include_linked
+        opening = _party_ledger_opening_as_of(
+            conn, "supplier", supplier_id, from_date, master_ob,
+            skip_shared_coa_jv=skip_own_coa,
+        )
         movements = _drop_duplicate_opening_jvr(
-            _collect_supplier_summary_movements(conn, supplier_id, from_date, to_date),
+            _collect_supplier_summary_movements(
+                conn, supplier_id, from_date, to_date, skip_shared_coa_jv=skip_own_coa,
+            ),
             master_ob,
             kind="supplier",
         )
-        linked = find_linked_counterparty("supplier", supplier_id, conn) if include_linked else None
+        linked = linked_probe if include_linked else None
         if linked:
-            same_code = _linked_parties_same_code(conn, "supplier", supplier_id)
             movements = _tag_ledger_book(movements, "Supplier")
             cust_ob = float(linked["opening_balance"] or 0)
             cust_open = _party_ledger_opening_as_of(
                 conn, "customer", linked["id"], from_date, cust_ob,
                 skip_shared_coa_jv=same_code,
             )
-            # Both books use +Dr/−Cr — net party position = supplier + customer
+            # Both books use +Dr/−Cr — net party position = supplier + customer.
+            # Include linked-book COA/JV lines; cross-book mirrors are removed in dedupe.
             opening = float(opening or 0) + float(cust_open or 0)
             cmov = _drop_duplicate_opening_jvr(
                 _collect_customer_summary_movements(
-                    conn, linked["id"], from_date, to_date, skip_shared_coa_jv=same_code,
+                    conn, linked["id"], from_date, to_date, skip_shared_coa_jv=False,
                 ),
                 cust_ob,
                 kind="customer",
@@ -5223,7 +5246,7 @@ def get_customer_ledger_detailed(customer_id, from_date=None, to_date=None, incl
             _append_supplier_invoice_detail(conn, events, linked["id"], from_date, to_date)
             _append_supplier_other_ledger(
                 conn, events, linked["id"], from_date, to_date, len(events),
-                skip_shared_coa_jv=same_code,
+                skip_shared_coa_jv=False,
             )
             _tag_detailed_book(events[before_s:], "Supplier")
             if len(events) > 1:
@@ -5265,10 +5288,17 @@ def get_supplier_ledger_detailed(supplier_id, from_date=None, to_date=None, incl
         if not supplier:
             return None, []
         master_ob = float(supplier.get("opening_balance") or 0)
-        opening = _party_ledger_opening_as_of(conn, "supplier", supplier_id, from_date, master_ob)
-        linked = find_linked_counterparty("supplier", supplier_id, conn) if include_linked else None
+        linked_probe = find_linked_counterparty("supplier", supplier_id, conn)
+        same_code = bool(
+            linked_probe and _linked_parties_same_code(conn, "supplier", supplier_id)
+        )
+        skip_own_coa = same_code and not include_linked
+        opening = _party_ledger_opening_as_of(
+            conn, "supplier", supplier_id, from_date, master_ob,
+            skip_shared_coa_jv=skip_own_coa,
+        )
+        linked = linked_probe if include_linked else None
         if linked:
-            same_code = _linked_parties_same_code(conn, "supplier", supplier_id)
             cust_ob = float(linked["opening_balance"] or 0)
             cust_open = _party_ledger_opening_as_of(
                 conn, "customer", linked["id"], from_date, cust_ob,
@@ -5278,7 +5308,6 @@ def get_supplier_ledger_detailed(supplier_id, from_date=None, to_date=None, incl
             supplier["linked_party"] = linked
             supplier["ledger_mode"] = "combined"
         else:
-            same_code = False
             supplier["linked_party"] = None
             supplier["ledger_mode"] = "supplier"
 
@@ -5290,14 +5319,17 @@ def get_supplier_ledger_detailed(supplier_id, from_date=None, to_date=None, incl
         )]
         before = len(events)
         _append_supplier_invoice_detail(conn, events, supplier_id, from_date, to_date)
-        _append_supplier_other_ledger(conn, events, supplier_id, from_date, to_date, len(events))
+        _append_supplier_other_ledger(
+            conn, events, supplier_id, from_date, to_date, len(events),
+            skip_shared_coa_jv=skip_own_coa,
+        )
         if linked:
             _tag_detailed_book(events[before:], "Supplier")
             before_c = len(events)
             _append_customer_invoice_detail(conn, events, linked["id"], from_date, to_date)
             _append_customer_other_ledger(
                 conn, events, linked["id"], from_date, to_date, len(events),
-                skip_shared_coa_jv=same_code,
+                skip_shared_coa_jv=False,
             )
             _tag_detailed_book(events[before_c:], "Customer")
             if len(events) > 1:
