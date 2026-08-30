@@ -1100,7 +1100,7 @@ def render_ledger_summary_table(entries):
             "</tr>"
         )
     st.markdown(
-        f'<div class="txn-reg-wrap"><table class="txn-reg-table">'
+        f'<div class="txn-reg-wrap txn-reg-wrap--ledger"><table class="txn-reg-table">'
         f"<thead><tr>{ths}</tr></thead><tbody>{''.join(body)}</tbody></table></div>",
         unsafe_allow_html=True,
     )
@@ -1146,7 +1146,7 @@ def render_ledger_detailed_table(entries):
             "</tr>"
         )
     st.markdown(
-        f'<div class="txn-reg-wrap"><table class="txn-reg-table">'
+        f'<div class="txn-reg-wrap txn-reg-wrap--ledger"><table class="txn-reg-table">'
         f"<thead><tr>{ths}</tr></thead><tbody>{''.join(body)}</tbody></table></div>",
         unsafe_allow_html=True,
     )

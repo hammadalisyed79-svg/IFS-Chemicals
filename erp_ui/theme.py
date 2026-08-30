@@ -728,6 +728,10 @@ div[class*="st-key-mod_chips_row"] .stButton > button:not([kind="primary"]) {{
   background: {WHITE};
   box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
 }}
+/* Party / report ledgers: taller scroll so long statements match Reports Center */
+.txn-reg-wrap.txn-reg-wrap--ledger {{
+  max-height: min(85vh, 920px);
+}}
 .txn-reg-table {{
   width: 100%;
   min-width: 520px;

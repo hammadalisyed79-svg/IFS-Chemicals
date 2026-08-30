@@ -112,17 +112,23 @@ def render_party_ledger(
         tab_state_key,
     )
 
+    # Match Reports Center: show up to 1000 on-screen lines (same data, not a 100-row page).
+    # Closing KPIs already use the full entry list; paging at 100 made mid-history look "missing".
+    _SCREEN_CAP = 1000
+
     if ledger_tab == "Summary":
         party, entries = get_summary(party_id, fd_s, td_s, include_linked=include_linked)
         _ledger_kpis(party, entries, detailed=False)
         if entries:
-            from erp_ui.list_paging import page_slice
             import pandas as pd
-            page_entries = page_slice(entries, f"{tab_state_key}_sum", default_size=100)
+            show = entries[:_SCREEN_CAP]
             df = pd.DataFrame(entries)[["date", "ref", "description", "debit", "credit", "balance"]]
             df = attach_ledger_party_fn(df, party, party_kind)
-            render_ledger_summary_table(page_entries)
-            st.caption(f"Table shows current page — export includes all **{len(entries):,}** lines.")
+            st.caption(f"**{len(entries):,}** voucher lines" + (
+                f" — showing first **{len(show):,}** on screen; Export / Print has all."
+                if len(entries) > _SCREEN_CAP else ""
+            ))
+            render_ledger_summary_table(show)
             filters = {party_label: f"{party.get('code')} - {party.get('name')}"}
             if include_linked and party.get("linked_party"):
                 lp = party["linked_party"]
@@ -141,9 +147,8 @@ def render_party_ledger(
         party, entries = get_detailed(party_id, fd_s, td_s, include_linked=include_linked)
         _ledger_kpis(party, entries, detailed=True)
         if entries:
-            from erp_ui.list_paging import page_slice
             from erp_ui.reports_pages import _detailed_ledger_dataframe
-            page_entries = page_slice(entries, f"{tab_state_key}_det", default_size=100)
+            show = entries[:_SCREEN_CAP]
             df = _detailed_ledger_dataframe(entries)
             df = attach_ledger_party_fn(df, party, party_kind)
             try:
@@ -152,8 +157,11 @@ def render_party_ledger(
                 df.attrs["ledger_summary"] = ls
             except Exception:
                 pass
-            render_ledger_detailed_table(page_entries)
-            st.caption(f"Table shows current page — export includes all **{len(entries):,}** lines.")
+            st.caption(f"**{len(entries):,}** detailed lines" + (
+                f" — showing first **{len(show):,}** on screen; Export / Print has all."
+                if len(entries) > _SCREEN_CAP else ""
+            ))
+            render_ledger_detailed_table(show)
             filters = {party_label: f"{party.get('code')} - {party.get('name')}"}
             if include_linked and party.get("linked_party"):
                 lp = party["linked_party"]
