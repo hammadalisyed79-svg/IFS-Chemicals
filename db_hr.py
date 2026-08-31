@@ -1028,6 +1028,70 @@ def update_payroll_line(line_id, data, user_id=None):
         return calc
 
 
+def update_payroll_lines_bulk(updates, user_id=None):
+    """Update many draft payroll lines in one transaction.
+
+    updates: [{line_id, basic_salary, ...}, ...]
+    """
+    from database import get_connection
+
+    if not updates:
+        return 0
+    editable = (
+        "basic_salary", "allowances", "overtime", "bonus",
+        "tax_deduction", "eobi", "social_security",
+        "advance_recovery", "loan_recovery", "other_deductions",
+        "days_present", "days_absent", "overtime_hrs",
+    )
+    payroll_ids = set()
+    saved = 0
+    with get_connection() as conn:
+        for data in updates:
+            line_id = data.get("line_id") or data.get("id")
+            if not line_id:
+                continue
+            row = conn.execute(
+                """SELECT pl.*, pr.status AS payroll_status
+                   FROM payroll_lines pl
+                   JOIN payroll_runs pr ON pl.payroll_id=pr.id
+                   WHERE pl.id=?""",
+                (int(line_id),),
+            ).fetchone()
+            if not row:
+                raise ValueError(f"Payroll line #{line_id} not found.")
+            row = dict(row)
+            if row["payroll_status"] != "draft":
+                raise ValueError("Only draft payroll can be edited.")
+            merged = dict(row)
+            for k in editable:
+                if k in data:
+                    merged[k] = data[k]
+            calc = _recalc_payroll_line_fields(merged)
+            conn.execute(
+                """UPDATE payroll_lines SET
+                   basic_salary=?, allowances=?, overtime=?, bonus=?, gross_salary=?,
+                   tax_deduction=?, eobi=?, social_security=?, advance_recovery=?,
+                   loan_recovery=?, other_deductions=?, total_deductions=?, net_salary=?,
+                   days_present=?, days_absent=?, overtime_hrs=?
+                   WHERE id=?""",
+                (
+                    calc["basic_salary"], calc["allowances"], calc["overtime"], calc["bonus"],
+                    calc["gross_salary"], calc["tax_deduction"], calc["eobi"], calc["social_security"],
+                    calc["advance_recovery"], calc["loan_recovery"], calc["other_deductions"],
+                    calc["total_deductions"], calc["net_salary"],
+                    float(merged.get("days_present") or 0),
+                    float(merged.get("days_absent") or 0),
+                    float(merged.get("overtime_hrs") or 0),
+                    int(line_id),
+                ),
+            )
+            payroll_ids.add(row["payroll_id"])
+            saved += 1
+        for pid in payroll_ids:
+            _refresh_payroll_run_totals(conn, pid)
+    return saved
+
+
 def approve_payroll(payroll_id, user_id):
     from database import get_connection
     with get_connection() as conn:

@@ -885,65 +885,189 @@ def page_payroll():
             if not pr or not pr.get("lines"):
                 st.warning("No payroll lines found.")
             else:
-                line_opts = {
-                    f"{l.get('employee_name', '—')} ({l.get('emp_code', '')}) — Net {fmt(l['net_salary'])}": l
-                    for l in pr["lines"]
-                }
-                sel_line = st.selectbox("Employee", list(line_opts.keys()), key="pr_edit_line")
-                line = line_opts[sel_line]
-                st.caption("Adjust earnings and deductions. Gross and net salary recalculate on save.")
-                with st.form("payroll_line_edit"):
-                    st.markdown("**Earnings**")
-                    e1, e2, e3, e4 = st.columns(4)
-                    with e1:
-                        basic = money_input("Basic Salary", value=float(line.get("basic_salary") or 0), min_value=0.0, key="pr_ed_basic")
-                    with e2:
-                        allowances = money_input("Allowances", value=float(line.get("allowances") or 0), min_value=0.0, key="pr_ed_allw")
-                    with e3:
-                        overtime = money_input("Overtime", value=float(line.get("overtime") or 0), min_value=0.0, key="pr_ed_ot")
-                    with e4:
-                        bonus = money_input("Bonus", value=float(line.get("bonus") or 0), min_value=0.0, key="pr_ed_bonus")
-                    st.markdown("**Deductions** (Tax / EOBI / SS default nil — enter only if applicable)")
-                    d1, d2, d3, d4, d5, d6 = st.columns(6)
-                    with d1:
-                        tax = money_input("Tax", value=float(line.get("tax_deduction") or 0), min_value=0.0, key="pr_ed_tax")
-                    with d2:
-                        eobi = money_input("EOBI", value=float(line.get("eobi") or 0), min_value=0.0, key="pr_ed_eobi")
-                    with d3:
-                        ss = money_input("Social Security", value=float(line.get("social_security") or 0), min_value=0.0, key="pr_ed_ss")
-                    with d4:
-                        adv = money_input("Advance Recovery", value=float(line.get("advance_recovery") or 0), min_value=0.0, key="pr_ed_adv")
-                    with d5:
-                        loan = money_input("Loan Recovery", value=float(line.get("loan_recovery") or 0), min_value=0.0, key="pr_ed_loan")
-                    with d6:
-                        other = money_input("Other Deductions", value=float(line.get("other_deductions") or 0), min_value=0.0, key="pr_ed_other")
-                    st.markdown("**Attendance (reference)**")
-                    a1, a2, a3 = st.columns(3)
-                    days_present = a1.number_input("Days Present", min_value=0.0, value=float(line.get("days_present") or 0), step=0.5)
-                    days_absent = a2.number_input("Days Absent", min_value=0.0, value=float(line.get("days_absent") or 0), step=0.5)
-                    ot_hrs = a3.number_input("Overtime Hours", min_value=0.0, value=float(line.get("overtime_hrs") or 0), step=0.5)
-                    preview_gross = basic + allowances + overtime + bonus
-                    preview_ded = tax + eobi + ss + adv + loan + other
-                    st.info(
-                        f"Preview — Gross: **{fmt(preview_gross)}** | "
-                        f"Deductions: **{fmt(preview_ded)}** | Net: **{fmt(preview_gross - preview_ded)}**"
-                    )
-                    if st.form_submit_button("Save Changes", type="primary"):
+                st.markdown(
+                    "**Tabular edit** — change cells in the grid, then **Save all lines**. "
+                    "Gross / deductions / net recalculate automatically on save."
+                )
+                edit_rows = []
+                for l in pr["lines"]:
+                    basic = float(l.get("basic_salary") or 0)
+                    allw = float(l.get("allowances") or 0)
+                    ot = float(l.get("overtime") or 0)
+                    bonus = float(l.get("bonus") or 0)
+                    tax = float(l.get("tax_deduction") or 0)
+                    eobi = float(l.get("eobi") or 0)
+                    ss = float(l.get("social_security") or 0)
+                    adv = float(l.get("advance_recovery") or 0)
+                    loan = float(l.get("loan_recovery") or 0)
+                    other = float(l.get("other_deductions") or 0)
+                    gross = float(l.get("gross_salary") or (basic + allw + ot + bonus))
+                    ded = float(l.get("total_deductions") or (tax + eobi + ss + adv + loan + other))
+                    net = float(l.get("net_salary") or (gross - ded))
+                    edit_rows.append({
+                        "line_id": int(l["id"]),
+                        "Employee": l.get("employee_name") or "—",
+                        "Code": l.get("emp_code") or "—",
+                        "Department": l.get("department_name") or "—",
+                        "Basic": basic,
+                        "Allowances": allw,
+                        "Overtime": ot,
+                        "Bonus": bonus,
+                        "Gross": gross,
+                        "Tax": tax,
+                        "EOBI": eobi,
+                        "SS": ss,
+                        "Advance Rec.": adv,
+                        "Loan Rec.": loan,
+                        "Other Ded.": other,
+                        "Total Ded.": ded,
+                        "Net Salary": net,
+                        "Present": float(l.get("days_present") or 0),
+                        "Absent": float(l.get("days_absent") or 0),
+                        "OT Hrs": float(l.get("overtime_hrs") or 0),
+                    })
+                edit_df = pd.DataFrame(edit_rows)
+                # Live preview of edited earnings/deductions in the grid (readonly cols refreshed after save)
+                edited = st.data_editor(
+                    edit_df,
+                    column_config={
+                        "line_id": None,
+                        "Employee": st.column_config.TextColumn("Employee", disabled=True, width="medium"),
+                        "Code": st.column_config.TextColumn("Code", disabled=True, width="small"),
+                        "Department": st.column_config.TextColumn("Department", disabled=True, width="small"),
+                        "Basic": st.column_config.NumberColumn("Basic", min_value=0.0, step=100.0, format="%.2f"),
+                        "Allowances": st.column_config.NumberColumn("Allowances", min_value=0.0, step=100.0, format="%.2f"),
+                        "Overtime": st.column_config.NumberColumn("Overtime", min_value=0.0, step=100.0, format="%.2f"),
+                        "Bonus": st.column_config.NumberColumn("Bonus", min_value=0.0, step=100.0, format="%.2f"),
+                        "Gross": st.column_config.NumberColumn("Gross", disabled=True, format="%.2f"),
+                        "Tax": st.column_config.NumberColumn("Tax", min_value=0.0, step=50.0, format="%.2f"),
+                        "EOBI": st.column_config.NumberColumn("EOBI", min_value=0.0, step=50.0, format="%.2f"),
+                        "SS": st.column_config.NumberColumn("SS", min_value=0.0, step=50.0, format="%.2f"),
+                        "Advance Rec.": st.column_config.NumberColumn("Advance Rec.", min_value=0.0, step=100.0, format="%.2f"),
+                        "Loan Rec.": st.column_config.NumberColumn("Loan Rec.", min_value=0.0, step=100.0, format="%.2f"),
+                        "Other Ded.": st.column_config.NumberColumn("Other Ded.", min_value=0.0, step=50.0, format="%.2f"),
+                        "Total Ded.": st.column_config.NumberColumn("Total Ded.", disabled=True, format="%.2f"),
+                        "Net Salary": st.column_config.NumberColumn("Net Salary", disabled=True, format="%.2f"),
+                        "Present": st.column_config.NumberColumn("Present", min_value=0.0, step=0.5, format="%.1f"),
+                        "Absent": st.column_config.NumberColumn("Absent", min_value=0.0, step=0.5, format="%.1f"),
+                        "OT Hrs": st.column_config.NumberColumn("OT Hrs", min_value=0.0, step=0.5, format="%.1f"),
+                    },
+                    hide_index=True,
+                    use_container_width=True,
+                    num_rows="fixed",
+                    height=min(720, 90 + max(len(edit_df), 1) * 36),
+                    key=f"pr_tab_editor_{pid}",
+                )
+                # Preview totals from current grid values
+                prev_gross = float(
+                    (edited["Basic"] + edited["Allowances"] + edited["Overtime"] + edited["Bonus"]).sum()
+                )
+                prev_ded = float(
+                    (
+                        edited["Tax"] + edited["EOBI"] + edited["SS"]
+                        + edited["Advance Rec."] + edited["Loan Rec."] + edited["Other Ded."]
+                    ).sum()
+                )
+                st.info(
+                    f"Preview (unsaved) — Gross: **{fmt(prev_gross)}** | "
+                    f"Deductions: **{fmt(prev_ded)}** | Net: **{fmt(prev_gross - prev_ded)}** · "
+                    f"**{len(edited)}** employees"
+                )
+                c1, c2 = st.columns([1, 3])
+                if c1.button("Save all lines", type="primary", key=f"pr_tab_save_{pid}"):
+                    # Only persist rows that actually changed
+                    orig = edit_df.set_index("line_id")
+                    cur = edited.set_index("line_id")
+                    updates = []
+                    cmp_cols = [
+                        "Basic", "Allowances", "Overtime", "Bonus",
+                        "Tax", "EOBI", "SS", "Advance Rec.", "Loan Rec.", "Other Ded.",
+                        "Present", "Absent", "OT Hrs",
+                    ]
+                    for lid in cur.index:
+                        changed = False
+                        for col in cmp_cols:
+                            if abs(float(cur.at[lid, col] or 0) - float(orig.at[lid, col] or 0)) > 0.009:
+                                changed = True
+                                break
+                        if not changed:
+                            continue
+                        updates.append({
+                            "line_id": int(lid),
+                            "basic_salary": float(cur.at[lid, "Basic"] or 0),
+                            "allowances": float(cur.at[lid, "Allowances"] or 0),
+                            "overtime": float(cur.at[lid, "Overtime"] or 0),
+                            "bonus": float(cur.at[lid, "Bonus"] or 0),
+                            "tax_deduction": float(cur.at[lid, "Tax"] or 0),
+                            "eobi": float(cur.at[lid, "EOBI"] or 0),
+                            "social_security": float(cur.at[lid, "SS"] or 0),
+                            "advance_recovery": float(cur.at[lid, "Advance Rec."] or 0),
+                            "loan_recovery": float(cur.at[lid, "Loan Rec."] or 0),
+                            "other_deductions": float(cur.at[lid, "Other Ded."] or 0),
+                            "days_present": float(cur.at[lid, "Present"] or 0),
+                            "days_absent": float(cur.at[lid, "Absent"] or 0),
+                            "overtime_hrs": float(cur.at[lid, "OT Hrs"] or 0),
+                        })
+                    if not updates:
+                        st.warning("No changes to save.")
+                    else:
                         try:
-                            db.update_payroll_line(line["id"], {
-                                "basic_salary": basic, "allowances": allowances,
-                                "overtime": overtime, "bonus": bonus,
-                                "tax_deduction": tax, "eobi": eobi,
-                                "social_security": ss, "advance_recovery": adv,
-                                "loan_recovery": loan, "other_deductions": other,
-                                "days_present": days_present, "days_absent": days_absent,
-                                "overtime_hrs": ot_hrs,
-                            }, uid())
-                            ff.action_done("Payroll line updated.")
+                            n = db.update_payroll_lines_bulk(updates, uid())
+                            ff.action_done(f"Updated **{n}** payroll line(s).")
                         except Exception as e:
                             st.error(str(e))
-                st.divider()
-                render_dataframe_html_table(_payroll_lines_df(pr["lines"]))
+                c2.caption(
+                    "Editable: earnings, deductions, attendance. "
+                    "Gross / Total Ded. / Net are calculated on save."
+                )
+                with st.expander("Single-employee form (optional)"):
+                    line_opts = {
+                        f"{l.get('employee_name', '—')} ({l.get('emp_code', '')}) — Net {fmt(l['net_salary'])}": l
+                        for l in pr["lines"]
+                    }
+                    sel_line = st.selectbox("Employee", list(line_opts.keys()), key="pr_edit_line")
+                    line = line_opts[sel_line]
+                    with st.form("payroll_line_edit"):
+                        e1, e2, e3, e4 = st.columns(4)
+                        with e1:
+                            basic = money_input("Basic Salary", value=float(line.get("basic_salary") or 0), min_value=0.0, key="pr_ed_basic")
+                        with e2:
+                            allowances = money_input("Allowances", value=float(line.get("allowances") or 0), min_value=0.0, key="pr_ed_allw")
+                        with e3:
+                            overtime = money_input("Overtime", value=float(line.get("overtime") or 0), min_value=0.0, key="pr_ed_ot")
+                        with e4:
+                            bonus = money_input("Bonus", value=float(line.get("bonus") or 0), min_value=0.0, key="pr_ed_bonus")
+                        d1, d2, d3, d4, d5, d6 = st.columns(6)
+                        with d1:
+                            tax = money_input("Tax", value=float(line.get("tax_deduction") or 0), min_value=0.0, key="pr_ed_tax")
+                        with d2:
+                            eobi = money_input("EOBI", value=float(line.get("eobi") or 0), min_value=0.0, key="pr_ed_eobi")
+                        with d3:
+                            ss = money_input("Social Security", value=float(line.get("social_security") or 0), min_value=0.0, key="pr_ed_ss")
+                        with d4:
+                            adv = money_input("Advance Recovery", value=float(line.get("advance_recovery") or 0), min_value=0.0, key="pr_ed_adv")
+                        with d5:
+                            loan = money_input("Loan Recovery", value=float(line.get("loan_recovery") or 0), min_value=0.0, key="pr_ed_loan")
+                        with d6:
+                            other = money_input("Other Deductions", value=float(line.get("other_deductions") or 0), min_value=0.0, key="pr_ed_other")
+                        a1, a2, a3 = st.columns(3)
+                        days_present = a1.number_input("Days Present", min_value=0.0, value=float(line.get("days_present") or 0), step=0.5)
+                        days_absent = a2.number_input("Days Absent", min_value=0.0, value=float(line.get("days_absent") or 0), step=0.5)
+                        ot_hrs = a3.number_input("Overtime Hours", min_value=0.0, value=float(line.get("overtime_hrs") or 0), step=0.5)
+                        if st.form_submit_button("Save this employee", type="primary"):
+                            try:
+                                db.update_payroll_line(line["id"], {
+                                    "basic_salary": basic, "allowances": allowances,
+                                    "overtime": overtime, "bonus": bonus,
+                                    "tax_deduction": tax, "eobi": eobi,
+                                    "social_security": ss, "advance_recovery": adv,
+                                    "loan_recovery": loan, "other_deductions": other,
+                                    "days_present": days_present, "days_absent": days_absent,
+                                    "overtime_hrs": ot_hrs,
+                                }, uid())
+                                ff.action_done("Payroll line updated.")
+                            except Exception as e:
+                                st.error(str(e))
     elif tab == "Salary Slips":
         runs = db.get_payroll_runs()
         if runs:
