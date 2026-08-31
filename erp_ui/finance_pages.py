@@ -2128,7 +2128,7 @@ def page_cash_advance():
     aid = db.resolve_cash_advance_account_id()
     if not aid:
         st.error(
-            "GL head **100180 — ADVANCE PAYMENTS** is missing. "
+            "GL head **100193 — ADVANCE PAYMENT OTHERS** is missing. "
             "Create it under Assets in Chart of Accounts first."
         )
         return
@@ -2137,7 +2137,10 @@ def page_cash_advance():
             "SELECT code, name FROM chart_of_accounts WHERE id=?", (aid,)
         ).fetchone()
     if acc:
-        st.caption(f"Advance control account: **{acc['code']} — {acc['name']}**")
+        st.caption(
+            f"Control account: **{acc['code']} — {acc['name']}** "
+            "(riders / cash float). Employee advances use **100180 — ADVANCE PAYMENTS**."
+        )
 
     open_res = db.search_cash_advances(open_only=True, page_size=200, export_all=False)
     open_items = open_res.get("items") or []

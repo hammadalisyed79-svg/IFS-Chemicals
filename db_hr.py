@@ -8,7 +8,8 @@ SCHEMA_HR_PATH = Path(__file__).parent / "schema_hr.sql"
 HR_AC = {
     "salary_expense": "6200",
     "salary_payable": "2150",
-    "employee_advance": "1360",
+    # 100180 ADVANCE PAYMENTS — employees only (cash/rider floats use 100193)
+    "employee_advance": "100180",
     "eobi_payable": "2160",
     "ss_payable": "2165",
     "tax_payable_payroll": "2170",

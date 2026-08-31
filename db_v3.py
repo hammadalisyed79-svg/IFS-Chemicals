@@ -377,22 +377,103 @@ def _ensure_cash_advances_schema(conn):
     conn.execute(
         "INSERT OR IGNORE INTO document_sequences (doc_type, prefix, padding) VALUES ('CAS', 'CAS', 4)"
     )
+    ensure_advance_payment_others_account(conn)
+    reclass_open_cash_advances_to_others_once(conn)
 
 
-def resolve_cash_advance_account_id(conn=None):
-    """Prefer ADVANCE PAYMENTS (100180); fall back to name match."""
+# 100180 = employee advances only (HR). Cash/rider floats use ADVANCE PAYMENT OTHERS.
+EMPLOYEE_ADVANCE_ACCOUNT_CODE = "100180"
+CASH_ADVANCE_OTHERS_ACCOUNT_CODE = "100193"
+CASH_ADVANCE_OTHERS_ACCOUNT_NAME = "ADVANCE PAYMENT OTHERS"
+
+
+def ensure_advance_payment_others_account(conn):
+    """Create GL head for non-employee advances (riders, cash float, etc.)."""
+    row = conn.execute(
+        "SELECT id FROM chart_of_accounts WHERE code=? AND is_active=1",
+        (CASH_ADVANCE_OTHERS_ACCOUNT_CODE,),
+    ).fetchone()
+    if row:
+        return int(row["id"])
+    existing = conn.execute(
+        "SELECT id, is_active FROM chart_of_accounts WHERE code=?",
+        (CASH_ADVANCE_OTHERS_ACCOUNT_CODE,),
+    ).fetchone()
+    if existing:
+        if not existing["is_active"]:
+            conn.execute(
+                "UPDATE chart_of_accounts SET is_active=1, name=? WHERE id=?",
+                (CASH_ADVANCE_OTHERS_ACCOUNT_NAME, existing["id"]),
+            )
+        return int(existing["id"])
+    by_name = conn.execute(
+        """SELECT id FROM chart_of_accounts
+           WHERE is_active=1 AND UPPER(TRIM(name))=? LIMIT 1""",
+        (CASH_ADVANCE_OTHERS_ACCOUNT_NAME,),
+    ).fetchone()
+    if by_name:
+        return int(by_name["id"])
+    # Prefer same asset group / company as 100180 when present
+    src = conn.execute(
+        """SELECT account_group_id, company_id, branch_id FROM chart_of_accounts
+           WHERE code=? LIMIT 1""",
+        (EMPLOYEE_ADVANCE_ACCOUNT_CODE,),
+    ).fetchone()
+    if src:
+        gid = int(src["account_group_id"])
+        company_id = src["company_id"]
+        branch_id = src["branch_id"]
+    else:
+        ag = conn.execute(
+            "SELECT id FROM account_groups WHERE group_type='asset' LIMIT 1"
+        ).fetchone()
+        if not ag:
+            return None
+        gid = int(ag["id"])
+        company_id = None
+        branch_id = None
+    cur = conn.execute(
+        """INSERT INTO chart_of_accounts(
+               code, name, account_group_id, opening_balance, current_balance,
+               is_active, company_id, branch_id, created_by
+           ) VALUES (?,?,?,0,0,1,?,?,1)""",
+        (CASH_ADVANCE_OTHERS_ACCOUNT_CODE, CASH_ADVANCE_OTHERS_ACCOUNT_NAME, gid, company_id, branch_id),
+    )
+    return int(cur.lastrowid)
+
+
+def resolve_employee_advance_account_code(conn=None):
+    """GL code for HR employee advances/loans — always 100180 when present."""
     import database as db
 
     def _find(c):
-        for code in ("100180",):
-            row = c.execute(
-                "SELECT id FROM chart_of_accounts WHERE code=? AND is_active=1", (code,),
-            ).fetchone()
-            if row:
-                return int(row["id"])
+        row = c.execute(
+            "SELECT code FROM chart_of_accounts WHERE code=? AND is_active=1",
+            (EMPLOYEE_ADVANCE_ACCOUNT_CODE,),
+        ).fetchone()
+        return EMPLOYEE_ADVANCE_ACCOUNT_CODE if row else "1360"
+
+    if conn is not None:
+        return _find(conn)
+    with db.get_connection() as c:
+        return _find(c)
+
+
+def resolve_cash_advance_account_id(conn=None):
+    """Non-employee advances (Cash Advance register) → ADVANCE PAYMENT OTHERS.
+
+    100180 is reserved for employee advances only.
+    """
+    import database as db
+
+    def _find(c):
+        aid = ensure_advance_payment_others_account(c)
+        if aid:
+            return aid
         row = c.execute(
             """SELECT id FROM chart_of_accounts
-               WHERE is_active=1 AND UPPER(name) LIKE '%ADVANCE PAYMENT%'
+               WHERE is_active=1
+                 AND UPPER(name) LIKE '%ADVANCE PAYMENT%OTHER%'
                ORDER BY code LIMIT 1"""
         ).fetchone()
         return int(row["id"]) if row else None
@@ -401,6 +482,57 @@ def resolve_cash_advance_account_id(conn=None):
         return _find(conn)
     with db.get_connection() as c:
         return _find(c)
+
+
+def reclass_open_cash_advances_to_others_once(conn, user_id=1):
+    """Move open/partial cash-advance control from 100180 → 100193 (one-time)."""
+    if not conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='schema_meta'"
+    ).fetchone():
+        return
+    done = conn.execute(
+        "SELECT 1 FROM schema_meta WHERE key='cash_adv_others_reclass_v1'"
+    ).fetchone()
+    if done:
+        return
+    emp_row = conn.execute(
+        "SELECT id FROM chart_of_accounts WHERE code=?",
+        (EMPLOYEE_ADVANCE_ACCOUNT_CODE,),
+    ).fetchone()
+    others_id = ensure_advance_payment_others_account(conn)
+    if not emp_row or not others_id:
+        return
+    emp_id = int(emp_row["id"])
+    if emp_id == others_id:
+        return
+    opens = conn.execute(
+        """SELECT id, document_no, outstanding_amount FROM cash_advances
+           WHERE advance_account_id=? AND status IN ('open','partial')
+             AND COALESCE(outstanding_amount,0) > 0.005""",
+        (emp_id,),
+    ).fetchall()
+    total = round(sum(float(r["outstanding_amount"] or 0) for r in opens), 2)
+    if total > 0.005:
+        from datetime import date as _date
+        today = _date.today().isoformat()
+        post_gl_account_id(
+            conn, today, others_id, total, 0,
+            "Reclass open cash advances to ADVANCE PAYMENT OTHERS",
+            "cash_advance_reclass", None, "CA-RECLASS-OTHERS", user_id,
+        )
+        post_gl_account_id(
+            conn, today, emp_id, 0, total,
+            "Reclass open cash advances to ADVANCE PAYMENT OTHERS",
+            "cash_advance_reclass", None, "CA-RECLASS-OTHERS", user_id,
+        )
+    conn.execute(
+        """UPDATE cash_advances SET advance_account_id=?
+           WHERE advance_account_id=? AND status IN ('open','partial')""",
+        (others_id, emp_id),
+    )
+    conn.execute(
+        "INSERT OR REPLACE INTO schema_meta(key,value) VALUES('cash_adv_others_reclass_v1','1')"
+    )
 
 
 def _ensure_cash_borrows_schema(conn):
@@ -4485,7 +4617,7 @@ def issue_cash_advance(
         adv_aid = int(advance_account_id or 0) or resolve_cash_advance_account_id(conn)
         if not adv_aid:
             raise ValueError(
-                "Advance account not found. Create GL head 100180 — ADVANCE PAYMENTS first."
+                "Advance account not found. Create GL head 100193 — ADVANCE PAYMENT OTHERS first."
             )
         acc = conn.execute(
             """SELECT a.id, a.code, a.name FROM chart_of_accounts a
