@@ -79,16 +79,27 @@ def page_business_overview():
     section_header("Today's Performance")
     r1 = st.columns(4)
     with r1[0]:
-        _kpi_card("Today Sales", fmt_money(stats.get("today_sales", 0)), "Invoices dated today", BLUE, "📈")
+        _kpi_card("Today Sales", fmt_money(stats.get("today_sales", 0)), "Approved invoices dated today", BLUE, "📈")
     with r1[1]:
-        _kpi_card("Today Purchases", fmt_money(stats.get("today_purchases", 0)), "Bills dated today", RED, "📦")
+        _kpi_card("Today Purchases", fmt_money(stats.get("today_purchases", 0)), "Approved bills dated today", RED, "📦")
     with r1[2]:
         mtd_s = stats.get("mtd_sales", 0)
         mtd_p = stats.get("mtd_purchases", 0)
-        _kpi_card("MTD Sales", fmt_money(mtd_s), f"Purchases {fmt_money(mtd_p)}", BLUE, "📊")
+        draft_note = ""
+        d_s = float(stats.get("mtd_sales_draft") or 0)
+        d_p = float(stats.get("mtd_purchases_draft") or 0)
+        if d_s > 0.005 or d_p > 0.005:
+            draft_note = f" · drafts excl. S {fmt_money(d_s)} / P {fmt_money(d_p)}"
+        _kpi_card(
+            "MTD Sales",
+            fmt_money(mtd_s),
+            f"Purchases {fmt_money(mtd_p)} (approved){draft_note}",
+            BLUE,
+            "📊",
+        )
     with r1[3]:
         net = float(mtd_s or 0) - float(mtd_p or 0)
-        _kpi_card("MTD Net (Sales − Purch.)", fmt_money(net), "Before expenses", RED, "💹")
+        _kpi_card("MTD Net (Sales − Purch.)", fmt_money(net), "Approved invoices · before expenses", RED, "💹")
 
     # --- Row 2: Liquidity & working capital ---
     section_header("Liquidity & Working Capital")

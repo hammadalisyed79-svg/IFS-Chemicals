@@ -1926,20 +1926,29 @@ def get_dashboard_stats_v2():
     with get_connection() as conn:
         stats = {"as_of": today, "generated_at": now()}
 
+        # Executive KPIs: posted (approved) invoices only — drafts inflate MTD.
         stats["today_sales"] = float(conn.execute(
-            "SELECT COALESCE(SUM(total),0) FROM sales_invoices WHERE invoice_date=? AND status!='cancelled'",
+            "SELECT COALESCE(SUM(total),0) FROM sales_invoices WHERE invoice_date=? AND status='approved'",
             (today,),
         ).fetchone()[0])
         stats["today_purchases"] = float(conn.execute(
-            "SELECT COALESCE(SUM(total),0) FROM purchase_invoices WHERE invoice_date=? AND status!='cancelled'",
+            "SELECT COALESCE(SUM(total),0) FROM purchase_invoices WHERE invoice_date=? AND status='approved'",
             (today,),
         ).fetchone()[0])
         stats["mtd_sales"] = float(conn.execute(
-            "SELECT COALESCE(SUM(total),0) FROM sales_invoices WHERE invoice_date>=? AND status!='cancelled'",
+            "SELECT COALESCE(SUM(total),0) FROM sales_invoices WHERE invoice_date>=? AND status='approved'",
             (month_start,),
         ).fetchone()[0])
         stats["mtd_purchases"] = float(conn.execute(
-            "SELECT COALESCE(SUM(total),0) FROM purchase_invoices WHERE invoice_date>=? AND status!='cancelled'",
+            "SELECT COALESCE(SUM(total),0) FROM purchase_invoices WHERE invoice_date>=? AND status='approved'",
+            (month_start,),
+        ).fetchone()[0])
+        stats["mtd_sales_draft"] = float(conn.execute(
+            "SELECT COALESCE(SUM(total),0) FROM sales_invoices WHERE invoice_date>=? AND status IN ('draft','pending_approval')",
+            (month_start,),
+        ).fetchone()[0])
+        stats["mtd_purchases_draft"] = float(conn.execute(
+            "SELECT COALESCE(SUM(total),0) FROM purchase_invoices WHERE invoice_date>=? AND status IN ('draft','pending_approval')",
             (month_start,),
         ).fetchone()[0])
 
@@ -2041,11 +2050,11 @@ def get_dashboard_stats_v2():
             m_start, m_end = _month_bounds(today_dt, months_back)
             ms, me = m_start.strftime("%Y-%m-%d"), m_end.strftime("%Y-%m-%d")
             sales = float(conn.execute(
-                "SELECT COALESCE(SUM(total),0) FROM sales_invoices WHERE invoice_date BETWEEN ? AND ? AND status!='cancelled'",
+                "SELECT COALESCE(SUM(total),0) FROM sales_invoices WHERE invoice_date BETWEEN ? AND ? AND status='approved'",
                 (ms, me),
             ).fetchone()[0])
             purchases = float(conn.execute(
-                "SELECT COALESCE(SUM(total),0) FROM purchase_invoices WHERE invoice_date BETWEEN ? AND ? AND status!='cancelled'",
+                "SELECT COALESCE(SUM(total),0) FROM purchase_invoices WHERE invoice_date BETWEEN ? AND ? AND status='approved'",
                 (ms, me),
             ).fetchone()[0])
             trend.append({"month": m_start.strftime("%b %Y"), "sales": sales, "purchases": purchases})
@@ -2056,10 +2065,10 @@ def get_dashboard_stats_v2():
         stats["items"] = conn.execute("SELECT COUNT(*) FROM products WHERE is_active=1").fetchone()[0]
         stats["employees"] = _safe_count(conn, "SELECT COUNT(*) FROM employees WHERE is_active=1")
         stats["sales_total"] = float(conn.execute(
-            "SELECT COALESCE(SUM(total),0) FROM sales_invoices WHERE status!='cancelled'"
+            "SELECT COALESCE(SUM(total),0) FROM sales_invoices WHERE status='approved'"
         ).fetchone()[0])
         stats["purchases_total"] = float(conn.execute(
-            "SELECT COALESCE(SUM(total),0) FROM purchase_invoices WHERE status!='cancelled'"
+            "SELECT COALESCE(SUM(total),0) FROM purchase_invoices WHERE status='approved'"
         ).fetchone()[0])
 
         if _table_exists(conn, "attendance"):
