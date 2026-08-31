@@ -234,6 +234,7 @@ def prime_edit_refresh(edit_prefix: str, record_id: int, picker_prefix: str | No
     rid = int(record_id)
     clear_keys(f"{edit_prefix}_header", f"{edit_prefix}_lines")
     st.session_state[f"{edit_prefix}_id"] = rid
+    st.session_state[f"{edit_prefix}_picker_id"] = rid
     st.session_state[f"{edit_prefix}_reload"] = rid
     if picker_prefix:
         from erp_ui.transaction_list import reselect_transaction_picker
@@ -249,6 +250,36 @@ def finish_edit_refresh(
     prime_edit_refresh(edit_prefix, record_id, picker_prefix)
     set_flash(message, title=infer_action_title(message))
     st.rerun()
+
+
+def edit_record_loaded(edit_prefix: str, record_id: int) -> bool:
+    """True when header/lines in session belong to this record id."""
+    try:
+        return int(st.session_state.get(f"{edit_prefix}_id") or 0) == int(record_id)
+    except (TypeError, ValueError):
+        return False
+
+
+def sync_edit_record(edit_prefix: str, record_id: int) -> None:
+    """Drop cached edit header/lines when the picker moves to another record."""
+    rid = int(record_id)
+    track_key = f"{edit_prefix}_picker_id"
+    prev = st.session_state.get(track_key)
+    if prev is not None and int(prev) != rid:
+        clear_keys(
+            f"{edit_prefix}_id",
+            f"{edit_prefix}_header",
+            f"{edit_prefix}_lines",
+            f"{edit_prefix}_reload",
+        )
+        for k in list(st.session_state.keys()):
+            sk = str(k)
+            if sk.startswith(f"{edit_prefix}_") and (
+                sk.endswith("_was_retail") or sk.endswith("_paid")
+            ):
+                st.session_state.pop(k, None)
+        bump_form_generation(f"{edit_prefix}_hdr")
+    st.session_state[track_key] = rid
 
 
 def edit_panel_active(edit_prefix: str, record_id: int, *, load_clicked: bool = False) -> bool:
@@ -274,6 +305,7 @@ def finish_after_delete(
     message: str = "Deleted successfully.",
 ) -> None:
     clear_session_prefix(edit_prefix)
+    clear_keys(f"{edit_prefix}_picker_id")
     if picker_prefix:
         clear_keys(
             f"{picker_prefix}_pick_sel",

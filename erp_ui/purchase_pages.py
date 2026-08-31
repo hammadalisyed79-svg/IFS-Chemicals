@@ -396,6 +396,7 @@ def page_purchases():
         )
         if not pid:
             return
+        ff.sync_edit_record("pur_edit", pid)
         purchase = db.get_purchase(pid)
         status = (purchase.get("status") or "draft").lower()
         sup_opts = supplier_options()
@@ -416,23 +417,49 @@ def page_purchases():
         # draft / rejected
         invoice_status_banner("purchase", purchase)
         sup_keys = list(sup_opts.keys())
-        cur_sup_id = (st.session_state.get("pur_edit_header") or {}).get("supplier_id") or purchase["supplier_id"]
+        loaded = ff.edit_record_loaded("pur_edit", pid)
+        cur_sup_id = (
+            (st.session_state.get("pur_edit_header") or {}).get("supplier_id")
+            if loaded
+            else purchase["supplier_id"]
+        ) or purchase["supplier_id"]
         sup_idx = next((i for i, k in enumerate(sup_keys) if sup_opts[k] == cur_sup_id), 0)
-        with st.form("edit_purchase_hdr"):
-            inv = st.text_input("Invoice No", value=purchase["invoice_no"])
+        hdr_form = ff.widget_key("pur_edit_hdr", f"form_{pid}")
+        with st.form(hdr_form):
+            inv = st.text_input(
+                "Invoice No",
+                value=purchase["invoice_no"],
+                key=ff.widget_key("pur_edit_hdr", f"inv_{pid}"),
+            )
             sup = st.selectbox(
                 "Supplier",
                 sup_keys,
                 index=sup_idx,
+                key=ff.widget_key("pur_edit_hdr", f"sup_{pid}"),
                 help="Change supplier here, then click Load for Edit and Update Purchase.",
             )
-            pdate = st.date_input("Date", value=date.fromisoformat(purchase["purchase_date"]))
-            pay_mode = st.selectbox("Payment Mode", ["credit", "cash", "bank"],
-                                    index=["credit", "cash", "bank"].index(purchase["payment_mode"]))
-            paid = hlp.money_input(
-                "Paid Amount", value=float(purchase["paid_amount"]), min_value=0.0, key="pur_edit_paid",
+            pdate = st.date_input(
+                "Date",
+                value=date.fromisoformat(purchase["purchase_date"]),
+                key=ff.widget_key("pur_edit_hdr", f"date_{pid}"),
             )
-            notes = st.text_input("Notes", value=purchase["notes"] or "")
+            pay_mode = st.selectbox(
+                "Payment Mode",
+                ["credit", "cash", "bank"],
+                index=["credit", "cash", "bank"].index(purchase["payment_mode"]),
+                key=ff.widget_key("pur_edit_hdr", f"pay_{pid}"),
+            )
+            paid = hlp.money_input(
+                "Paid Amount",
+                value=float(purchase["paid_amount"]),
+                min_value=0.0,
+                key=ff.widget_key("pur_edit_hdr", f"paid_{pid}"),
+            )
+            notes = st.text_input(
+                "Notes",
+                value=purchase["notes"] or "",
+                key=ff.widget_key("pur_edit_hdr", f"notes_{pid}"),
+            )
             load = st.form_submit_button("Load for Edit")
         if ff.edit_panel_active("pur_edit", pid, load_clicked=load):
             if load:

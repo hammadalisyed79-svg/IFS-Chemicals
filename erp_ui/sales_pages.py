@@ -493,6 +493,7 @@ def page_sales():
         )
         if not sid:
             return
+        ff.sync_edit_record("sal_edit", sid)
         sale = db.get_sale(sid)
         status = (sale.get("status") or "draft").lower()
         cust_opts = customer_options()
@@ -513,18 +514,37 @@ def page_sales():
         # draft / rejected — editable
         invoice_status_banner("sale", sale)
         cust_keys = list(cust_opts.keys())
-        cur_cust_id = (st.session_state.get("sal_edit_header") or {}).get("customer_id") or sale["customer_id"]
+        loaded = ff.edit_record_loaded("sal_edit", sid)
+        cur_cust_id = (
+            (st.session_state.get("sal_edit_header") or {}).get("customer_id")
+            if loaded
+            else sale["customer_id"]
+        ) or sale["customer_id"]
         cust_idx = next((i for i, k in enumerate(cust_keys) if cust_opts[k] == cur_cust_id), 0)
-        with st.form("edit_sale_hdr"):
-            inv = st.text_input("Invoice No", value=sale["invoice_no"])
+        hdr_form = ff.widget_key("sal_edit_hdr", f"form_{sid}")
+        with st.form(hdr_form):
+            inv = st.text_input(
+                "Invoice No",
+                value=sale["invoice_no"],
+                key=ff.widget_key("sal_edit_hdr", f"inv_{sid}"),
+            )
             cust = st.selectbox(
                 "Customer",
                 cust_keys,
                 index=cust_idx,
+                key=ff.widget_key("sal_edit_hdr", f"cust_{sid}"),
                 help="Change customer here, then click Load for Edit and Update Sale.",
             )
-            sdate = st.date_input("Date", value=date.fromisoformat(sale["sale_date"]))
-            notes = st.text_input("Notes", value=sale["notes"] or "")
+            sdate = st.date_input(
+                "Date",
+                value=date.fromisoformat(sale["sale_date"]),
+                key=ff.widget_key("sal_edit_hdr", f"date_{sid}"),
+            )
+            notes = st.text_input(
+                "Notes",
+                value=sale["notes"] or "",
+                key=ff.widget_key("sal_edit_hdr", f"notes_{sid}"),
+            )
             load = st.form_submit_button("Load for Edit")
         if ff.edit_panel_active("sal_edit", sid, load_clicked=load):
             if load:
