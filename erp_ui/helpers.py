@@ -1777,18 +1777,53 @@ def sales_order_dispatch_to(order: dict | None) -> str:
     return ""
 
 
+def _picker_status_suffix(status) -> str:
+    try:
+        from erp_ui.invoice_status_ui import status_label
+        return status_label(status or "open")
+    except Exception:
+        raw = str(status or "open").strip().lower()
+        return {"open": "Active", "partial": "Partial"}.get(
+            raw, raw.replace("_", " ").title() or "—"
+        )
+
+
+def document_party_picker_label(
+    row: dict,
+    *,
+    doc_key: str = "document_no",
+    party_key: str = "customer_name",
+    status_key: str = "status",
+    date_key: str | None = None,
+) -> str:
+    """Search/picker label: doc — party [Status] (optional date)."""
+    r = row or {}
+    doc = r.get(doc_key) or r.get("invoice_no") or r.get("return_no") or "—"
+    party = (
+        r.get(party_key)
+        or r.get("customer_name")
+        or r.get("supplier_name")
+        or ""
+    )
+    status = _picker_status_suffix(r.get(status_key))
+    label = f"{doc} — {party} [{status}]"
+    if date_key and r.get(date_key):
+        label += f" ({str(r.get(date_key))[:10]})"
+    return label
+
+
 def sales_order_picker_label(
     order: dict,
     *,
     show_total: bool = True,
     show_pending: bool = False,
 ) -> str:
-    """Dropdown label: SO no, customer, delivery stop, amount/pending, Active/Partial status."""
+    """Dropdown label: SO — customer [Status] — stop / pending / amount."""
     o = order or {}
-    parts = [
-        o.get("document_no") or "SO",
-        o.get("customer_name") or "",
-    ]
+    doc = o.get("document_no") or "SO"
+    cust = o.get("customer_name") or ""
+    status = _picker_status_suffix(o.get("status") or "open")
+    parts = [f"{doc} — {cust} [{status}]"]
     dest = sales_order_dispatch_to(o)
     if dest:
         parts.append(f"Stop: {dest}")
@@ -1796,15 +1831,6 @@ def sales_order_picker_label(
         parts.append(f"pending {float(o.get('pending_qty') or 0):,.0f} units")
     if show_total:
         parts.append(f"Rs. {float(o.get('total') or 0):,.0f}")
-    try:
-        from erp_ui.invoice_status_ui import status_label
-        status = status_label(o.get("status") or "open")
-    except Exception:
-        raw = str(o.get("status") or "open").strip().lower()
-        status = {"open": "Active", "partial": "Partial"}.get(
-            raw, raw.replace("_", " ").title()
-        )
-    parts.append(f"[{status}]")
     return " — ".join(p for p in parts if p)
 
 

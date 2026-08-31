@@ -389,7 +389,7 @@ def page_purchases():
         pid, _ = txn.transaction_picker(
             "pur_edit",
             db.search_purchases,
-            lambda r: f"{r['invoice_no']} — {r['supplier_name']} ({r['purchase_date']}) [{r.get('status','draft')}]",
+            lambda r: hlp.document_party_picker_label(r, doc_key="invoice_no", date_key="purchase_date"),
             "Supplier",
             party_opts,
             "supplier_id",

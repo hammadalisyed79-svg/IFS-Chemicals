@@ -735,8 +735,7 @@ def sales_register_list(action_panel=None, open_handler=None):
         "Customer",
         party_opts,
         lambda r: (
-            f"{r['invoice_no']} — {r['customer_name']} "
-            f"({fmt_datetime_from_record(r, 'sale_date')}) [{_status_label(r.get('status'))}]"
+            hlp.document_party_picker_label(r, doc_key="invoice_no", date_key="sale_date")
         ),
         "sales_list",
         "Sales Register",
@@ -770,8 +769,7 @@ def purchase_register_list(action_panel=None, open_handler=None):
         "Supplier",
         party_opts,
         lambda r: (
-            f"{r['invoice_no']} — {r['supplier_name']} "
-            f"({fmt_datetime_from_record(r, 'purchase_date')}) [{_status_label(r.get('status'))}]"
+            hlp.document_party_picker_label(r, doc_key="invoice_no", date_key="purchase_date")
         ),
         "purchase_list",
         "Purchase Register",
@@ -844,7 +842,7 @@ def quotation_register_list():
     ]
     return document_register(
         "qt_reg", db.search_quotations, cols, "Customer", party_opts, "customer_id",
-        lambda r: f"{r['document_no']} — {r['customer_name']}",
+        lambda r: hlp.document_party_picker_label(r, date_key="quote_date"),
         "quotations", "Quotations",
     )
 
@@ -894,7 +892,9 @@ def purchase_order_register_list():
     ]
     return document_register(
         "po_reg", db.search_purchase_orders, cols, "Supplier", party_opts, "supplier_id",
-        lambda r: f"{r['document_no']} — {r['supplier_name']}",
+        lambda r: hlp.document_party_picker_label(
+            r, party_key="supplier_name", date_key="order_date",
+        ),
         "purchase_orders", "Purchase Orders",
     )
 
@@ -910,7 +910,9 @@ def grn_register_list(action_panel=None):
     ]
     return document_register(
         "grn_reg", db.search_grns, cols, "Supplier", party_opts, "supplier_id",
-        lambda r: f"{r['document_no']} — {r['supplier_name']}",
+        lambda r: hlp.document_party_picker_label(
+            r, party_key="supplier_name", date_key="grn_date",
+        ),
         "grns", "Goods Receipt Notes", action_panel=action_panel,
     )
 
@@ -926,7 +928,7 @@ def delivery_note_register_list(action_panel=None):
     ]
     return document_register(
         "dn_reg", db.search_delivery_notes, cols, "Customer", party_opts, "customer_id",
-        lambda r: f"{r['document_no']} — {r['customer_name']}",
+        lambda r: hlp.document_party_picker_label(r, date_key="dn_date"),
         "delivery_notes", "Delivery Notes", action_panel=action_panel,
     )
 

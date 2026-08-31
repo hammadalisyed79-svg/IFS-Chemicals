@@ -486,7 +486,7 @@ def page_sales():
         sid, _ = txn.transaction_picker(
             "sal_edit",
             db.search_sales_invoices,
-            lambda r: f"{r['invoice_no']} — {r['customer_name']} ({r['sale_date']}) [{r.get('status','draft')}]",
+            lambda r: hlp.document_party_picker_label(r, doc_key="invoice_no", date_key="sale_date"),
             "Customer",
             party_opts,
             "customer_id",

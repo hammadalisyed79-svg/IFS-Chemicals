@@ -9,7 +9,7 @@ import streamlit as st
 
 from application import data_gateway as db
 from erp_core import dispatch_planning as dp
-from erp_ui.helpers import std_page_header, export_buttons, render_dataframe_html_table
+from erp_ui.helpers import std_page_header, export_buttons, render_dataframe_html_table, sales_order_picker_label
 
 
 @st.dialog("Sales Order", width="large")
@@ -197,8 +197,9 @@ def page_dispatch_planning():
         key="dsp_order_editor",
     )
 
+    orders_by_id = {int(o["id"]): o for o in orders}
     id_by_label = {
-        f"{r['SO']} — {r['Customer']}": int(r["_id"])
+        sales_order_picker_label(orders_by_id[int(r["_id"])], show_total=False): int(r["_id"])
         for _, r in edit_df.iterrows()
     }
     labels = list(id_by_label.keys())
