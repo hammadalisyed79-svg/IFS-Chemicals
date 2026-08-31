@@ -424,41 +424,82 @@ def apply(src: Path, year_filter: int | None):
 
         print(f"Payroll: runs_created={runs_created} skipped={runs_skipped} lines={lines_created}")
 
-        # --- Mark unpaid where ending balance still positive for latest salary month ---
-        # Recompute last balance per Access employee ID
-        last_bal: dict[int, float] = {}
+        # --- Ending balance per Access employee = SUM(Balance deltas) ---
+        # Access Balance.Balance is a signed movement (salary +, payment/adv −),
+        # not a running balance. Using the last row alone was wrong.
+        last_bal: dict[int, float] = defaultdict(float)
         for r in balances:
-            last_bal[int(r[0])] = _f(r[4])
+            last_bal[int(r[0])] += _f(r[4])
+        last_bal = {aid: round(bal, 2) for aid, bal in last_bal.items()}
 
         unpaid = 0
+        restored_paid = 0
         for aid, bal in last_bal.items():
-            if bal <= 0.01 or aid not in access_to_ifs:
+            if aid not in access_to_ifs:
                 continue
             eid = access_to_ifs[aid]
-            # find latest payroll line for employee and reduce paid if still owed
-            row = conn.execute(
-                """SELECT pl.id, pl.net_salary, pl.paid_amount, pr.payroll_year, pr.payroll_month
+            lines = conn.execute(
+                """SELECT pl.id, pl.net_salary, pl.paid_amount
                    FROM payroll_lines pl
                    JOIN payroll_runs pr ON pr.id=pl.payroll_id
                    WHERE pl.employee_id=?
-                   ORDER BY pr.payroll_year DESC, pr.payroll_month DESC LIMIT 1""",
+                   ORDER BY pr.payroll_year DESC, pr.payroll_month DESC, pl.id DESC""",
                 (eid,),
-            ).fetchone()
-            if not row:
+            ).fetchall()
+            if not lines:
                 continue
-            owed = min(bal, _f(row[1]))
-            if owed > 0.01:
-                paid_amt = max(0.0, _f(row[1]) - owed)
-                status = "paid" if paid_amt >= _f(row[1]) - 0.01 else ("partial" if paid_amt > 0 else "unpaid")
+            # Reset all lines to fully paid, then leave unpaid = Access ending bal (if > 0)
+            for row in lines:
+                net = _f(row[1])
+                if abs(_f(row[2]) - net) > 0.01:
+                    conn.execute(
+                        "UPDATE payroll_lines SET paid_status='paid', paid_amount=? WHERE id=?",
+                        (net, row[0]),
+                    )
+                    restored_paid += 1
+            remain = bal if bal > 0.01 else 0.0
+            if remain <= 0.01:
+                continue
+            for row in lines:
+                if remain <= 0.01:
+                    break
+                net = _f(row[1])
+                if net <= 0.01:
+                    continue
+                leave_unpaid = min(remain, net)
+                paid_amt = max(0.0, net - leave_unpaid)
+                status = "paid" if paid_amt >= net - 0.01 else ("partial" if paid_amt > 0.01 else "unpaid")
                 conn.execute(
                     "UPDATE payroll_lines SET paid_status=?, paid_amount=? WHERE id=?",
                     (status, paid_amt, row[0]),
                 )
+                remain = round(remain - leave_unpaid, 2)
                 unpaid += 1
-        print(f"Adjusted unpaid/partial latest lines: {unpaid}")
+        print(f"Unpaid-salary sync: lines marked unpaid/partial={unpaid}; reset-to-paid touches={restored_paid}")
 
-        # --- Outstanding advances from negative ending balances ---
-        adv_created = adv_skipped = 0
+        # --- Outstanding advances from negative ending balances (SUM) ---
+        adv_created = adv_updated = adv_cleared = 0
+        # Clear stale Access-ending advances when true ending bal is no longer negative
+        for row in conn.execute(
+            """SELECT id, employee_id FROM employee_advances
+               WHERE reason LIKE '%Access ending balance%'
+                 AND status IN ('issued','approved','pending')"""
+        ).fetchall():
+            eid = int(row[1])
+            aid = next((a for a, e in access_to_ifs.items() if e == eid), None)
+            if aid is None:
+                continue
+            bal = last_bal.get(aid, 0.0)
+            if bal >= -0.01:
+                conn.execute(
+                    """UPDATE employee_advances
+                       SET outstanding_amount=0, recovered_amount=amount, status='closed',
+                           modified_by=?, modified_at=?
+                       WHERE id=?""",
+                    (uid, ts, row[0]),
+                )
+                adv_cleared += 1
+
         for aid, bal in last_bal.items():
             if bal >= -0.01 or aid not in access_to_ifs:
                 continue
@@ -466,16 +507,17 @@ def apply(src: Path, year_filter: int | None):
             amt = round(abs(bal), 2)
             exists = conn.execute(
                 """SELECT id FROM employee_advances
-                   WHERE employee_id=? AND reason LIKE ? AND status IN ('issued','approved','pending')""",
+                   WHERE employee_id=? AND reason LIKE ? AND status IN ('issued','approved','pending','closed')
+                   ORDER BY CASE status WHEN 'closed' THEN 1 ELSE 0 END, id DESC LIMIT 1""",
                 (eid, "%Access ending balance%"),
             ).fetchone()
             if exists:
                 conn.execute(
                     """UPDATE employee_advances SET amount=?, outstanding_amount=?, recovered_amount=0,
-                       monthly_recovery=?, modified_by=?, modified_at=? WHERE id=?""",
+                       monthly_recovery=?, status='issued', modified_by=?, modified_at=? WHERE id=?""",
                     (amt, amt, amt, uid, ts, exists[0]),
                 )
-                adv_skipped += 1
+                adv_updated += 1
                 continue
             doc = db.ensure_document_no("ADV", None, conn)
             conn.execute(
@@ -492,7 +534,7 @@ def apply(src: Path, year_filter: int | None):
                 ),
             )
             adv_created += 1
-        print(f"Advances: created={adv_created} updated={adv_skipped}")
+        print(f"Advances: created={adv_created} updated={adv_updated} cleared={adv_cleared}")
 
         # --- Optional: stamp payment dates from Payments onto recent lines ---
         # Aggregate paid by employee for Aug 2026 window already handled via balance.
