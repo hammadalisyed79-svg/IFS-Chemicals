@@ -406,6 +406,26 @@ def _pagination(key_prefix, result):
     return page
 
 
+def _search_kw_from_filters(filters, page, party_kw=None):
+    """Build search_fn kwargs; non-empty q searches all dates (not Today-only)."""
+    q = filters.get("q")
+    kw = {
+        "q": q,
+        "from_date": None if q else filters.get("from_date"),
+        "to_date": None if q else filters.get("to_date"),
+        "status": filters.get("status"),
+        "page": page,
+        "page_size": filters.get("page_size"),
+    }
+    if party_kw and filters.get("party_id"):
+        kw[party_kw] = filters["party_id"]
+    if filters.get("payment_mode") and filters["payment_mode"] != "All":
+        kw["payment_mode"] = filters["payment_mode"]
+    if filters.get("sort"):
+        kw["sort"] = filters["sort"]
+    return kw
+
+
 def _register_core(
     key_prefix,
     search_fn,
@@ -428,20 +448,9 @@ def _register_core(
         st.session_state[f"{key_prefix}_page"] = 1
     st.session_state[f"{key_prefix}_fsig"] = filter_sig
     page = st.session_state.get(f"{key_prefix}_page", 1)
-    kw = {
-        "q": filters["q"],
-        "from_date": filters["from_date"],
-        "to_date": filters["to_date"],
-        "status": filters["status"],
-        "page": page,
-        "page_size": filters["page_size"],
-    }
-    if party_kw and filters.get("party_id"):
-        kw[party_kw] = filters["party_id"]
-    if filters.get("payment_mode") and filters["payment_mode"] != "All":
-        kw["payment_mode"] = filters["payment_mode"]
-    if filters.get("sort"):
-        kw["sort"] = filters["sort"]
+    kw = _search_kw_from_filters(filters, page, party_kw)
+    if filters.get("q"):
+        st.caption("Search active — matching **all dates** (change Period to Today to limit by date again).")
     try:
         result = search_fn(**kw)
     except TypeError:
@@ -994,8 +1003,11 @@ def weight_slip_register_list():
         st.session_state["ws_reg_page"] = 1
     st.session_state["ws_reg_fsig"] = filter_sig
     page = st.session_state.get("ws_reg_page", 1)
+    kw = _search_kw_from_filters(filters, page)
+    if filters.get("q"):
+        st.caption("Search active — matching **all dates**.")
     result = db.search_weight_slips(
-        q=filters["q"], from_date=filters["from_date"], to_date=filters["to_date"],
+        q=kw["q"], from_date=kw["from_date"], to_date=kw["to_date"],
         status=status, page=page, page_size=filters["page_size"],
     )
     st.session_state["ws_reg_page"] = result["page"]
@@ -1029,7 +1041,7 @@ def weight_slip_register_list():
     _pagination("ws_reg", result)
     if st.button("Export filtered (all pages)", key="ws_reg_export"):
         full = db.search_weight_slips(
-            q=filters["q"], from_date=filters["from_date"], to_date=filters["to_date"],
+            q=kw["q"], from_date=kw["from_date"], to_date=kw["to_date"],
             status=status, export_all=True,
         )
         for r in full["items"]:
@@ -1061,8 +1073,11 @@ def gate_pass_register_list():
     )
     type_map = {"Material In": "material_in", "Material Out": "material_out", "FG Dispatch": "fg_dispatch"}
     pass_type = type_map.get(type_lbl)
+    kw = _search_kw_from_filters(filters, page)
+    if filters.get("q"):
+        st.caption("Search active — matching **all dates**.")
     result = db.search_gate_passes(
-        q=filters["q"], pass_type=pass_type, from_date=filters["from_date"], to_date=filters["to_date"],
+        q=kw["q"], pass_type=pass_type, from_date=kw["from_date"], to_date=kw["to_date"],
         status=status, page=page, page_size=filters["page_size"],
     )
     st.session_state["gp_reg_page"] = result["page"]
@@ -1092,7 +1107,7 @@ def gate_pass_register_list():
     _pagination("gp_reg", result)
     if st.button("Export filtered (all pages)", key="gp_reg_export"):
         full = db.search_gate_passes(
-            q=filters["q"], pass_type=pass_type, from_date=filters["from_date"], to_date=filters["to_date"],
+            q=kw["q"], pass_type=pass_type, from_date=kw["from_date"], to_date=kw["to_date"],
             status=status, export_all=True,
         )
         _export_df(_build_df(full["items"], cols), "gate_pass_register", "Gate Pass Register")
