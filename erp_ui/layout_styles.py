@@ -380,6 +380,38 @@ div[class*="st-key-"][class*="_lines_blk"] {
   box-shadow: 0 1px 3px rgba(15, 23, 42, 0.05);
   padding: 0.35rem 0.45rem 0.5rem;
 }
+.txn-line-hdr-cell {
+  background: #1D4ED8;
+  color: #fff !important;
+  text-align: left;
+  padding: 0.42rem 0.35rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  line-height: 1.2;
+  margin-bottom: 0.12rem;
+  border-radius: 4px;
+}
+.txn-line-hdr-cell.txn-line-hdr-num {
+  text-align: right;
+}
+.txn-line-hdr-cell.txn-line-act {
+  text-align: center;
+  padding-left: 0.15rem;
+  padding-right: 0.15rem;
+}
+.txn-line-num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-size: 0.82rem;
+  padding: 0.35rem 0.2rem 0.1rem 0;
+  line-height: 1.25;
+}
+.txn-line-prev {
+  font-size: 0.78rem;
+}
+/* Legacy table header (unused) — kept for old cached pages */
 .txn-line-head-wrap {
   margin: 0 0 0.2rem 0;
   overflow-x: auto;
@@ -405,15 +437,15 @@ div[class*="st-key-"][class*="_lines_blk"] {
   text-align: center;
 }
 div[class*="st-key-"][class*="_lines_blk"] [data-testid="stHorizontalBlock"] {
-  gap: 0.22rem !important;
+  gap: 0.35rem !important;
   align-items: flex-end !important;
   margin-bottom: 0.08rem !important;
   flex-wrap: nowrap !important;
-  min-width: min(100%, 42rem);
 }
 div[class*="st-key-"][class*="_lines_blk"] [data-testid="column"] {
-  flex: 1 1 0% !important;
-  min-width: 3.25rem !important;
+  min-width: 0 !important;
+  padding-left: 0 !important;
+  padding-right: 0 !important;
 }
 div[class*="st-key-"][class*="_lines_blk"] label {
   font-size: 0.72rem !important;

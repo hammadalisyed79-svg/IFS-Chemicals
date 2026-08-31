@@ -2102,9 +2102,16 @@ def _line_item_col_widths(show_weight):
     return [3.1, 0.7, 0.7, 0.55, 0.7, 1.0, 0.3]
 
 
+_LINE_ITEM_NUM_COLS = frozenset({
+    "Qty", "Rate", "Disc %", "Amount", "Prev Rate", "Net Wt (kg)", "Unit Wt (kg)",
+})
+
+
 def _line_items_table_header(show_weight):
+    """Header row — same st.columns ratios as data rows (HTML table caused misalignment)."""
     from html import escape
 
+    widths = _line_item_col_widths(show_weight)
     if show_weight:
         cols_hdr = [
             "Product", "Qty", "Net Wt (kg)", "Unit Wt (kg)",
@@ -2112,18 +2119,19 @@ def _line_items_table_header(show_weight):
         ]
     else:
         cols_hdr = ["Product", "Qty", "Rate", "Disc %", "Amount", "Prev Rate", ""]
-    ths = []
-    for c in cols_hdr:
-        if c:
-            ths.append(f"<th>{escape(c)}</th>")
-        else:
-            ths.append("<th class='txn-line-act' aria-label='Remove'></th>")
-    st.markdown(
-        "<div class='txn-line-head-wrap'>"
-        f"<table class='txn-line-head'><thead><tr>{''.join(ths)}</tr></thead></table>"
-        "</div>",
-        unsafe_allow_html=True,
-    )
+    cols = st.columns(widths, gap="small")
+    for label, col in zip(cols_hdr, cols):
+        if not label:
+            col.markdown(
+                '<div class="txn-line-hdr-cell txn-line-act">&nbsp;</div>',
+                unsafe_allow_html=True,
+            )
+            continue
+        num_cls = " txn-line-hdr-num" if label in _LINE_ITEM_NUM_COLS else ""
+        col.markdown(
+            f'<div class="txn-line-hdr-cell{num_cls}">{escape(label)}</div>',
+            unsafe_allow_html=True,
+        )
 
 
 def _format_party_last_rate_suffix(product, key_prefix: str, party_id=None) -> str:
@@ -2219,12 +2227,12 @@ def _prev_rate_column(cols, col_idx, product, key_prefix: str, party_id=None):
         sub = f"{sub} · {doc}".strip(" ·")
     if sub:
         cols[col_idx].markdown(
-            f"{rate_txt}  \n"
-            f"<span style='font-size:0.72em;color:#666'>{sub}</span>",
+            f"<div class='txn-line-num txn-line-prev'>{rate_txt}  \n"
+            f"<span style='font-size:0.72em;color:#666'>{sub}</span></div>",
             unsafe_allow_html=True,
         )
     else:
-        cols[col_idx].markdown(rate_txt)
+        cols[col_idx].markdown(f"<div class='txn-line-num txn-line-prev'>{rate_txt}</div>")
 
 
 def _rate_kind_from_prefix(key_prefix: str) -> str:
@@ -2432,7 +2440,7 @@ def line_items_editor(
     with st.container(key=f"{key_prefix}_lines_blk"):
         _line_items_table_header(show_weight)
         for i, line in enumerate(st.session_state[sk]):
-            cols = st.columns(widths)
+            cols = st.columns(widths, gap="small")
             pid = line.get("product_id") or line.get("item_id")
             default_key = (
                 next((l for l in items_dict if items_dict[l]["id"] == pid), None)
@@ -2469,7 +2477,10 @@ def line_items_editor(
             )
             effective_disc = disc_pct if disc_pct > 0 else float(default_discount_pct or 0)
             amount = _line_amount_after_discount(qty, rate, effective_disc)
-            cols[ci].write(f"{amount:,.2f}")
+            cols[ci].markdown(
+                f'<div class="txn-line-num">{amount:,.2f}</div>',
+                unsafe_allow_html=True,
+            )
             ci += 1
             _prev_rate_column(cols, ci, prod, key_prefix, party_id)
             if cols[-1].button("✕", key=f"{key_prefix}_x_{i}"):
@@ -2607,7 +2618,7 @@ def smart_line_item_editor(
     with st.container(key=f"{key_prefix}_lines_blk"):
         _line_items_table_header(show_weight)
         for i, line in enumerate(st.session_state[sk]):
-            cols = st.columns(widths)
+            cols = st.columns(widths, gap="small")
             pid = line.get("item_id") or line.get("product_id")
             default_key = (
                 next((k for k, p in filtered_dict.items() if p and p["id"] == pid), None)
@@ -2660,7 +2671,10 @@ def smart_line_item_editor(
             )
             effective_disc = disc_pct if disc_pct > 0 else float(default_discount_pct or 0)
             amount = _line_amount_after_discount(qty, rate, effective_disc)
-            cols[ci].write(f"{amount:,.2f}")
+            cols[ci].markdown(
+                f'<div class="txn-line-num">{amount:,.2f}</div>',
+                unsafe_allow_html=True,
+            )
             ci += 1
             _prev_rate_column(cols, ci, prod, key_prefix, party_id)
             if cols[-1].button("✕", key=f"{key_prefix}_id_{i}"):
