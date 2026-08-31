@@ -87,15 +87,39 @@ def page_hr_employees():
         status="register" if peek == "Employee List" else None,
         status_kind="shell" if peek == "Employee List" else "invoice",
     )
-    search = st.text_input("Search")
+    f1, f2 = st.columns([2, 1.2])
+    search = f1.text_input("Search", placeholder="Code, name, CNIC, mobile…")
+    active_for_depts = db.get_employees_hr(active_only=True) if hasattr(db, "get_employees_hr") else []
+    depts = sorted({
+        (r.get("department_name") or r.get("department") or "Unassigned")
+        for r in active_for_depts
+    }, key=str.upper)
+    dept_filter = f2.selectbox(
+        "Department",
+        ["All departments"] + depts,
+        key="hr_emp_dept_filter",
+    )
     tab = sticky_page_tabs(["Employee List", "Add Employee", "Edit / View"], "hr_emp_tab")
-    rows = db.get_employees_hr(search=search or None)
+    rows = db.get_employees_hr(search=search or None, active_only=True)
+    if dept_filter != "All departments":
+        rows = [
+            r for r in rows
+            if (r.get("department_name") or r.get("department") or "Unassigned") == dept_filter
+        ]
+    rows = sorted(
+        rows,
+        key=lambda r: (
+            (r.get("department_name") or r.get("department") or "Unassigned").upper(),
+            (r.get("full_name") or "").upper(),
+            r.get("code") or "",
+        ),
+    )
     if tab == "Employee List":
         if rows:
             active_n = sum(1 for r in rows if r.get("is_active"))
-            k1, k2 = st.columns(2, gap="small")
+            k1, k2, k3 = st.columns(3, gap="small")
             k1.markdown(
-                f"<div class='txn-kpi-card'><p class='txn-kpi'>Employees</p>"
+                f"<div class='txn-kpi-card'><p class='txn-kpi'>In View</p>"
                 f"<p class='txn-kpi-val'>{len(rows):,}</p></div>",
                 unsafe_allow_html=True,
             )
@@ -104,9 +128,14 @@ def page_hr_employees():
                 f"<p class='txn-kpi-val'>{active_n:,}</p></div>",
                 unsafe_allow_html=True,
             )
+            k3.markdown(
+                f"<div class='txn-kpi-card'><p class='txn-kpi'>Department</p>"
+                f"<p class='txn-kpi-val' style='font-size:1.05rem'>{dept_filter}</p></div>",
+                unsafe_allow_html=True,
+            )
             ths = "".join(
                 f"<th>{h}</th>"
-                for h in ("Code", "Name", "Department", "Designation", "Mobile", "Status")
+                for h in ("Department", "Code", "Name", "Designation", "Mobile", "Status")
             )
             body = []
             for r in rows:
@@ -118,9 +147,9 @@ def page_hr_employees():
                 )
                 body.append(
                     "<tr>"
+                    f"<td>{escape(str(r.get('department_name') or '—'))}</td>"
                     f"<td>{escape(str(r.get('code') or ''))}</td>"
                     f"<td>{escape(str(r.get('full_name') or ''))}</td>"
-                    f"<td>{escape(str(r.get('department_name') or '—'))}</td>"
                     f"<td>{escape(str(r.get('designation_name') or '—'))}</td>"
                     f"<td>{escape(str(r.get('mobile') or '—'))}</td>"
                     f"<td class='txn-status-cell'>{badge}</td>"
@@ -131,7 +160,7 @@ def page_hr_employees():
                 f"<thead><tr>{ths}</tr></thead><tbody>{''.join(body)}</tbody></table></div>",
                 unsafe_allow_html=True,
             )
-            cols = ["code", "full_name", "father_name", "cnic", "department_name", "designation_name",
+            cols = ["department_name", "code", "full_name", "father_name", "cnic", "designation_name",
                     "mobile", "joining_date", "employment_status", "basic_salary", "is_active"]
             df = pd.DataFrame(rows)[[c for c in cols if c in rows[0]]]
             export_df(df, "employee_list")

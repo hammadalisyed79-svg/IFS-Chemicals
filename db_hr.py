@@ -263,9 +263,11 @@ def get_employees_hr(active_only=True, search=None):
     if active_only:
         q += " AND e.is_active=1"
     if search:
-        q += " AND (e.code LIKE ? OR e.full_name LIKE ? OR e.cnic LIKE ?)"
-        p.extend([f"%{search}%"] * 3)
-    q += " ORDER BY e.full_name"
+        q += " AND (e.code LIKE ? OR e.full_name LIKE ? OR e.cnic LIKE ? OR e.mobile LIKE ?)"
+        p.extend([f"%{search}%"] * 4)
+    # Department-wise everywhere — each dept keeps its own attendance / HR register
+    q += """ ORDER BY COALESCE(d.name, e.department, 'Unassigned'),
+                     e.full_name, e.code"""
     with get_connection() as conn:
         return rows_to_list(conn.execute(q, p).fetchall())
 
@@ -495,8 +497,12 @@ def save_attendance(data, user_id=None):
 
 def get_attendance(from_date=None, to_date=None, employee_id=None):
     from database import get_connection, rows_to_list
-    q = """SELECT a.*, e.code AS emp_code, e.full_name AS employee_name
-           FROM attendance a JOIN employees e ON a.employee_id=e.id WHERE 1=1"""
+    q = """SELECT a.*, e.code AS emp_code, e.full_name AS employee_name,
+                  COALESCE(d.name, e.department, 'Unassigned') AS department_name
+           FROM attendance a
+           JOIN employees e ON a.employee_id=e.id
+           LEFT JOIN departments d ON e.department_id=d.id
+           WHERE 1=1"""
     p = []
     if employee_id:
         q += " AND a.employee_id=?"; p.append(employee_id)
@@ -504,7 +510,9 @@ def get_attendance(from_date=None, to_date=None, employee_id=None):
         q += " AND a.att_date>=?"; p.append(from_date)
     if to_date:
         q += " AND a.att_date<=?"; p.append(to_date)
-    q += " ORDER BY a.att_date DESC, e.full_name"
+    q += """ ORDER BY a.att_date DESC,
+                     COALESCE(d.name, e.department, 'Unassigned'),
+                     e.full_name"""
     with get_connection() as conn:
         return rows_to_list(conn.execute(q, p).fetchall())
 
@@ -699,6 +707,7 @@ def get_payroll_run(pid):
                 """SELECT pl.id, pl.payroll_id, pl.employee_id,
                           e.code AS emp_code,
                           COALESCE(e.full_name, e.code, 'Employee #' || pl.employee_id) AS employee_name,
+                          COALESCE(d.name, e.department, 'Unassigned') AS department_name,
                           pl.basic_salary, pl.allowances, pl.overtime, pl.bonus, pl.gross_salary,
                           pl.tax_deduction, pl.eobi, pl.social_security, pl.advance_recovery,
                           pl.loan_recovery, pl.other_deductions, pl.total_deductions, pl.net_salary,
@@ -707,7 +716,9 @@ def get_payroll_run(pid):
                           pl.paid_amount, pl.paid_date, pl.payment_mode, pl.payment_document_no
                    FROM payroll_lines pl
                    LEFT JOIN employees e ON pl.employee_id=e.id
-                   WHERE pl.payroll_id=? ORDER BY e.full_name, e.code""",
+                   LEFT JOIN departments d ON e.department_id=d.id
+                   WHERE pl.payroll_id=?
+                   ORDER BY COALESCE(d.name, e.department, 'Unassigned'), e.full_name, e.code""",
                 (pid,),
             ).fetchall())
         return h
@@ -1654,10 +1665,15 @@ def report_overtime(from_date, to_date):
     from database import get_connection, rows_to_list
     with get_connection() as conn:
         return rows_to_list(conn.execute(
-            """SELECT e.code, e.full_name, SUM(a.overtime_hrs) AS total_overtime_hrs, COUNT(*) AS days
-               FROM attendance a JOIN employees e ON a.employee_id=e.id
+            """SELECT e.id AS employee_id, e.code, e.full_name,
+                      COALESCE(d.name, e.department, 'Unassigned') AS department_name,
+                      SUM(a.overtime_hrs) AS total_overtime_hrs, COUNT(*) AS days
+               FROM attendance a
+               JOIN employees e ON a.employee_id=e.id
+               LEFT JOIN departments d ON e.department_id=d.id
                WHERE a.att_date>=? AND a.att_date<=? AND a.overtime_hrs>0
-               GROUP BY e.id ORDER BY total_overtime_hrs DESC""",
+               GROUP BY e.id
+               ORDER BY COALESCE(d.name, e.department, 'Unassigned'), total_overtime_hrs DESC""",
             (from_date, to_date),
         ).fetchall())
 
@@ -1666,15 +1682,19 @@ def report_payroll_register(from_date=None, to_date=None):
     from database import get_connection, rows_to_list
     q = """SELECT pr.document_no, pr.payroll_month, pr.payroll_year, pr.run_date, pr.status,
                   pr.total_gross, pr.total_deductions, pr.total_net,
-                  pl.*, e.full_name AS employee_name
+                  pl.*, e.full_name AS employee_name,
+                  COALESCE(d.name, e.department, 'Unassigned') AS department_name
            FROM payroll_runs pr JOIN payroll_lines pl ON pr.id=pl.payroll_id
-           JOIN employees e ON pl.employee_id=e.id WHERE 1=1"""
+           JOIN employees e ON pl.employee_id=e.id
+           LEFT JOIN departments d ON e.department_id=d.id
+           WHERE 1=1"""
     p = []
     if from_date:
         q += " AND pr.run_date>=?"; p.append(from_date)
     if to_date:
         q += " AND pr.run_date<=?"; p.append(to_date)
-    q += " ORDER BY pr.payroll_year DESC, pr.payroll_month DESC, e.full_name"
+    q += """ ORDER BY pr.payroll_year DESC, pr.payroll_month DESC,
+                     COALESCE(d.name, e.department, 'Unassigned'), e.full_name"""
     with get_connection() as conn:
         return rows_to_list(conn.execute(q, p).fetchall())
 

@@ -1,4 +1,4 @@
-"""Daily attendance — bulk sheet for 150+ employees."""
+"""Daily attendance — bulk sheet, one department register at a time."""
 
 from datetime import date, timedelta
 import pandas as pd
@@ -13,22 +13,24 @@ STATUSES = db.ATTENDANCE_STATUSES if hasattr(db, "ATTENDANCE_STATUSES") else [
 STATUS_LABELS = {s: s.replace("_", " ").title() for s in STATUSES}
 
 
+def _emp_dept(e):
+    return (e.get("department_name") or e.get("department") or "Unassigned").strip() or "Unassigned"
+
+
 def _load_employees(search=None, department=None):
     emps = db.get_employees_hr(active_only=True, search=search) if hasattr(db, "get_employees_hr") else db.get_employees()
-    if department and department != "All":
-        emps = [
-            e for e in emps
-            if (e.get("department_name") or e.get("department") or "Unassigned") == department
-        ]
+    # Always department-wise sort (API already sorts; keep stable if fallback)
+    emps = sorted(emps, key=lambda e: (_emp_dept(e).upper(), (e.get("full_name") or "").upper(), e.get("code") or ""))
+    if department and department != "All departments":
+        emps = [e for e in emps if _emp_dept(e) == department]
     return emps
 
 
-def _dept_options(emps):
-    depts = sorted({
-        e.get("department_name") or e.get("department") or "Unassigned"
-        for e in emps
-    })
-    return ["All"] + depts
+def _dept_options(emps, *, include_all=True):
+    depts = sorted({_emp_dept(e) for e in emps}, key=str.upper)
+    if include_all:
+        return ["All departments"] + depts
+    return depts
 
 
 def _build_sheet(emps, existing_map, force_status=None):
@@ -43,7 +45,7 @@ def _build_sheet(emps, existing_map, force_status=None):
             "employee_id": e["id"],
             "code": e.get("code", ""),
             "name": e.get("full_name") or e.get("name", ""),
-            "department": e.get("department_name") or e.get("department") or "—",
+            "department": _emp_dept(e),
             "status": status,
             "overtime_hrs": float(ex.get("overtime_hrs") or 0),
             "late_mins": float(ex.get("late_mins") or 0),
@@ -73,13 +75,13 @@ def _render_attendance_register_table(rows):
         return
     df = pd.DataFrame([{
         "Date": r.get("att_date"),
-        "Code": r.get("employee_code", ""),
+        "Department": r.get("department_name") or "",
+        "Code": r.get("employee_code") or r.get("emp_code") or "",
         "Employee": r.get("employee_name", ""),
         "Status": STATUS_LABELS.get(r.get("status"), r.get("status", "")),
         "OT (hrs)": float(r.get("overtime_hrs") or 0),
         "Late (min)": float(r.get("late_mins") or 0),
         "Notes": r.get("notes") or "",
-        "_status_key": r.get("status"),
     } for r in rows])
     present_n = sum(1 for r in rows if (r.get("status") or "") == "present")
     absent_n = sum(1 for r in rows if (r.get("status") or "") == "absent")
@@ -99,12 +101,16 @@ def _render_attendance_register_table(rows):
         f"<p class='txn-kpi-val'>{absent_n:,}</p></div>",
         unsafe_allow_html=True,
     )
-    ths = "".join(f"<th>{h}</th>" for h in ("Date", "Code", "Employee", "Status", "OT (hrs)", "Late (min)", "Notes"))
+    ths = "".join(
+        f"<th>{h}</th>"
+        for h in ("Date", "Department", "Code", "Employee", "Status", "OT (hrs)", "Late (min)", "Notes")
+    )
     body = []
     for r in rows:
         body.append(
             "<tr>"
             f"<td>{escape(str(r.get('att_date') or ''))}</td>"
+            f"<td>{escape(str(r.get('department_name') or '—'))}</td>"
             f"<td>{escape(str(r.get('employee_code') or r.get('emp_code') or ''))}</td>"
             f"<td>{escape(str(r.get('employee_name') or ''))}</td>"
             f"<td class='txn-status-cell'>{_attendance_status_badge(r.get('status'))}</td>"
@@ -118,7 +124,7 @@ def _render_attendance_register_table(rows):
         f"<thead><tr>{ths}</tr></thead><tbody>{''.join(body)}</tbody></table></div>",
         unsafe_allow_html=True,
     )
-    return df.drop(columns=["_status_key"], errors="ignore")
+    return df
 
 
 def _summary_counts(df):
@@ -129,14 +135,17 @@ def _summary_counts(df):
 
 
 def _daily_sheet_tab():
-    st.markdown("**Daily attendance sheet** — edit all employees for one date, then save once.")
+    st.markdown(
+        "**Daily attendance** — each department has its own register. "
+        "Select a department, mark the sheet, then **Save**."
+    )
 
     nav = st.columns([1, 1, 1, 2])
     ds_key = "att_bulk_date"
     if ds_key not in st.session_state:
         st.session_state[ds_key] = date.today()
     if nav[0].button("◀ Previous Day", key="att_prev"):
-        st.session_state[ds_key] -= timedelta(days=1)
+        st.session_state[ds_key] = st.session_state[ds_key] - timedelta(days=1)
         st.session_state.pop("att_preset", None)
         st.rerun()
     if nav[1].button("Today", key="att_today"):
@@ -144,10 +153,11 @@ def _daily_sheet_tab():
         st.session_state.pop("att_preset", None)
         st.rerun()
     if nav[2].button("Next Day ▶", key="att_next"):
-        st.session_state[ds_key] += timedelta(days=1)
+        st.session_state[ds_key] = st.session_state[ds_key] + timedelta(days=1)
         st.session_state.pop("att_preset", None)
         st.rerun()
-    att_date = nav[3].date_input("Attendance Date", value=st.session_state[ds_key], key=ds_key)
+    # Do not pass value= when key is already in session_state (avoids Streamlit warning)
+    att_date = nav[3].date_input("Attendance Date", key=ds_key)
     ds = str(att_date)
 
     all_emps = _load_employees()
@@ -155,9 +165,14 @@ def _daily_sheet_tab():
         st.warning("Add employees first under **HR → Employees**.")
         return
 
+    dept_opts = _dept_options(all_emps, include_all=True)
+    # Default to first real department — registers differ by department
+    if "att_dept" not in st.session_state or st.session_state.get("att_dept") not in dept_opts:
+        st.session_state["att_dept"] = dept_opts[1] if len(dept_opts) > 1 else dept_opts[0]
+
     f1, f2, f3 = st.columns([2, 1.5, 1])
     search = f1.text_input("Search", placeholder="Code, name, mobile…", key="att_search")
-    dept = f2.selectbox("Department", _dept_options(all_emps), key="att_dept")
+    dept = f2.selectbox("Department register", dept_opts, key="att_dept")
     show_only = f3.selectbox("Show", ["All employees", "Not yet saved today", "Already marked"], key="att_show")
 
     emps = _load_employees(search=search or None, department=dept)
@@ -170,15 +185,30 @@ def _daily_sheet_tab():
     elif show_only == "Already marked":
         emps = [e for e in emps if e["id"] in existing_map]
 
+    # Dept headcounts for quick navigation
+    dept_counts = {}
+    for e in all_emps:
+        d = _emp_dept(e)
+        dept_counts[d] = dept_counts.get(d, 0) + 1
+    chips = " · ".join(f"**{d}** {n}" for d, n in sorted(dept_counts.items(), key=lambda x: x[0].upper()))
+    st.caption(f"Active by department: {chips}")
+
     if not emps:
-        st.info("No employees match your filters.")
+        st.info("No employees match your filters. Pick another department register.")
         return
+
+    if dept == "All departments":
+        st.warning(
+            "You are viewing **all departments** mixed. "
+            "Prefer one department at a time — each register is separate."
+        )
 
     preset = st.session_state.pop("att_preset", None)
     df = _build_sheet(emps, existing_map, force_status=preset)
 
     counts = _summary_counts(df)
-    marked_today = len([e for e in all_emps if e["id"] in existing_map])
+    scoped = all_emps if dept == "All departments" else [e for e in all_emps if _emp_dept(e) == dept]
+    marked_scoped = len([e for e in scoped if e["id"] in existing_map])
     k1, k2, k3, k4, k5, k6 = st.columns(6, gap="small")
     k1.markdown(
         f"<div class='txn-kpi-card'><p class='txn-kpi'>In View</p>"
@@ -186,8 +216,8 @@ def _daily_sheet_tab():
         unsafe_allow_html=True,
     )
     k2.markdown(
-        f"<div class='txn-kpi-card'><p class='txn-kpi'>Saved Today</p>"
-        f"<p class='txn-kpi-val'>{marked_today}/{len(all_emps)}</p></div>",
+        f"<div class='txn-kpi-card'><p class='txn-kpi'>Saved (dept)</p>"
+        f"<p class='txn-kpi-val'>{marked_scoped}/{len(scoped)}</p></div>",
         unsafe_allow_html=True,
     )
     k3.markdown(
@@ -221,7 +251,9 @@ def _daily_sheet_tab():
     if qa[2].button("Leave All", key="att_all_leave"):
         st.session_state["att_preset"] = "leave"
         st.rerun()
-    qa[3].caption("Quick-fill applies to the filtered list below, then click **Save All**.")
+    qa[3].caption(
+        f"Quick-fill applies to **{dept}** list below, then click **Save All**."
+    )
 
     edited = st.data_editor(
         df,
@@ -239,7 +271,7 @@ def _daily_sheet_tab():
         },
         hide_index=True,
         use_container_width=True,
-        height=min(640, 80 + len(df) * 35),
+        height=min(640, 80 + max(len(df), 1) * 35),
         key=f"att_editor_{ds}_{dept}_{search}_{show_only}",
     )
 
@@ -256,11 +288,13 @@ def _daily_sheet_tab():
             })
         try:
             n = db.bulk_save_attendance(ds, records, uid())
-            ff.action_done(f"Saved attendance for **{n}** employee(s) on **{ds}**.")
+            ff.action_done(
+                f"Saved **{dept}** attendance for **{n}** employee(s) on **{ds}**."
+            )
         except Exception as e:
             st.error(str(e))
     c2.caption(
-        f"Tip: filter by department for large teams. "
+        f"Register: **{dept}** · Active in this register: **{len(scoped)}** · "
         f"Total active staff: **{len(all_emps)}**."
     )
 
@@ -268,10 +302,10 @@ def _daily_sheet_tab():
 def _quick_entry_tab():
     st.caption("Use for one-off corrections — bulk entry is on **Daily Sheet**.")
     att_date = st.date_input("Date", value=date.today(), key="att_q_date")
-    emps = db.get_employees_hr() if hasattr(db, "get_employees_hr") else db.get_employees()
+    emps = _load_employees()
     _, eid, _ = smart_select(
         "Employee", emps, "att_q_emp", "id",
-        lambda r: f"{r['code']} - {r.get('full_name', r.get('name', ''))}",
+        lambda r: f"{_emp_dept(r)} · {r['code']} - {r.get('full_name', r.get('name', ''))}",
     )
     if not eid:
         return
@@ -296,17 +330,41 @@ def _quick_entry_tab():
 
 
 def _register_tab():
+    all_emps = _load_employees()
     c1, c2, c3 = st.columns([1, 1, 2])
     fd = str(c1.date_input("From", value=date.today().replace(day=1), key="att_reg_fd"))
     td = str(c2.date_input("To", value=date.today(), key="att_reg_td"))
-    dept = c3.selectbox("Department", _dept_options(_load_employees()), key="att_reg_dept")
+    dept_opts = _dept_options(all_emps, include_all=True)
+    if "att_reg_dept" not in st.session_state or st.session_state.get("att_reg_dept") not in dept_opts:
+        st.session_state["att_reg_dept"] = dept_opts[1] if len(dept_opts) > 1 else dept_opts[0]
+    dept = c3.selectbox("Department register", dept_opts, key="att_reg_dept")
     rows = db.get_attendance(fd, td)
-    if dept != "All":
+    if dept != "All departments":
         emps = {e["id"] for e in _load_employees(department=dept)}
         rows = [r for r in rows if r.get("employee_id") in emps]
+    # Ensure department-wise order within date
+    rows = sorted(
+        rows,
+        key=lambda r: (
+            str(r.get("att_date") or ""),
+            str(r.get("department_name") or "").upper(),
+            str(r.get("employee_name") or "").upper(),
+        ),
+        reverse=False,
+    )
+    # att_date DESC preference for register browse
+    rows = sorted(
+        rows,
+        key=lambda r: (
+            str(r.get("att_date") or ""),
+            str(r.get("department_name") or "").upper(),
+            str(r.get("employee_name") or "").upper(),
+        ),
+        reverse=True,
+    )
     if not rows:
         st.markdown(
-            '<div class="erp-empty-state"><p>No attendance records for this period.</p></div>',
+            '<div class="erp-empty-state"><p>No attendance records for this period / department.</p></div>',
             unsafe_allow_html=True,
         )
         if st.button("Open Daily Sheet", type="primary", key="att_reg_empty_cta"):
@@ -317,6 +375,7 @@ def _register_tab():
     page_rows = page_slice(rows, "att_reg", default_size=100)
     df = pd.DataFrame([{
         "Date": r["att_date"],
+        "Department": r.get("department_name") or "",
         "Code": r.get("emp_code", ""),
         "Employee": r.get("employee_name", ""),
         "Status": STATUS_LABELS.get(r.get("status"), r.get("status", "")),
@@ -326,16 +385,20 @@ def _register_tab():
     } for r in page_rows])
     export_df = _render_attendance_register_table(page_rows)
     export_buttons(export_df if export_df is not None else df, "attendance_register", "Attendance Register")
-    st.caption(f"Showing paged rows — full period has **{len(rows):,}** records (export uses current page table styling; use period filter to narrow).")
+    st.caption(
+        f"Department register: **{dept}** · "
+        f"Showing paged rows — full period has **{len(rows):,}** records."
+    )
     st.divider()
     st.subheader("Summary by employee")
     full_df = pd.DataFrame([{
         "Date": r["att_date"],
+        "Department": r.get("department_name") or "",
         "Employee": r.get("employee_name", ""),
         "Status": STATUS_LABELS.get(r.get("status"), r.get("status", "")),
         "OT (hrs)": float(r.get("overtime_hrs") or 0),
     } for r in rows])
-    summary = full_df.groupby("Employee").agg(
+    summary = full_df.groupby(["Department", "Employee"]).agg(
         Days=("Date", "count"),
         Present=("Status", lambda s: (s == "Present").sum()),
         Absent=("Status", lambda s: (s == "Absent").sum()),
@@ -364,16 +427,30 @@ def page_attendance_simple():
     elif tab == "Register":
         _register_tab()
     elif tab == "Overtime Report":
-        c1, c2 = st.columns(2)
+        c1, c2, c3 = st.columns([1, 1, 2])
         fd, td = str(c1.date_input("From", key="otf")), str(c2.date_input("To", key="ott"))
+        all_emps = _load_employees()
+        dept_opts = _dept_options(all_emps, include_all=True)
+        dept = c3.selectbox("Department", dept_opts, key="ot_dept")
         rows = db.report_overtime(fd, td)
+        if dept != "All departments":
+            allowed = {e["id"] for e in _load_employees(department=dept)}
+            # report may use employee_id or code — filter by code set
+            codes = {e["code"] for e in _load_employees(department=dept)}
+            rows = [
+                r for r in rows
+                if r.get("employee_id") in allowed or r.get("code") in codes
+            ]
         if rows:
             df = pd.DataFrame([{
+                "Department": r.get("department_name") or r.get("department") or "",
                 "Code": r.get("code", ""),
                 "Employee": r.get("full_name", ""),
                 "Total OT (hrs)": float(r.get("total_overtime_hrs") or 0),
                 "Days with OT": int(r.get("days") or 0),
             } for r in rows])
+            if "Department" in df.columns:
+                df = df.sort_values(["Department", "Employee"], kind="mergesort")
             k1, k2 = st.columns(2, gap="small")
             k1.markdown(
                 f"<div class='txn-kpi-card'><p class='txn-kpi'>Employees with OT</p>"
