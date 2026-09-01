@@ -934,7 +934,7 @@ page_production = page_production_orders
 
 def page_daily_production():
     """One-screen daily production: BOM → issue RM → receive FG (stock update)."""
-    peek = st.session_state.get("daily_prod_tab") or "Post Production"
+    peek = st.session_state.get("daily_prod_tab") or "Quick Grid"
     std_page_header(
         "Daily Production",
         status="register" if peek == "Today / Recent" else None,
@@ -950,9 +950,14 @@ def page_daily_production():
         for b in approved_boms
     }
     wh_opts = {f"{w['code']} — {w['name']}": w["id"] for w in db.get_warehouses()}
-    tab = sticky_page_tabs(["Post Production", "Today / Recent"], "daily_prod_tab")
+    tab = sticky_page_tabs(
+        ["Quick Grid", "Post Production", "Today / Recent"],
+        "daily_prod_tab",
+    )
 
-    if tab == "Post Production":
+    if tab == "Quick Grid":
+        _daily_production_quick_grid(approved_boms, wh_opts)
+    elif tab == "Post Production":
         with st.form("daily_prod_form"):
             bl = st.selectbox("Approved BOM *", list(bom_opts.keys()))
             b = bom_opts[bl]
@@ -1066,3 +1071,144 @@ def page_daily_production():
                         st.error(str(e).replace("**", ""))
         else:
             st.info("No production orders yet.")
+
+
+def _daily_production_quick_grid(approved_boms, wh_opts):
+    """Tabular multi-line entry: item + qty only; BOM/consumption stays in backend."""
+    st.markdown(
+        "**Quick Grid** — pick finished item and production qty for several lines, then **Post all**. "
+        "Approved BOM materials are issued automatically (formula is not shown here)."
+    )
+
+    # One label per finished product (latest approved BOM)
+    by_product = {}
+    for b in approved_boms:
+        pid = int(b.get("finished_product_id") or 0)
+        if not pid:
+            continue
+        cur = by_product.get(pid)
+        if cur is None or (float(b.get("version_no") or 0), int(b.get("id") or 0)) > (
+            float(cur.get("version_no") or 0), int(cur.get("id") or 0)
+        ):
+            by_product[pid] = b
+
+    item_labels = [""]
+    item_map = {}  # label -> bom
+    for b in sorted(
+        by_product.values(),
+        key=lambda x: (
+            str(x.get("finished_product_code") or ""),
+            str(x.get("finished_product_name") or ""),
+        ),
+    ):
+        code = (b.get("finished_product_code") or "").strip()
+        name = (b.get("finished_product_name") or "").strip()
+        label = f"{code} — {name}" if code else name
+        if not label or label in item_map:
+            label = f"{label} [{b.get('document_no')}]"
+        item_labels.append(label)
+        item_map[label] = b
+
+    if len(item_labels) <= 1:
+        st.warning("No approved BOM finished products available.")
+        return
+
+    top = st.columns([1.2, 2, 1.5])
+    prod_date = top[0].date_input("Production Date", value=date.today(), key="dq_prod_date")
+    wh_lbl = top[1].selectbox(
+        "Warehouse",
+        list(wh_opts.keys()) if wh_opts else ["—"],
+        key="dq_wh",
+    )
+    notes = top[2].text_input("Notes", value="Daily production (quick grid)", key="dq_notes")
+    opt = st.columns([1, 1, 2])
+    allow_neg = opt[0].checkbox("Allow if material short", value=False, key="dq_neg")
+    allow_dup = opt[1].checkbox("Allow same item+qty duplicates", value=False, key="dq_dup")
+    opt[2].caption(f"{len(item_map)} finished items with approved BOM.")
+
+    n_rows = 12
+    blank = pd.DataFrame({
+        "item": [""] * n_rows,
+        "qty": [0.0] * n_rows,
+    })
+    edited = st.data_editor(
+        blank,
+        column_config={
+            "item": st.column_config.SelectboxColumn(
+                "Item (code / name)",
+                options=item_labels,
+                required=False,
+                width="large",
+            ),
+            "qty": st.column_config.NumberColumn(
+                "Production qty",
+                min_value=0.0,
+                step=1.0,
+                format="%.3f",
+                width="medium",
+            ),
+        },
+        hide_index=True,
+        use_container_width=True,
+        num_rows="dynamic",
+        height=min(520, 80 + n_rows * 36),
+        key=f"dq_grid_{prod_date}",
+    )
+
+    if st.button("Post all lines", type="primary", key="dq_post_all"):
+        lines = []
+        for _, row in edited.iterrows():
+            label = (row.get("item") or "").strip()
+            qty = float(row.get("qty") or 0)
+            if not label or qty <= 0:
+                continue
+            bom = item_map.get(label)
+            if not bom:
+                st.error(f"Unknown item: {label}")
+                return
+            lines.append((label, bom, qty))
+        if not lines:
+            st.warning("Add at least one item with production qty > 0.")
+            return
+
+        posted = []
+        errors = []
+        # Within this batch, auto-allow duplicate for repeated same BOM+qty rows
+        seen_keys = set()
+        wh_id = wh_opts.get(wh_lbl) if wh_opts else None
+        for label, bom, qty in lines:
+            key = (int(bom["id"]), round(qty, 6))
+            row_allow_dup = allow_dup or key in seen_keys
+            seen_keys.add(key)
+            try:
+                po_id = db.post_daily_production(
+                    {
+                        "bom_id": bom["id"],
+                        "finished_product_id": bom["finished_product_id"],
+                        "production_date": str(prod_date),
+                        "planned_qty": qty,
+                        "actual_qty": qty,
+                        "wastage_qty": 0,
+                        "warehouse_id": wh_id,
+                        "batch_no": None,
+                        "notes": notes or "Daily production (quick grid)",
+                        "qc_status": "Passed",
+                    },
+                    uid(),
+                    allow_insufficient=allow_neg,
+                    allow_duplicate=row_allow_dup,
+                )
+                po = db.get_production_order(po_id) or {}
+                posted.append(
+                    f"{po.get('document_no') or po_id}: {label} × {qty:g} "
+                    f"(batch {po.get('batch_no') or '—'})"
+                )
+            except Exception as e:
+                errors.append(f"{label} × {qty:g}: {str(e).replace('**', '')}")
+
+        if posted:
+            ff.action_done(f"Posted **{len(posted)}** production line(s). RM issued and FG received automatically.")
+            for p in posted:
+                st.write(f"- {p}")
+        for err in errors:
+            st.error(err)
