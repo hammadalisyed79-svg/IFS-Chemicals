@@ -166,9 +166,14 @@ def _daily_sheet_tab():
         return
 
     dept_opts = _dept_options(all_emps, include_all=True)
-    # Default to first real department — registers differ by department
-    if "att_dept" not in st.session_state or st.session_state.get("att_dept") not in dept_opts:
-        st.session_state["att_dept"] = dept_opts[1] if len(dept_opts) > 1 else dept_opts[0]
+    _ATT_DEPT_DEFAULT_V = 2  # v2: default register = All departments
+    if (
+        "att_dept" not in st.session_state
+        or st.session_state.get("att_dept") not in dept_opts
+        or st.session_state.get("_att_dept_default_v", 0) < _ATT_DEPT_DEFAULT_V
+    ):
+        st.session_state["att_dept"] = dept_opts[0]
+        st.session_state["_att_dept_default_v"] = _ATT_DEPT_DEFAULT_V
 
     f1, f2, f3 = st.columns([2, 1.5, 1])
     search = f1.text_input("Search", placeholder="Code, name, mobile…", key="att_search")
@@ -335,8 +340,13 @@ def _register_tab():
     fd = str(c1.date_input("From", value=date.today().replace(day=1), key="att_reg_fd"))
     td = str(c2.date_input("To", value=date.today(), key="att_reg_td"))
     dept_opts = _dept_options(all_emps, include_all=True)
-    if "att_reg_dept" not in st.session_state or st.session_state.get("att_reg_dept") not in dept_opts:
-        st.session_state["att_reg_dept"] = dept_opts[1] if len(dept_opts) > 1 else dept_opts[0]
+    if (
+        "att_reg_dept" not in st.session_state
+        or st.session_state.get("att_reg_dept") not in dept_opts
+        or st.session_state.get("_att_dept_default_v", 0) < 2
+    ):
+        st.session_state["att_reg_dept"] = dept_opts[0]
+        st.session_state["_att_dept_default_v"] = 2
     dept = c3.selectbox("Department register", dept_opts, key="att_reg_dept")
     rows = db.get_attendance(fd, td)
     if dept != "All departments":
