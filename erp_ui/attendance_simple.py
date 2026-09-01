@@ -1,4 +1,4 @@
-"""Daily attendance — bulk sheet, one department register at a time."""
+"""Daily attendance — bulk sheet, employee-wise month view, register."""
 
 from datetime import date, timedelta
 import pandas as pd
@@ -418,20 +418,261 @@ def _register_tab():
     render_dataframe_html_table(summary)
 
 
+def _employee_wise_tab():
+    """One employee × date range calendar, with mark/edit for any day."""
+    st.markdown(
+        "**Employee-wise attendance** — pick an employee and period, review the month, "
+        "and mark or correct any specific date."
+    )
+    all_emps = _load_employees()
+    if not all_emps:
+        st.warning("Add employees first under **HR → Employees**.")
+        return
+
+    f1, f2, f3 = st.columns([2.4, 1, 1])
+    with f1:
+        _, eid, emp = smart_select(
+            "Employee",
+            all_emps,
+            "att_ew_emp",
+            "id",
+            lambda r: f"{_emp_dept(r)} · {r['code']} - {r.get('full_name', r.get('name', ''))}",
+            blank_default=True,
+        )
+    today = date.today()
+    month_start = today.replace(day=1)
+    if "att_ew_fd" not in st.session_state:
+        st.session_state["att_ew_fd"] = month_start
+    if "att_ew_td" not in st.session_state:
+        st.session_state["att_ew_td"] = today
+    fd = f2.date_input("From", key="att_ew_fd")
+    td = f3.date_input("To", key="att_ew_td")
+    qb = st.columns([1, 1, 4])
+    if qb[0].button("This month", key="att_ew_this_month"):
+        st.session_state["att_ew_fd"] = month_start
+        if today.month == 12:
+            last = date(today.year, 12, 31)
+        else:
+            last = date(today.year, today.month + 1, 1) - timedelta(days=1)
+        st.session_state["att_ew_td"] = last
+        st.rerun()
+    if qb[1].button("Month to today", key="att_ew_to_today"):
+        st.session_state["att_ew_fd"] = month_start
+        st.session_state["att_ew_td"] = today
+        st.rerun()
+    qb[2].caption("Default range is the current month through today.")
+
+    if not eid or not emp:
+        st.info("Select an employee to view and mark attendance.")
+        return
+    if fd > td:
+        st.error("From date must be on or before To date.")
+        return
+
+    fd_s, td_s = str(fd), str(td)
+    existing = db.get_attendance(fd_s, td_s, eid)
+    by_date = {str(r.get("att_date")): r for r in existing}
+
+    # ----- Mark / edit one date -----
+    st.subheader("Mark specific date")
+    if "att_ew_mark_date" not in st.session_state:
+        default_mark = today if fd <= today <= td else td
+        st.session_state["att_ew_mark_date"] = min(max(default_mark, fd), td)
+    # Keep mark date inside selected range when range changes
+    md = st.session_state.get("att_ew_mark_date")
+    if isinstance(md, date) and (md < fd or md > td):
+        st.session_state["att_ew_mark_date"] = min(max(md, fd), td)
+
+    mark_cols = st.columns([1.2, 1.4, 1, 1, 2, 1])
+    mark_date = mark_cols[0].date_input("Date", key="att_ew_mark_date")
+    mark_ds = str(mark_date)
+    cur = by_date.get(mark_ds, {})
+    mark_status = mark_cols[1].selectbox(
+        "Status",
+        STATUSES,
+        index=STATUSES.index(cur["status"]) if cur.get("status") in STATUSES else 0,
+        format_func=lambda x: STATUS_LABELS.get(x, x),
+        key=f"att_ew_mark_status_{mark_ds}",
+    )
+    mark_ot = mark_cols[2].number_input(
+        "OT (hrs)", min_value=0.0, step=0.5,
+        value=float(cur.get("overtime_hrs") or 0),
+        key=f"att_ew_mark_ot_{mark_ds}",
+    )
+    mark_late = mark_cols[3].number_input(
+        "Late (min)", min_value=0.0, step=1.0,
+        value=float(cur.get("late_mins") or 0),
+        key=f"att_ew_mark_late_{mark_ds}",
+    )
+    mark_notes = mark_cols[4].text_input(
+        "Notes",
+        value=cur.get("notes") or "",
+        key=f"att_ew_mark_notes_{mark_ds}",
+    )
+    if mark_cols[5].button("Save date", type="primary", key="att_ew_mark_save"):
+        try:
+            db.save_attendance({
+                "employee_id": int(eid),
+                "att_date": mark_ds,
+                "status": mark_status,
+                "overtime_hrs": float(mark_ot or 0),
+                "late_mins": float(mark_late or 0),
+                "notes": mark_notes or "",
+            }, uid())
+            ff.action_done(
+                f"Saved **{STATUS_LABELS.get(mark_status, mark_status)}** for "
+                f"**{emp.get('code')} {emp.get('full_name') or emp.get('name')}** on **{mark_ds}**."
+            )
+        except Exception as e:
+            st.error(str(e))
+
+    # ----- Range calendar grid -----
+    st.subheader("Period overview")
+    days = []
+    d = fd
+    while d <= td:
+        ds = str(d)
+        ex = by_date.get(ds, {})
+        days.append({
+            "att_date": ds,
+            "weekday": d.strftime("%a"),
+            "status": ex.get("status") or "",
+            "overtime_hrs": float(ex.get("overtime_hrs") or 0),
+            "late_mins": float(ex.get("late_mins") or 0),
+            "notes": ex.get("notes") or "",
+            "marked": "Yes" if ex else "No",
+        })
+        d += timedelta(days=1)
+
+    df = pd.DataFrame(days)
+    marked_n = int((df["marked"] == "Yes").sum()) if not df.empty else 0
+    present_n = int((df["status"] == "present").sum()) if not df.empty else 0
+    absent_n = int((df["status"] == "absent").sum()) if not df.empty else 0
+    leave_n = int((df["status"] == "leave").sum()) if not df.empty else 0
+    ot_sum = float(df["overtime_hrs"].sum()) if not df.empty else 0.0
+
+    k1, k2, k3, k4, k5, k6 = st.columns(6, gap="small")
+    k1.markdown(
+        f"<div class='txn-kpi-card'><p class='txn-kpi'>Days in range</p>"
+        f"<p class='txn-kpi-val'>{len(df):,}</p></div>",
+        unsafe_allow_html=True,
+    )
+    k2.markdown(
+        f"<div class='txn-kpi-card'><p class='txn-kpi'>Marked</p>"
+        f"<p class='txn-kpi-val'>{marked_n}/{len(df)}</p></div>",
+        unsafe_allow_html=True,
+    )
+    k3.markdown(
+        f"<div class='txn-kpi-card'><p class='txn-kpi'>Present</p>"
+        f"<p class='txn-kpi-val'>{present_n:,}</p></div>",
+        unsafe_allow_html=True,
+    )
+    k4.markdown(
+        f"<div class='txn-kpi-card'><p class='txn-kpi'>Absent</p>"
+        f"<p class='txn-kpi-val'>{absent_n:,}</p></div>",
+        unsafe_allow_html=True,
+    )
+    k5.markdown(
+        f"<div class='txn-kpi-card'><p class='txn-kpi'>Leave</p>"
+        f"<p class='txn-kpi-val'>{leave_n:,}</p></div>",
+        unsafe_allow_html=True,
+    )
+    k6.markdown(
+        f"<div class='txn-kpi-card'><p class='txn-kpi'>OT hours</p>"
+        f"<p class='txn-kpi-val'>{ot_sum:,.1f}</p></div>",
+        unsafe_allow_html=True,
+    )
+
+    st.caption(
+        f"**{emp.get('code')}** · {emp.get('full_name') or emp.get('name')} · "
+        f"{_emp_dept(emp)} · {fd_s} → {td_s}. "
+        "Edit rows below and **Save period**, or use **Mark specific date** above."
+    )
+
+    status_opts = [""] + list(STATUSES)
+    edited = st.data_editor(
+        df,
+        column_config={
+            "att_date": st.column_config.TextColumn("Date", disabled=True, width="small"),
+            "weekday": st.column_config.TextColumn("Day", disabled=True, width="small"),
+            "status": st.column_config.SelectboxColumn(
+                "Status", options=status_opts, required=False, width="medium",
+            ),
+            "overtime_hrs": st.column_config.NumberColumn("OT (hrs)", min_value=0, step=0.5, format="%.1f"),
+            "late_mins": st.column_config.NumberColumn("Late (min)", min_value=0, step=1, format="%.0f"),
+            "notes": st.column_config.TextColumn("Notes", width="medium"),
+            "marked": st.column_config.TextColumn("Saved?", disabled=True, width="small"),
+        },
+        hide_index=True,
+        use_container_width=True,
+        height=min(640, 80 + max(len(df), 1) * 35),
+        key=f"att_ew_editor_{eid}_{fd_s}_{td_s}",
+        disabled=["att_date", "weekday", "marked"],
+    )
+
+    c1, c2 = st.columns([1, 3])
+    if c1.button("Save period", type="primary", key="att_ew_save_period"):
+        records = []
+        for _, row in edited.iterrows():
+            status = (row.get("status") or "").strip()
+            if not status:
+                continue
+            records.append({
+                "employee_id": int(eid),
+                "att_date": str(row["att_date"]),
+                "status": status,
+                "overtime_hrs": float(row.get("overtime_hrs") or 0),
+                "late_mins": float(row.get("late_mins") or 0),
+                "notes": row.get("notes") or "",
+            })
+        if not records:
+            st.warning("Set a status on at least one day before saving.")
+        else:
+            try:
+                saved = 0
+                for rec in records:
+                    db.save_attendance(rec, uid())
+                    saved += 1
+                ff.action_done(
+                    f"Saved **{saved}** day(s) for "
+                    f"**{emp.get('code')} {emp.get('full_name') or emp.get('name')}**."
+                )
+            except Exception as e:
+                st.error(str(e))
+    c2.caption("Blank status = leave unmarked (not saved). Clearing a saved day is not supported here — set Absent/Leave instead.")
+
+    export_df = edited.copy()
+    if "status" in export_df.columns:
+        export_df["status"] = export_df["status"].map(
+            lambda s: STATUS_LABELS.get(s, s) if s else ""
+        )
+    export_buttons(
+        export_df.rename(columns={
+            "att_date": "Date", "weekday": "Day", "status": "Status",
+            "overtime_hrs": "OT (hrs)", "late_mins": "Late (min)",
+            "notes": "Notes", "marked": "Saved?",
+        }),
+        f"attendance_employee_{emp.get('code') or eid}",
+        "Employee Attendance",
+    )
+
+
 def page_attendance_simple():
     peek = st.session_state.get("att_simple_tab") or "Daily Sheet"
     std_page_header(
         "Attendance",
-        status="register" if peek == "Register" else None,
-        status_kind="shell" if peek == "Register" else "invoice",
+        status="register" if peek in ("Register", "Employee Wise") else None,
+        status_kind="shell" if peek in ("Register", "Employee Wise") else "invoice",
     )
     tab = sticky_page_tabs(
-        ["Daily Sheet", "Quick Entry", "Register", "Overtime Report"],
+        ["Daily Sheet", "Employee Wise", "Quick Entry", "Register", "Overtime Report"],
         "att_simple_tab",
     )
 
     if tab == "Daily Sheet":
         _daily_sheet_tab()
+    elif tab == "Employee Wise":
+        _employee_wise_tab()
     elif tab == "Quick Entry":
         _quick_entry_tab()
     elif tab == "Register":
