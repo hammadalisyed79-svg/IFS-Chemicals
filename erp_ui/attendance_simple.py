@@ -421,8 +421,8 @@ def _register_tab():
 def _employee_wise_tab():
     """One employee × date range calendar, with mark/edit for any day."""
     st.markdown(
-        "**Employee-wise attendance** — pick an employee and period, review the month, "
-        "and mark or correct any specific date."
+        "**Employee-wise attendance** — pick an employee and period. "
+        "Days default to **Present**; change only absences / leave / OT, then save."
     )
     all_emps = _load_employees()
     if not all_emps:
@@ -536,7 +536,7 @@ def _employee_wise_tab():
         days.append({
             "att_date": ds,
             "weekday": d.strftime("%a"),
-            "status": ex.get("status") or "",
+            "status": ex.get("status") or "present",
             "overtime_hrs": float(ex.get("overtime_hrs") or 0),
             "late_mins": float(ex.get("late_mins") or 0),
             "notes": ex.get("notes") or "",
@@ -586,17 +586,16 @@ def _employee_wise_tab():
     st.caption(
         f"**{emp.get('code')}** · {emp.get('full_name') or emp.get('name')} · "
         f"{_emp_dept(emp)} · {fd_s} → {td_s}. "
-        "Edit rows below and **Save period**, or use **Mark specific date** above."
+        "Default is **Present** — mark Absent/Leave where needed, then **Save period**."
     )
 
-    status_opts = [""] + list(STATUSES)
     edited = st.data_editor(
         df,
         column_config={
             "att_date": st.column_config.TextColumn("Date", disabled=True, width="small"),
             "weekday": st.column_config.TextColumn("Day", disabled=True, width="small"),
             "status": st.column_config.SelectboxColumn(
-                "Status", options=status_opts, required=False, width="medium",
+                "Status", options=STATUSES, required=True, width="medium",
             ),
             "overtime_hrs": st.column_config.NumberColumn("OT (hrs)", min_value=0, step=0.5, format="%.1f"),
             "late_mins": st.column_config.NumberColumn("Late (min)", min_value=0, step=1, format="%.0f"),
@@ -606,7 +605,7 @@ def _employee_wise_tab():
         hide_index=True,
         use_container_width=True,
         height=min(640, 80 + max(len(df), 1) * 35),
-        key=f"att_ew_editor_{eid}_{fd_s}_{td_s}",
+        key=f"att_ew_editor_{eid}_{fd_s}_{td_s}_v2",
         disabled=["att_date", "weekday", "marked"],
     )
 
@@ -614,9 +613,7 @@ def _employee_wise_tab():
     if c1.button("Save period", type="primary", key="att_ew_save_period"):
         records = []
         for _, row in edited.iterrows():
-            status = (row.get("status") or "").strip()
-            if not status:
-                continue
+            status = (row.get("status") or "present").strip() or "present"
             records.append({
                 "employee_id": int(eid),
                 "att_date": str(row["att_date"]),
@@ -625,21 +622,18 @@ def _employee_wise_tab():
                 "late_mins": float(row.get("late_mins") or 0),
                 "notes": row.get("notes") or "",
             })
-        if not records:
-            st.warning("Set a status on at least one day before saving.")
-        else:
-            try:
-                saved = 0
-                for rec in records:
-                    db.save_attendance(rec, uid())
-                    saved += 1
-                ff.action_done(
-                    f"Saved **{saved}** day(s) for "
-                    f"**{emp.get('code')} {emp.get('full_name') or emp.get('name')}**."
-                )
-            except Exception as e:
-                st.error(str(e))
-    c2.caption("Blank status = leave unmarked (not saved). Clearing a saved day is not supported here — set Absent/Leave instead.")
+        try:
+            saved = 0
+            for rec in records:
+                db.save_attendance(rec, uid())
+                saved += 1
+            ff.action_done(
+                f"Saved **{saved}** day(s) for "
+                f"**{emp.get('code')} {emp.get('full_name') or emp.get('name')}**."
+            )
+        except Exception as e:
+            st.error(str(e))
+    c2.caption("Unmarked days start as Present. Change only exceptions, then Save period.")
 
     export_df = edited.copy()
     if "status" in export_df.columns:
