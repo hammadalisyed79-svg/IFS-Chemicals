@@ -7,6 +7,7 @@ Imports:
   - Departments / designations (from Employee)
   - Employees (skip Photo OLE; code EMP-A#### = Access ID)
   - Salary history → payroll_runs + payroll_lines (2022–2026)
+    (re-apply backfills missing lines on existing Access import runs)
   - Ending negative balances → issued employee advances
   - Payments → mark matching payroll lines paid
 
@@ -216,6 +217,40 @@ def preview(src: Path, year_filter: int | None):
     ac.close()
 
 
+def _salary_line_values(r, *, eid: int, run_date: str, uid, ts):
+    """Map one Access Salary row to payroll_lines INSERT values (and amounts)."""
+    days = _f(r[2]) or 30
+    present = _f(r[6])
+    payscale = _f(r[4])
+    salary_amt = _f(r[7])
+    food = _f(r[8])
+    bata = _f(r[9])
+    advance = _f(r[10])
+    loan = _f(r[11])
+    esi_amt = _f(r[13])
+    total_deduct = _f(r[14])
+    net = _f(r[15])
+    allowances = food + bata
+    # SalaryAmount is often already net-of-attendance; treat as gross for the period
+    gross = salary_amt + allowances if allowances else salary_amt
+    if gross <= 0 and payscale > 0:
+        gross = payscale
+    other = max(0.0, total_deduct - advance - loan - esi_amt)
+    if total_deduct <= 0:
+        total_deduct = advance + loan + esi_amt + other
+    if net <= 0 and gross > 0:
+        net = gross - total_deduct
+    absent = max(0.0, days - present) if present else 0.0
+    values = (
+        eid, payscale, allowances, 0, 0,
+        gross, 0, esi_amt, 0,
+        advance, loan, other,
+        total_deduct, net, present, absent, 0,
+        "paid", net, run_date, "cash", uid, ts,
+    )
+    return values, gross, total_deduct, net
+
+
 def apply(src: Path, year_filter: int | None):
     uid = _uid()
     ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -274,17 +309,19 @@ def apply(src: Path, year_filter: int | None):
 
             existing = access_to_ifs.get(aid)
             if existing:
+                # Do not overwrite is_active / employment_status — ERP may have
+                # inactivated staff after import; reactivation is intentional.
                 conn.execute(
                     """UPDATE employees SET full_name=?, gender=?, mobile=?, address=?, cnic=?,
                        department_id=?, designation_id=?, department=?, designation=?,
-                       joining_date=?, date_of_birth=?, employment_status=?, is_active=?,
+                       joining_date=?, date_of_birth=?,
                        basic_salary=?, bank_account=?, confirmation_date=COALESCE(confirmation_date,?),
                        modified_by=?, modified_at=?
                        WHERE id=?""",
                     (
                         name, gender, mobile, address, cnic,
                         dept_id, desig_id, dept, desig,
-                        join_on, dob, status, active,
+                        join_on, dob,
                         payscale, bank_account, left_on,
                         uid, ts, existing,
                     ),
@@ -326,29 +363,93 @@ def apply(src: Path, year_filter: int | None):
                 continue
             by_period[(dated.year, dated.month)].append(r)
 
-        runs_created = lines_created = runs_skipped = 0
+        runs_created = lines_created = lines_backfilled = runs_existing = 0
         line_ids_by_emp_period: dict[tuple[int, int, int], int] = {}  # (ifs_eid,y,m) -> payroll_line id
+
+        line_sql = """INSERT INTO payroll_lines(
+                           payroll_id, employee_id, basic_salary, allowances, overtime, bonus,
+                           gross_salary, tax_deduction, eobi, social_security,
+                           advance_recovery, loan_recovery, other_deductions,
+                           total_deductions, net_salary, days_present, days_absent, overtime_hrs,
+                           paid_status, paid_amount, paid_date, payment_mode, paid_by, paid_at)
+                       VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"""
 
         for (year, month) in sorted(by_period.keys()):
             existing = conn.execute(
-                "SELECT id FROM payroll_runs WHERE payroll_month=? AND payroll_year=? AND notes LIKE ?",
-                (month, year, "%Access payroll import%"),
+                "SELECT id, COALESCE(notes,'') FROM payroll_runs WHERE payroll_month=? AND payroll_year=?",
+                (month, year),
             ).fetchone()
-            if existing:
-                # still map lines for payment update
-                for lr in conn.execute(
-                    "SELECT id, employee_id FROM payroll_lines WHERE payroll_id=?",
-                    (existing[0],),
-                ).fetchall():
-                    line_ids_by_emp_period[(lr[1], year, month)] = lr[0]
-                runs_skipped += 1
-                continue
 
             run_date = f"{year}-{month:02d}-28"
-            # use last salary dated in period if available
             last_d = max((r[1] for r in by_period[(year, month)] if r[1]), default=None)
             if last_d:
                 run_date = last_d.strftime("%Y-%m-%d")
+
+            if existing:
+                pid = existing[0]
+                notes = existing[1] or ""
+                if "Access payroll import" not in notes:
+                    print(
+                        f"  skip {year}-{month:02d}: non-Access payroll run already exists "
+                        f"(id={pid}); not creating Access import for this month"
+                    )
+                    for lr in conn.execute(
+                        "SELECT id, employee_id FROM payroll_lines WHERE payroll_id=?",
+                        (pid,),
+                    ).fetchall():
+                        line_ids_by_emp_period[(lr[1], year, month)] = lr[0]
+                    runs_existing += 1
+                    continue
+
+                have_eids = set()
+                for lr in conn.execute(
+                    "SELECT id, employee_id FROM payroll_lines WHERE payroll_id=?",
+                    (pid,),
+                ).fetchall():
+                    line_ids_by_emp_period[(lr[1], year, month)] = lr[0]
+                    have_eids.add(int(lr[1]))
+
+                # Backfill lines added in Access after the first import of this month
+                added_g = added_d = added_n = 0.0
+                backfilled_eids: list[int] = []
+                for r in by_period[(year, month)]:
+                    aid = int(r[3]) if r[3] is not None else None
+                    if aid is None or aid not in access_to_ifs:
+                        continue
+                    eid = access_to_ifs[aid]
+                    if eid in have_eids:
+                        continue
+                    values, gross, total_deduct, net = _salary_line_values(
+                        r, eid=eid, run_date=run_date, uid=uid, ts=ts
+                    )
+                    cur_l = conn.execute(line_sql, (pid, *values))
+                    line_ids_by_emp_period[(eid, year, month)] = cur_l.lastrowid
+                    have_eids.add(eid)
+                    backfilled_eids.append(eid)
+                    lines_backfilled += 1
+                    added_g += gross
+                    added_d += total_deduct
+                    added_n += net
+                if added_g or added_d or added_n:
+                    conn.execute(
+                        """UPDATE payroll_runs
+                           SET total_gross=COALESCE(total_gross,0)+?,
+                               total_deductions=COALESCE(total_deductions,0)+?,
+                               total_net=COALESCE(total_net,0)+?
+                           WHERE id=?""",
+                        (added_g, added_d, added_n, pid),
+                    )
+                # Staff with late-added Access salary for this month should be active again
+                for eid in backfilled_eids:
+                    conn.execute(
+                        """UPDATE employees
+                           SET is_active=1, employment_status='active',
+                               modified_by=?, modified_at=?
+                           WHERE id=?""",
+                        (uid, ts, eid),
+                    )
+                runs_existing += 1
+                continue
 
             doc = db.ensure_document_no("PAY", None, conn)
             cur_r = conn.execute(
@@ -371,45 +472,10 @@ def apply(src: Path, year_filter: int | None):
                 if aid is None or aid not in access_to_ifs:
                     continue
                 eid = access_to_ifs[aid]
-                days = _f(r[2]) or 30
-                present = _f(r[6])
-                payscale = _f(r[4])
-                salary_amt = _f(r[7])
-                food = _f(r[8])
-                bata = _f(r[9])
-                advance = _f(r[10])
-                loan = _f(r[11])
-                esi_amt = _f(r[13])
-                total_deduct = _f(r[14])
-                net = _f(r[15])
-                allowances = food + bata
-                # SalaryAmount is often already net-of-attendance; treat as gross for the period
-                gross = salary_amt + allowances if allowances else salary_amt
-                if gross <= 0 and payscale > 0:
-                    gross = payscale
-                other = max(0.0, total_deduct - advance - loan - esi_amt)
-                if total_deduct <= 0:
-                    total_deduct = advance + loan + esi_amt + other
-                if net <= 0 and gross > 0:
-                    net = gross - total_deduct
-                absent = max(0.0, days - present) if present else 0.0
-
-                cur_l = conn.execute(
-                    """INSERT INTO payroll_lines(
-                           payroll_id, employee_id, basic_salary, allowances, overtime, bonus,
-                           gross_salary, tax_deduction, eobi, social_security,
-                           advance_recovery, loan_recovery, other_deductions,
-                           total_deductions, net_salary, days_present, days_absent, overtime_hrs,
-                           paid_status, paid_amount, paid_date, payment_mode, paid_by, paid_at)
-                       VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
-                    (
-                        pid, eid, payscale, allowances, 0, 0,
-                        gross, 0, esi_amt, 0,
-                        advance, loan, other,
-                        total_deduct, net, present, absent, 0,
-                        "paid", net, run_date, "cash", uid, ts,
-                    ),
+                values, gross, total_deduct, net = _salary_line_values(
+                    r, eid=eid, run_date=run_date, uid=uid, ts=ts
                 )
+                cur_l = conn.execute(line_sql, (pid, *values))
                 line_ids_by_emp_period[(eid, year, month)] = cur_l.lastrowid
                 lines_created += 1
                 total_gross += gross
@@ -422,11 +488,13 @@ def apply(src: Path, year_filter: int | None):
             )
             runs_created += 1
 
-        print(f"Payroll: runs_created={runs_created} skipped={runs_skipped} lines={lines_created}")
+        print(
+            f"Payroll: runs_created={runs_created} existing={runs_existing} "
+            f"lines_new={lines_created} lines_backfilled={lines_backfilled}"
+        )
 
         # --- Ending balance per Access employee = SUM(Balance deltas) ---
-        # Access Balance.Balance is a signed movement (salary +, payment/adv −),
-        # not a running balance. Using the last row alone was wrong.
+        # Access Balance.ID is the employee ID; Balance.Balance is a signed movement.
         last_bal: dict[int, float] = defaultdict(float)
         for r in balances:
             last_bal[int(r[0])] += _f(r[4])
