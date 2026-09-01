@@ -465,7 +465,10 @@ def get_leave_allocation_register(year=None, employee_id=None):
 
 
 # ---------- Attendance ----------
-ATTENDANCE_STATUSES = ["present", "absent", "leave", "late", "overtime", "half_day"]
+ATTENDANCE_STATUSES = [
+    "present", "absent", "leave", "late", "overtime", "half_day",
+    "weekly_holiday", "public_holiday",
+]
 
 
 def save_attendance(data, user_id=None):

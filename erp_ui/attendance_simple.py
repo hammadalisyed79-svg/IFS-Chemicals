@@ -9,8 +9,43 @@ from erp_ui.helpers import uid, smart_select, std_page_header, export_buttons, s
 
 STATUSES = db.ATTENDANCE_STATUSES if hasattr(db, "ATTENDANCE_STATUSES") else [
     "present", "absent", "leave", "late", "overtime", "half_day",
+    "weekly_holiday", "public_holiday",
 ]
-STATUS_LABELS = {s: s.replace("_", " ").title() for s in STATUSES}
+STATUS_LABELS = {
+    "present": "Present",
+    "absent": "Absent",
+    "leave": "Leave",
+    "late": "Late",
+    "overtime": "Overtime",
+    "half_day": "Half Day",
+    "weekly_holiday": "Weekly Holiday",
+    "public_holiday": "Gazetted Holiday",
+}
+for _s in STATUSES:
+    STATUS_LABELS.setdefault(_s, _s.replace("_", " ").title())
+
+
+def _holiday_for(d):
+    if hasattr(db, "holiday_info_for_date"):
+        return db.holiday_info_for_date(d)
+    return None
+
+
+def _holidays_between(fd, td):
+    if hasattr(db, "holidays_in_range"):
+        return db.holidays_in_range(fd, td)
+    return {}
+
+
+def _holiday_banner(d):
+    hol = _holiday_for(d)
+    if not hol:
+        return None
+    st.info(
+        f"**{hol['label']}** — {hol['name']} · {d}. "
+        "Attendance defaults to this holiday status (change only if someone worked)."
+    )
+    return hol
 
 
 def _emp_dept(e):
@@ -33,14 +68,15 @@ def _dept_options(emps, *, include_all=True):
     return depts
 
 
-def _build_sheet(emps, existing_map, force_status=None):
+def _build_sheet(emps, existing_map, force_status=None, default_status="present"):
     rows = []
     for e in emps:
         ex = existing_map.get(e["id"], {})
         if force_status:
             status = force_status
         else:
-            status = ex.get("status") or "present"
+            status = ex.get("status") or default_status
+        notes = ex.get("notes") or ""
         rows.append({
             "employee_id": e["id"],
             "code": e.get("code", ""),
@@ -49,7 +85,7 @@ def _build_sheet(emps, existing_map, force_status=None):
             "status": status,
             "overtime_hrs": float(ex.get("overtime_hrs") or 0),
             "late_mins": float(ex.get("late_mins") or 0),
-            "notes": ex.get("notes") or "",
+            "notes": notes,
         })
     return pd.DataFrame(rows)
 
@@ -63,6 +99,8 @@ def _attendance_status_badge(status: str) -> str:
         "late": "inv-badge-pending",
         "overtime": "inv-badge-approved",
         "half_day": "inv-badge-draft",
+        "weekly_holiday": "inv-badge-draft",
+        "public_holiday": "inv-badge-pending",
     }.get(key, "inv-badge-draft")
     label = STATUS_LABELS.get(key, key.replace("_", " ").title())
     return f'<span class="inv-badge {css}">{label}</span>'
@@ -159,6 +197,8 @@ def _daily_sheet_tab():
     # Do not pass value= when key is already in session_state (avoids Streamlit warning)
     att_date = nav[3].date_input("Attendance Date", key=ds_key)
     ds = str(att_date)
+    hol = _holiday_banner(att_date)
+    default_status = hol["status"] if hol else "present"
 
     all_emps = _load_employees()
     if not all_emps:
@@ -209,7 +249,7 @@ def _daily_sheet_tab():
         )
 
     preset = st.session_state.pop("att_preset", None)
-    df = _build_sheet(emps, existing_map, force_status=preset)
+    df = _build_sheet(emps, existing_map, force_status=preset, default_status=default_status)
 
     counts = _summary_counts(df)
     scoped = all_emps if dept == "All departments" else [e for e in all_emps if _emp_dept(e) == dept]
@@ -240,13 +280,14 @@ def _daily_sheet_tab():
         f"<p class='txn-kpi-val'>{counts.get('leave', 0):,}</p></div>",
         unsafe_allow_html=True,
     )
+    hol_n = counts.get("weekly_holiday", 0) + counts.get("public_holiday", 0)
     k6.markdown(
-        f"<div class='txn-kpi-card'><p class='txn-kpi'>Late / OT</p>"
-        f"<p class='txn-kpi-val'>{counts.get('late', 0) + counts.get('overtime', 0):,}</p></div>",
+        f"<div class='txn-kpi-card'><p class='txn-kpi'>Holiday / OT</p>"
+        f"<p class='txn-kpi-val'>{hol_n + counts.get('late', 0) + counts.get('overtime', 0):,}</p></div>",
         unsafe_allow_html=True,
     )
 
-    qa = st.columns([1, 1, 1, 2])
+    qa = st.columns([1, 1, 1, 1, 2])
     if qa[0].button("✓ All Present", key="att_all_pres"):
         st.session_state["att_preset"] = "present"
         st.rerun()
@@ -256,8 +297,12 @@ def _daily_sheet_tab():
     if qa[2].button("Leave All", key="att_all_leave"):
         st.session_state["att_preset"] = "leave"
         st.rerun()
-    qa[3].caption(
+    if hol and qa[3].button("All Holiday", key="att_all_hol"):
+        st.session_state["att_preset"] = hol["status"]
+        st.rerun()
+    qa[4].caption(
         f"Quick-fill applies to **{dept}** list below, then click **Save All**."
+        + (f" Today is **{hol['label']}**." if hol else "")
     )
 
     edited = st.data_editor(
@@ -307,6 +352,7 @@ def _daily_sheet_tab():
 def _quick_entry_tab():
     st.caption("Use for one-off corrections — bulk entry is on **Daily Sheet**.")
     att_date = st.date_input("Date", value=date.today(), key="att_q_date")
+    hol = _holiday_banner(att_date)
     emps = _load_employees()
     _, eid, _ = smart_select(
         "Employee", emps, "att_q_emp", "id",
@@ -316,16 +362,21 @@ def _quick_entry_tab():
         return
     existing = db.get_attendance(str(att_date), str(att_date), eid)
     cur = existing[0] if existing else {}
+    default_status = cur.get("status") or (hol["status"] if hol else "present")
+    default_idx = STATUSES.index(default_status) if default_status in STATUSES else 0
     with st.form("att_quick"):
         status = st.selectbox(
             "Status", STATUSES,
-            index=STATUSES.index(cur["status"]) if cur.get("status") in STATUSES else 0,
+            index=default_idx,
             format_func=lambda x: STATUS_LABELS.get(x, x),
         )
         c1, c2 = st.columns(2)
         ot = c1.number_input("Overtime Hours", min_value=0.0, value=float(cur.get("overtime_hrs") or 0))
         late = c2.number_input("Late (minutes)", min_value=0.0, value=float(cur.get("late_mins") or 0))
-        notes = st.text_input("Notes", value=cur.get("notes") or "")
+        notes = st.text_input(
+            "Notes",
+            value=cur.get("notes") or (hol["name"] if hol and not cur else ""),
+        )
         if st.form_submit_button("Save", type="primary"):
             db.save_attendance({
                 "employee_id": eid, "att_date": str(att_date), "status": status,
@@ -352,6 +403,12 @@ def _register_tab():
     if dept != "All departments":
         emps = {e["id"] for e in _load_employees(department=dept)}
         rows = [r for r in rows if r.get("employee_id") in emps]
+    hol_map = _holidays_between(fd, td)
+    if hol_map:
+        bits = []
+        for ds, info in sorted(hol_map.items()):
+            bits.append(f"**{ds}** {info['label']} ({info['name']})")
+        st.info("Holidays in this period: " + " · ".join(bits[:12]) + (" …" if len(bits) > 12 else ""))
     # Ensure department-wise order within date
     rows = sorted(
         rows,
@@ -413,6 +470,8 @@ def _register_tab():
         Present=("Status", lambda s: (s == "Present").sum()),
         Absent=("Status", lambda s: (s == "Absent").sum()),
         Leave=("Status", lambda s: (s == "Leave").sum()),
+        Weekly_Holiday=("Status", lambda s: (s == "Weekly Holiday").sum()),
+        Gazetted_Holiday=("Status", lambda s: (s == "Gazetted Holiday").sum()),
         OT_Hours=("OT (hrs)", "sum"),
     ).reset_index()
     render_dataframe_html_table(summary)
@@ -422,7 +481,8 @@ def _employee_wise_tab():
     """One employee × date range calendar, with mark/edit for any day."""
     st.markdown(
         "**Employee-wise attendance** — pick an employee and period. "
-        "Days default to **Present**; change only absences / leave / OT, then save."
+        "Working days default to **Present**; **Weekly / Gazetted holidays** default from the holiday calendar. "
+        "Change only exceptions, then save."
     )
     all_emps = _load_employees()
     if not all_emps:
@@ -472,6 +532,13 @@ def _employee_wise_tab():
     fd_s, td_s = str(fd), str(td)
     existing = db.get_attendance(fd_s, td_s, eid)
     by_date = {str(r.get("att_date")): r for r in existing}
+    hol_map = _holidays_between(fd, td)
+    if hol_map:
+        bits = [
+            f"**{ds}** {info['label']} — {info['name']}"
+            for ds, info in sorted(hol_map.items())
+        ]
+        st.info("Holidays in range: " + " · ".join(bits[:10]) + (" …" if len(bits) > 10 else ""))
 
     # ----- Mark / edit one date -----
     st.subheader("Mark specific date")
@@ -487,10 +554,14 @@ def _employee_wise_tab():
     mark_date = mark_cols[0].date_input("Date", key="att_ew_mark_date")
     mark_ds = str(mark_date)
     cur = by_date.get(mark_ds, {})
+    mark_hol = hol_map.get(mark_ds) or _holiday_for(mark_date)
+    if mark_hol:
+        mark_cols[0].caption(f"{mark_hol['label']}: {mark_hol['name']}")
+    default_mark_status = cur.get("status") or (mark_hol["status"] if mark_hol else "present")
     mark_status = mark_cols[1].selectbox(
         "Status",
         STATUSES,
-        index=STATUSES.index(cur["status"]) if cur.get("status") in STATUSES else 0,
+        index=STATUSES.index(default_mark_status) if default_mark_status in STATUSES else 0,
         format_func=lambda x: STATUS_LABELS.get(x, x),
         key=f"att_ew_mark_status_{mark_ds}",
     )
@@ -506,7 +577,7 @@ def _employee_wise_tab():
     )
     mark_notes = mark_cols[4].text_input(
         "Notes",
-        value=cur.get("notes") or "",
+        value=cur.get("notes") or (mark_hol["name"] if mark_hol and not cur else ""),
         key=f"att_ew_mark_notes_{mark_ds}",
     )
     if mark_cols[5].button("Save date", type="primary", key="att_ew_mark_save"):
@@ -533,10 +604,14 @@ def _employee_wise_tab():
     while d <= td:
         ds = str(d)
         ex = by_date.get(ds, {})
+        hol = hol_map.get(ds)
+        status = ex.get("status") or (hol["status"] if hol else "present")
         days.append({
             "att_date": ds,
             "weekday": d.strftime("%a"),
-            "status": ex.get("status") or "present",
+            "holiday": (hol["label"] if hol else ""),
+            "holiday_name": (hol["name"] if hol else ""),
+            "status": status,
             "overtime_hrs": float(ex.get("overtime_hrs") or 0),
             "late_mins": float(ex.get("late_mins") or 0),
             "notes": ex.get("notes") or "",
@@ -549,7 +624,8 @@ def _employee_wise_tab():
     present_n = int((df["status"] == "present").sum()) if not df.empty else 0
     absent_n = int((df["status"] == "absent").sum()) if not df.empty else 0
     leave_n = int((df["status"] == "leave").sum()) if not df.empty else 0
-    ot_sum = float(df["overtime_hrs"].sum()) if not df.empty else 0.0
+    weekly_n = int((df["status"] == "weekly_holiday").sum()) if not df.empty else 0
+    gaz_n = int((df["status"] == "public_holiday").sum()) if not df.empty else 0
 
     k1, k2, k3, k4, k5, k6 = st.columns(6, gap="small")
     k1.markdown(
@@ -578,15 +654,15 @@ def _employee_wise_tab():
         unsafe_allow_html=True,
     )
     k6.markdown(
-        f"<div class='txn-kpi-card'><p class='txn-kpi'>OT hours</p>"
-        f"<p class='txn-kpi-val'>{ot_sum:,.1f}</p></div>",
+        f"<div class='txn-kpi-card'><p class='txn-kpi'>Weekly / Gazetted</p>"
+        f"<p class='txn-kpi-val'>{weekly_n}/{gaz_n}</p></div>",
         unsafe_allow_html=True,
     )
 
     st.caption(
         f"**{emp.get('code')}** · {emp.get('full_name') or emp.get('name')} · "
         f"{_emp_dept(emp)} · {fd_s} → {td_s}. "
-        "Default is **Present** — mark Absent/Leave where needed, then **Save period**."
+        "Working days → Present; calendar holidays → Weekly/Gazetted Holiday."
     )
 
     edited = st.data_editor(
@@ -594,6 +670,8 @@ def _employee_wise_tab():
         column_config={
             "att_date": st.column_config.TextColumn("Date", disabled=True, width="small"),
             "weekday": st.column_config.TextColumn("Day", disabled=True, width="small"),
+            "holiday": st.column_config.TextColumn("Holiday type", disabled=True, width="medium"),
+            "holiday_name": st.column_config.TextColumn("Holiday name", disabled=True, width="medium"),
             "status": st.column_config.SelectboxColumn(
                 "Status", options=STATUSES, required=True, width="medium",
             ),
@@ -605,8 +683,8 @@ def _employee_wise_tab():
         hide_index=True,
         use_container_width=True,
         height=min(640, 80 + max(len(df), 1) * 35),
-        key=f"att_ew_editor_{eid}_{fd_s}_{td_s}_v2",
-        disabled=["att_date", "weekday", "marked"],
+        key=f"att_ew_editor_{eid}_{fd_s}_{td_s}_v3",
+        disabled=["att_date", "weekday", "holiday", "holiday_name", "marked"],
     )
 
     c1, c2 = st.columns([1, 3])
@@ -633,7 +711,10 @@ def _employee_wise_tab():
             )
         except Exception as e:
             st.error(str(e))
-    c2.caption("Unmarked days start as Present. Change only exceptions, then Save period.")
+    c2.caption(
+        "Holiday columns come from **Administration → Holidays**. "
+        "Change status only for exceptions, then Save period."
+    )
 
     export_df = edited.copy()
     if "status" in export_df.columns:
@@ -642,7 +723,9 @@ def _employee_wise_tab():
         )
     export_buttons(
         export_df.rename(columns={
-            "att_date": "Date", "weekday": "Day", "status": "Status",
+            "att_date": "Date", "weekday": "Day",
+            "holiday": "Holiday type", "holiday_name": "Holiday name",
+            "status": "Status",
             "overtime_hrs": "OT (hrs)", "late_mins": "Late (min)",
             "notes": "Notes", "marked": "Saved?",
         }),
