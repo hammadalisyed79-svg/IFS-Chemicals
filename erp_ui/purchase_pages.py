@@ -157,7 +157,7 @@ def page_purchases():
         if open_pos:
             st.markdown("**Create invoice from Purchase Order** (optional)")
             po_opts = {
-                f"{o['document_no']} — {o['supplier_name']} — Rs. {float(o['total']):,.0f} ({o['status']})": o["id"]
+                hlp.purchase_order_picker_label(o, show_total=True, show_pending=True): o["id"]
                 for o in open_pos
             }
             c_po1, c_po2 = st.columns([3, 1])

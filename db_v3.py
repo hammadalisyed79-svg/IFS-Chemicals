@@ -2884,24 +2884,64 @@ def search_purchase_orders(
     q=None, from_date=None, to_date=None, supplier_id=None, status=None,
     page=1, page_size=50, export_all=False, **_ignored,
 ):
+    """List purchase orders. Pending (open/partial) stay visible even when a date period is set."""
     from database import run_paginated_list
     where, params = ["1=1"], []
     if q:
         like = f"%{q.strip()}%"
         where.append("(po.document_no LIKE ? OR s.name LIKE ? OR s.code LIKE ? OR COALESCE(po.notes,'') LIKE ?)")
         params.extend([like, like, like, like])
-    if from_date:
-        where.append("po.order_date >= ?"); params.append(from_date)
-    if to_date:
-        where.append("po.order_date <= ?"); params.append(to_date)
     if supplier_id:
         where.append("po.supplier_id = ?"); params.append(supplier_id)
-    if status and status != "All":
-        where.append("COALESCE(po.status,'open') = ?"); params.append(status)
+
+    st_raw = (status or "").strip()
+    st_l = st_raw.lower() if st_raw and st_raw != "All" else None
+    pending_sql = "LOWER(COALESCE(po.status,'open')) IN ('open','partial')"
+    if st_l in ("pending", "active"):
+        where.append(pending_sql)
+        apply_date = False
+    elif st_l:
+        where.append("LOWER(COALESCE(po.status,'open')) = ?")
+        params.append(st_l)
+        apply_date = st_l not in ("open", "partial")
+    else:
+        apply_date = True
+
+    if apply_date and (from_date or to_date):
+        date_parts, date_params = [], []
+        if from_date:
+            date_parts.append("po.order_date >= ?")
+            date_params.append(from_date)
+        if to_date:
+            date_parts.append("po.order_date <= ?")
+            date_params.append(to_date)
+        date_sql = " AND ".join(date_parts)
+        if st_l is None:
+            where.append(f"(({date_sql}) OR {pending_sql})")
+            params.extend(date_params)
+        else:
+            where.append(f"({date_sql})")
+            params.extend(date_params)
+
+    pending_expr = """COALESCE((
+        SELECT SUM(poi.quantity - COALESCE(poi.received_qty, 0))
+        FROM purchase_order_items poi
+        WHERE poi.order_id = po.id
+    ), 0)"""
     return run_paginated_list(
         "purchase_orders po JOIN suppliers s ON po.supplier_id=s.id",
-        "po.*, s.name AS supplier_name, s.code AS supplier_code",
-        where, params, "po.order_date DESC, po.id DESC", page, page_size, export_all,
+        f"po.*, s.name AS supplier_name, s.code AS supplier_code, {pending_expr} AS pending_qty",
+        where, params,
+        """CASE LOWER(COALESCE(po.status,'open'))
+               WHEN 'open' THEN 0
+               WHEN 'partial' THEN 1
+               WHEN 'closed' THEN 2
+               WHEN 'cancelled' THEN 3
+               WHEN 'canceled' THEN 3
+               ELSE 4
+           END,
+           po.order_date DESC, po.id DESC""",
+        page, page_size, export_all,
         sum_exprs=["COALESCE(SUM(po.total),0)"],
     )
 
@@ -2925,6 +2965,16 @@ def get_purchase_order(po_id):
                WHERE poi.order_id=? ORDER BY poi.id""",
             (po_id,),
         ).fetchall())
+        pending_total = 0.0
+        for li in header["items"]:
+            ordered = float(li.get("quantity") or 0)
+            received = float(li.get("received_qty") or 0)
+            pending = round(max(ordered - received, 0), 3)
+            li["ordered_qty"] = ordered
+            li["received_qty"] = received
+            li["pending_qty"] = pending
+            pending_total += pending
+        header["pending_qty"] = round(pending_total, 3)
         return header
 
 
@@ -2937,12 +2987,7 @@ def get_purchase_orders_for_invoice(supplier_id=None):
            JOIN suppliers s ON po.supplier_id=s.id
            JOIN purchase_order_items poi ON poi.order_id=po.id
            WHERE po.status IN ('open', 'partial')
-             AND poi.quantity > COALESCE(poi.received_qty, 0)
-             AND NOT EXISTS (
-                 SELECT 1 FROM purchase_invoices pi
-                 WHERE pi.order_id=po.id
-                   AND COALESCE(pi.status,'draft') NOT IN ('cancelled','rejected')
-             )"""
+             AND poi.quantity > COALESCE(poi.received_qty, 0)"""
     p = []
     if supplier_id:
         q += " AND po.supplier_id=?"
@@ -2976,6 +3021,63 @@ def purchase_order_invoice_lines(po_id):
     return lines
 
 
+def _refresh_purchase_order_status(conn, order_id):
+    """Set PO status from line received vs ordered quantities."""
+    rows = conn.execute(
+        """SELECT quantity, COALESCE(received_qty, 0) AS received_qty
+           FROM purchase_order_items WHERE order_id=?""",
+        (order_id,),
+    ).fetchall()
+    if not rows:
+        return
+    any_received = any(float(r["received_qty"]) > 0.0001 for r in rows)
+    any_pending = any(
+        float(r["quantity"]) > float(r["received_qty"]) + 0.0001 for r in rows
+    )
+    if any_pending:
+        new_status = "partial"
+    elif any_received:
+        new_status = "closed"
+    else:
+        new_status = "open"
+    conn.execute(
+        "UPDATE purchase_orders SET status=?, modified_at=? WHERE id=?",
+        (new_status, now(), order_id),
+    )
+
+
+def _apply_purchase_order_receipt_items(conn, order_id, items):
+    """Increase received_qty on PO lines (capped at ordered quantity)."""
+    if not order_id or not items:
+        return
+    for row in items:
+        qty = float(row["quantity"] if isinstance(row, dict) else row[1])
+        pid = row["product_id"] if isinstance(row, dict) else row[0]
+        conn.execute(
+            """UPDATE purchase_order_items SET received_qty=
+               CASE WHEN COALESCE(received_qty,0) + ? > quantity THEN quantity
+                    ELSE COALESCE(received_qty,0) + ? END
+               WHERE order_id=? AND product_id=?""",
+            (qty, qty, order_id, pid),
+        )
+
+
+def _reverse_purchase_order_receipt_items(conn, order_id, items):
+    """Decrease received_qty on PO lines (floored at zero)."""
+    if not order_id or not items:
+        return
+    for row in items:
+        qty = float(row["quantity"] if isinstance(row, dict) else row[1])
+        pid = row["product_id"] if isinstance(row, dict) else row[0]
+        conn.execute(
+            """UPDATE purchase_order_items SET received_qty=
+               CASE WHEN COALESCE(received_qty,0) - ? < 0 THEN 0
+                    ELSE COALESCE(received_qty,0) - ? END
+               WHERE order_id=? AND product_id=?""",
+            (qty, qty, order_id, pid),
+        )
+
+
 def reverse_purchase_order_delivery(conn, order_id, invoice_id):
     """Undo PO received qty reserved by a purchase invoice."""
     if not order_id:
@@ -2983,34 +3085,8 @@ def reverse_purchase_order_delivery(conn, order_id, invoice_id):
     items = conn.execute(
         "SELECT product_id, quantity FROM purchase_invoice_items WHERE invoice_id=?", (invoice_id,)
     ).fetchall()
-    for row in items:
-        conn.execute(
-            """UPDATE purchase_order_items SET received_qty=
-               CASE WHEN COALESCE(received_qty,0) - ? < 0 THEN 0
-                    ELSE COALESCE(received_qty,0) - ? END
-               WHERE order_id=? AND product_id=?""",
-            (float(row["quantity"]), float(row["quantity"]), order_id, row["product_id"]),
-        )
-    partial = conn.execute(
-        """SELECT 1 FROM purchase_order_items
-           WHERE order_id=? AND quantity > COALESCE(received_qty, 0) + 0.0001""",
-        (order_id,),
-    ).fetchone()
-    open_rows = conn.execute(
-        """SELECT 1 FROM purchase_order_items
-           WHERE order_id=? AND COALESCE(received_qty,0) > 0.0001""",
-        (order_id,),
-    ).fetchone()
-    if partial:
-        new_status = "partial"
-    elif open_rows:
-        new_status = "partial"
-    else:
-        new_status = "open"
-    conn.execute(
-        "UPDATE purchase_orders SET status=?, modified_at=? WHERE id=?",
-        (new_status, now(), order_id),
-    )
+    _reverse_purchase_order_receipt_items(conn, order_id, items)
+    _refresh_purchase_order_status(conn, order_id)
 
 
 def apply_purchase_order_delivery(conn, order_id, invoice_id):
@@ -3020,22 +3096,8 @@ def apply_purchase_order_delivery(conn, order_id, invoice_id):
     items = conn.execute(
         "SELECT product_id, quantity FROM purchase_invoice_items WHERE invoice_id=?", (invoice_id,)
     ).fetchall()
-    for row in items:
-        conn.execute(
-            """UPDATE purchase_order_items SET received_qty=COALESCE(received_qty,0)+?
-               WHERE order_id=? AND product_id=?""",
-            (float(row["quantity"]), order_id, row["product_id"]),
-        )
-    partial = conn.execute(
-        """SELECT 1 FROM purchase_order_items
-           WHERE order_id=? AND quantity > COALESCE(received_qty, 0) + 0.0001""",
-        (order_id,),
-    ).fetchone()
-    new_status = "partial" if partial else "closed"
-    conn.execute(
-        "UPDATE purchase_orders SET status=?, modified_at=? WHERE id=?",
-        (new_status, now(), order_id),
-    )
+    _apply_purchase_order_receipt_items(conn, order_id, items)
+    _refresh_purchase_order_status(conn, order_id)
 
 
 def get_purchase_requisition(req_id):
@@ -3204,6 +3266,13 @@ def post_grn(grn_id, user_id):
                 conn.execute("INSERT OR REPLACE INTO product_batches(batch_no,product_id,warehouse_id,quantity,expiry_date,created_by) VALUES(?,?,?,?,?,?)",
                              (it["batch_no"], it["product_id"], wh, qty, it.get("expiry_date"), user_id))
             db._record_movement(conn, it["product_id"], wh, "in", qty, "grn", grn_id, g["document_no"], user_id)
+        po_id = g["purchase_order_id"]
+        if po_id:
+            grn_lines = conn.execute(
+                "SELECT product_id, quantity FROM grn_items WHERE grn_id=?", (grn_id,)
+            ).fetchall()
+            _apply_purchase_order_receipt_items(conn, po_id, grn_lines)
+            _refresh_purchase_order_status(conn, po_id)
         conn.execute("UPDATE goods_receipt_notes SET status='posted',posted_by=?,posted_at=? WHERE id=?", (user_id, now(), grn_id))
 
 

@@ -1812,6 +1812,25 @@ def document_party_picker_label(
     return label
 
 
+def purchase_order_picker_label(
+    order: dict,
+    *,
+    show_total: bool = True,
+    show_pending: bool = False,
+) -> str:
+    """Dropdown label: PO — supplier [Status] — pending / amount."""
+    o = order or {}
+    doc = o.get("document_no") or "PO"
+    sup = o.get("supplier_name") or ""
+    status = _picker_status_suffix(o.get("status") or "open")
+    parts = [f"{doc} — {sup} [{status}]"]
+    if show_pending:
+        parts.append(f"pending {float(o.get('pending_qty') or 0):,.0f} units")
+    if show_total:
+        parts.append(f"Rs. {float(o.get('total') or 0):,.0f}")
+    return " — ".join(p for p in parts if p)
+
+
 def sales_order_picker_label(
     order: dict,
     *,

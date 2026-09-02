@@ -167,6 +167,8 @@ def _build_df(items, columns):
                 val = fmt_datetime_from_record(
                     r, col["field"], time_field=col.get("time_field"),
                 )
+            elif col.get("format") == "qty":
+                val = float(val or 0)
             row[col["label"]] = val
         rows.append(row)
     return pd.DataFrame(rows)
@@ -888,14 +890,19 @@ def purchase_order_register_list():
         {"field": "order_date", "label": "Date / Time", "format": "datetime"},
         {"field": "supplier_name", "label": "Supplier"},
         {"field": "status", "label": "Status", "format": "status"},
+        {"field": "pending_qty", "label": "Pending Qty", "format": "qty"},
         {"field": "total", "label": "Total", "format": "money"},
     ]
+    po_status = ["All", "Pending", "open", "partial", "closed", "cancelled"]
+    st.caption(
+        "Pending purchase orders (**Open** / **Partial**) stay in the list when a date period is set. "
+        "**Pending Qty** is what remains to receive after GRN or purchase invoice."
+    )
     return document_register(
         "po_reg", db.search_purchase_orders, cols, "Supplier", party_opts, "supplier_id",
-        lambda r: hlp.document_party_picker_label(
-            r, party_key="supplier_name", date_key="order_date",
-        ),
+        lambda r: hlp.purchase_order_picker_label(r, show_total=False, show_pending=True),
         "purchase_orders", "Purchase Orders",
+        status_options=po_status,
     )
 
 

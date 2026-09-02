@@ -103,7 +103,7 @@ def _edit_picker(doc_type, party_opts_fn, delete_fn):
         render_document_hub(key, f"v3_{doc_type}")
         return
     search_map = {
-        "PO": (db.search_purchase_orders, lambda r: f"{r['document_no']} — {r['supplier_name']}", "Supplier", "supplier_id"),
+        "PO": (db.search_purchase_orders, lambda r: hlp.purchase_order_picker_label(r, show_total=False, show_pending=True), "Supplier", "supplier_id"),
         "PRQ": (db.search_purchase_requisitions, lambda r: f"{r['document_no']} ({r['req_date']})", None, None),
         "SO": (db.search_sales_orders, lambda r: f"{r['document_no']} — {r.get('customer_name','')}", "Customer", "customer_id"),
         "QT": (db.search_quotations, lambda r: f"{r['document_no']} — {r.get('customer_name','')}", "Customer", "customer_id"),
@@ -907,7 +907,7 @@ def page_purchase_orders():
             st.info("No open purchase orders with pending quantity.")
         else:
             po_opts = {
-                f"{o['document_no']} — {o['supplier_name']} — pending {float(o['pending_qty']):,.0f} units": o["id"]
+                hlp.purchase_order_picker_label(o, show_total=False, show_pending=True): o["id"]
                 for o in open_pos
             }
             po_lbl = st.selectbox("Purchase Order", list(po_opts.keys()), key="po_inv_pick")

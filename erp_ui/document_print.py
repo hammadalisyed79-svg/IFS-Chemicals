@@ -1145,6 +1145,10 @@ def purchase_order_html(po_id):
     }
     if inv.get("delivery_date"):
         extra["Delivery Date"] = inv["delivery_date"]
+    raw_items = inv.get("items") or []
+    has_receipts = any(float(it.get("received_qty") or 0) > 0.0001 for it in raw_items)
+    if has_receipts:
+        extra["Note"] = "Quantities below are pending (not yet received)."
     body = _doc_header(
         "Purchase Order", inv["document_no"], inv["order_date"],
         "Supplier", inv.get("supplier_name"),
@@ -1153,18 +1157,43 @@ def purchase_order_html(po_id):
         doc_time=inv.get("created_at"),
     )
     items = []
-    for src in inv.get("items") or []:
+    for src in raw_items:
+        ordered = float(src.get("ordered_qty") or src.get("quantity") or 0)
+        received = float(src.get("received_qty") or 0)
+        pending = round(float(src.get("pending_qty") or max(ordered - received, 0)), 3)
+        if has_receipts:
+            if pending <= 0.0001:
+                continue
+            display_qty = pending
+        else:
+            display_qty = ordered
         it = dict(src)
+        it["quantity"] = display_qty
+        if has_receipts:
+            it["received_qty"] = received
+            it["ordered_qty"] = ordered
         name = it.get("product_name") or it.get("item_name") or ""
         code = (it.get("product_code") or "").strip()
         it["item_name"] = f"{code} — {name}" if code else name
         if not float(it.get("net_weight") or 0):
             sw = float(it.get("standard_weight") or 0)
-            qty = float(it.get("quantity") or 0)
-            if sw > 0 and qty > 0:
-                it["net_weight"] = round(sw * qty, 3)
+            if sw > 0 and display_qty > 0:
+                it["net_weight"] = round(sw * display_qty, 3)
         items.append(it)
+    if has_receipts and not items:
+        body += '<p><em>All items on this purchase order have been received.</em></p>'
+        return _wrap_doc(
+            body, inv["document_no"], page_mode="full",
+            user_id=document_preparer_user_id(inv),
+        )
     cols, total_wt, has_disc = _invoice_line_cols_and_format(items, rate_decimals=4)
+    if has_receipts:
+        names = [c[0] for c in cols]
+        if "received_qty" not in names and "quantity" in names:
+            qty_i = names.index("quantity") + 1
+            cols = cols[:qty_i] + [("received_qty", "Received")] + cols[qty_i:]
+            for it in items:
+                it["received_qty"] = float(it.get("received_qty") or 0)
     if any((it.get("unit") or "").strip() for it in items):
         names = [c[0] for c in cols]
         if "unit" not in names:
