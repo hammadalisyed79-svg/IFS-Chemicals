@@ -64,8 +64,9 @@ REPORT_CATALOG = {
             customer=True,
             party_required="customer",
         ),
-        _r("Customer Outstanding", "Balances due from customers.", date=False,
-           customer_group=True, party_group_view=True),
+        _r("Customer Outstanding",
+           "Balances as of To date; Period Debit/Credit = activity From–To. Filter by customer group.",
+           date=True, customer_group=True, party_group_view=True),
         _r(
             "Customer Due Aging",
             "Net customer balance due by age (dual-role parties netted like Outstanding): "
@@ -1118,8 +1119,13 @@ def _run_report(report, fd, td, cid, sid, pid, wid, eid, payroll_id=None, gf=Non
             product_group_id=gf.get("product_group_id"),
         ))
     if report == "Customer Outstanding":
+        st.caption(
+            "Balances **as of To date**. **Period Debit / Credit** = ledger activity From–To. "
+            "Closing Debit/Credit split from signed balance (+Dr / −Cr)."
+        )
         return pd.DataFrame(db.get_customer_outstanding(
             customer_group_id=gf.get("customer_group_id"), view_mode=pvm,
+            from_date=fd, to_date=td,
         ))
     if report == "Customer Due Aging":
         as_of = td or str(date.today())

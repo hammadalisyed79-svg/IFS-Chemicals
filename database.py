@@ -4428,6 +4428,142 @@ def _apply_summary_movements(balance, movements, kind: str) -> float:
     return bal
 
 
+def _party_ledger_closing_as_of(
+    conn, kind: str, party_id, as_of, master_ob: float, *, skip_shared_coa_jv=False,
+) -> float:
+    """Signed closing balance (+Dr / −Cr) including all movements with date <= as_of.
+
+    If as_of is empty, returns current-style closing = master + all movements.
+    """
+    master = float(master_ob or 0)
+    if kind == "supplier":
+        moves = _collect_supplier_summary_movements(
+            conn, party_id, None, as_of, skip_shared_coa_jv=skip_shared_coa_jv,
+        )
+    else:
+        moves = _collect_customer_summary_movements(
+            conn, party_id, None, as_of, skip_shared_coa_jv=skip_shared_coa_jv,
+        )
+    moves = _drop_duplicate_opening_jvr(moves, master, kind=kind)
+    return round(_apply_summary_movements(master, moves, kind), 2)
+
+
+def _party_period_debit_credit(
+    conn, kind: str, party_id, from_date, to_date, *, skip_shared_coa_jv=False,
+) -> tuple[float, float]:
+    """Sum debit/credit movements in [from_date, to_date] (no opening row)."""
+    if not from_date and not to_date:
+        return 0.0, 0.0
+    if kind == "supplier":
+        moves = _collect_supplier_summary_movements(
+            conn, party_id, from_date, to_date, skip_shared_coa_jv=skip_shared_coa_jv,
+        )
+    else:
+        moves = _collect_customer_summary_movements(
+            conn, party_id, from_date, to_date, skip_shared_coa_jv=skip_shared_coa_jv,
+        )
+    # Do not strip opening JVR here — period range usually starts after opening;
+    # duplicate OB JVR inside the period is rare and would understate activity if dropped.
+    debit = round(sum(float(e.get("debit") or 0) for e in moves), 2)
+    credit = round(sum(float(e.get("credit") or 0) for e in moves), 2)
+    return debit, credit
+
+
+def get_customer_balances_for_period(
+    from_date=None,
+    to_date=None,
+    customer_group_id=None,
+    *,
+    include_zero=False,
+):
+    """Customer list with closing as of To date and optional period Dr/Cr (From–To).
+
+    Closing uses customer ledger (+Dr/−Cr). Dual-role parties (same code as supplier)
+    are netted customer_closing + supplier_closing for the Balance/Debit/Credit columns,
+    matching live Outstanding netting spirit while remaining date-aware.
+    """
+    from datetime import date as _date
+
+    as_of = (str(to_date)[:10] if to_date else None) or str(_date.today())
+    fd = str(from_date)[:10] if from_date else None
+    EPS = 0.005
+
+    with get_connection() as conn:
+        customers = rows_to_list(conn.execute(
+            """SELECT c.id, c.code, c.name, c.phone, c.city, c.opening_balance,
+                      c.group_id, mg.code AS group_code, mg.name AS group_name
+               FROM customers c
+               LEFT JOIN master_groups mg ON c.group_id=mg.id AND mg.entity_type='customer'
+               WHERE c.is_active=1
+               ORDER BY c.code"""
+        ).fetchall())
+        suppliers = {
+            (r["code"] or "").strip().upper(): r
+            for r in rows_to_list(conn.execute(
+                """SELECT id, code, name, opening_balance FROM suppliers WHERE is_active=1"""
+            ).fetchall())
+            if (r.get("code") or "").strip()
+        }
+
+        rows = []
+        for c in customers:
+            if customer_group_id and int(c.get("group_id") or 0) != int(customer_group_id):
+                continue
+            cid = int(c["id"])
+            master_ob = float(c.get("opening_balance") or 0)
+            cust_close = _party_ledger_closing_as_of(conn, "customer", cid, as_of, master_ob)
+            key = (c.get("code") or "").strip().upper()
+            linked = suppliers.get(key)
+            dual = False
+            if linked:
+                dual = True
+                s_close = _party_ledger_closing_as_of(
+                    conn, "supplier", int(linked["id"]), as_of,
+                    float(linked.get("opening_balance") or 0),
+                )
+                closing = round(cust_close + s_close, 2)
+            else:
+                closing = cust_close
+
+            period_debit = period_credit = 0.0
+            if fd:
+                period_debit, period_credit = _party_period_debit_credit(
+                    conn, "customer", cid, fd, as_of,
+                )
+                if linked:
+                    sd, sc = _party_period_debit_credit(
+                        conn, "supplier", int(linked["id"]), fd, as_of,
+                    )
+                    # Net period activity in signed terms is awkward; show customer-book
+                    # period Dr/Cr only (matches Customer Ledger). Supplier side ignored
+                    # for period columns when dual-role.
+                    _ = (sd, sc)
+
+            if not include_zero and abs(closing) < EPS and period_debit < EPS and period_credit < EPS:
+                continue
+
+            debit = round(closing, 2) if closing > EPS else 0.0
+            credit = round(abs(closing), 2) if closing < -EPS else 0.0
+            rows.append({
+                "code": c.get("code"),
+                "name": c.get("name"),
+                "phone": c.get("phone") or "",
+                "city": c.get("city") or "",
+                "group_id": c.get("group_id"),
+                "group_code": c.get("group_code"),
+                "group_name": c.get("group_name"),
+                "period_debit": period_debit,
+                "period_credit": period_credit,
+                "debit": debit,
+                "credit": credit,
+                "balance": closing,
+                "outstanding": closing,
+                "dual_role": dual,
+                "as_of": as_of,
+            })
+    return rows
+
+
 def _party_ledger_opening_as_of(
     conn, kind: str, party_id, from_date, master_ob: float, *, skip_shared_coa_jv=False,
 ) -> float:

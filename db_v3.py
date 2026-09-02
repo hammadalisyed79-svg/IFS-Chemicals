@@ -3757,36 +3757,27 @@ def get_balance_sheet(as_of=None, account_group_id=None, view_mode="detail"):
     }
 
 
-def get_customer_outstanding(customer_group_id=None, view_mode="detail"):
-    from database import get_connection, rows_to_list, net_dual_role_party_balances
+def get_customer_outstanding(
+    customer_group_id=None,
+    view_mode="detail",
+    from_date=None,
+    to_date=None,
+):
+    """Customer balances as of To date, with optional From–To period Debit/Credit.
+
+    When no dates are passed, To defaults to today (live as-of). Group filter and
+    dual-role netting match Report Hub / Outstanding behaviour.
+    """
+    from database import get_customer_balances_for_period
     from db_report_groups import summarize_party_outstanding
 
-    with get_connection() as conn:
-        net = net_dual_role_party_balances(conn)
-        # Optional group filter from customer master
-        group_map = {
-            (r["code"] or "").strip().upper(): r
-            for r in rows_to_list(conn.execute(
-                """SELECT c.code, c.group_id, mg.code AS group_code, mg.name AS group_name, c.phone
-                   FROM customers c
-                   LEFT JOIN master_groups mg ON c.group_id=mg.id AND mg.entity_type='customer'
-                   WHERE c.is_active=1"""
-            ).fetchall())
-        }
-        rows = []
-        for r in net["receivables"]:
-            meta = group_map.get((r.get("code") or "").strip().upper()) or {}
-            if customer_group_id and int(meta.get("group_id") or 0) != int(customer_group_id):
-                continue
-            rows.append({
-                "code": r["code"],
-                "name": r["name"],
-                "phone": r.get("phone") or meta.get("phone") or "",
-                "outstanding": r["balance"],
-                "group_code": meta.get("group_code"),
-                "group_name": meta.get("group_name"),
-                "group_id": meta.get("group_id"),
-            })
+    rows = get_customer_balances_for_period(
+        from_date=from_date,
+        to_date=to_date,
+        customer_group_id=customer_group_id,
+        # Group reports (e.g. ZAIDI SB) keep every member; otherwise hide nil balances
+        include_zero=bool(customer_group_id),
+    )
     return summarize_party_outstanding(rows, view_mode)
 
 def get_supplier_outstanding(supplier_group_id=None, view_mode="detail"):

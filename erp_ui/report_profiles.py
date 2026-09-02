@@ -34,7 +34,10 @@ REPORT_COLUMNS: dict[str, list[str]] = {
         "invoice_no", "invoice_date", "supplier", "product_code", "product",
         "quantity", "rate", "amount", "line_discount", "tax_amount", "invoice_total",
     ],
-    "Customer Outstanding": ["code", "name", "phone", "outstanding"],
+    "Customer Outstanding": [
+        "code", "name", "city",
+        "period_debit", "period_credit", "balance",
+    ],
     "Customer Due Aging": [
         "code", "name", "phone",
         "days_0_15", "days_16_30", "days_31_45", "days_46_60", "days_61_90",
@@ -164,6 +167,7 @@ REPORT_COLUMNS: dict[str, list[str]] = {
 }
 
 REPORT_LAYOUT = {
+    "Customer Outstanding": "portrait_full",
     "Customer Ledger": "portrait_full",
     "Supplier Ledger": "portrait_full",
     "Employee Ledger": "portrait_full",
@@ -333,6 +337,30 @@ def summary_keys_for_report(report_title: str | None, df: pd.DataFrame) -> dict:
     if df is None or df.empty:
         return {}
     report_title = _report_profile_key(report_title) or report_title
+    if report_title == "Customer Outstanding":
+        # Closing Debit/Credit = split of signed balance; also sum period activity
+        bals = pd.to_numeric(df.get("balance", df.get("Balance", 0)), errors="coerce").fillna(0)
+        total_dr = float(bals[bals > 0.005].sum())
+        total_cr = float((-bals[bals < -0.005]).sum())
+        net = float(bals.sum())
+        out = {
+            "Total Debit": f"{total_dr:,.2f}",
+            "Total Credit": f"{total_cr:,.2f}",
+            "Net Balance": f"{abs(net):,.2f} {'Dr' if net >= 0 else 'Cr'}",
+        }
+        for col, label in (
+            ("period_debit", "Period Debit"),
+            ("period_credit", "Period Credit"),
+            ("Period Debit", "Period Debit"),
+            ("Period Credit", "Period Credit"),
+        ):
+            if col in df.columns:
+                try:
+                    s = pd.to_numeric(df[col], errors="coerce").fillna(0).sum()
+                    out[f"Total {label}"] = f"{float(s):,.2f}"
+                except Exception:
+                    pass
+        return out
     ledger_titles = (
         "Customer Ledger", "Supplier Ledger",
         "Customer Ledger (Detailed)", "Supplier Ledger (Detailed)",
