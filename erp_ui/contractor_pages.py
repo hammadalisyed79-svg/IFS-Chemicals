@@ -9,6 +9,8 @@ import streamlit as st
 
 from application import data_gateway as db
 from db_contractors import (
+    BULK_PREFIX_HINTS,
+    PAYMENT_PRODUCTION_QTY,
     PAYMENT_TYPES,
     add_contractor,
     calculate_contractor_month,
@@ -16,7 +18,9 @@ from db_contractors import (
     delete_contractor,
     get_contractor,
     get_contractor_product_ids,
+    get_contractor_product_rates,
     list_contractors,
+    product_ids_by_code_prefix,
     save_contractor_products,
     update_contractor,
 )
@@ -183,13 +187,6 @@ def _tab_contractors():
 
 
 def _tab_products():
-    from db_contractors import (
-        BULK_PREFIX_HINTS,
-        PAYMENT_PRODUCTION_QTY,
-        get_contractor_product_rates,
-        product_ids_by_code_prefix,
-    )
-
     rows = list_contractors(active_only=True)
     if not rows:
         st.info("Add a contractor on the **Contractors** tab first.")
@@ -361,8 +358,6 @@ def _tab_products():
 
 
 def _tab_month_preview():
-    from db_contractors import PAYMENT_PRODUCTION_QTY
-
     rows = list_contractors(active_only=True)
     if not rows:
         st.info("Add a contractor and assign products first.")
