@@ -1730,8 +1730,14 @@ def page_customer_due_aging():
 
 def page_supplier_outstanding():
     from erp_ui.helpers import render_dataframe_html_table
+    from erp_ui.report_print import prettify_columns
+    from erp_ui.report_profiles import prepare_report_dataframe
 
     hlp.std_page_header("Supplier Outstanding", status="register", status_kind="shell")
+    st.caption(
+        "Party-wise payables — balance due to each supplier. "
+        "Dual-role parties (customer + supplier same code) are netted like the dashboard Payables total."
+    )
     from erp_ui.report_grouping import party_group_filter, party_view_mode
     c1, c2 = st.columns(2)
     with c1:
@@ -1739,21 +1745,24 @@ def page_supplier_outstanding():
     with c2:
         vm = party_view_mode("so")
     rows = db.get_supplier_outstanding(supplier_group_id=gid, view_mode=vm)
-    if rows:
-        df = pd.DataFrame(rows)
-        tot = float(df["outstanding"].sum())
-        k1, k2 = st.columns(2, gap="small")
-        k1.markdown(
-            f"<div class='txn-kpi-card'><p class='txn-kpi'>Suppliers</p>"
-            f"<p class='txn-kpi-val'>{len(df):,}</p></div>",
-            unsafe_allow_html=True,
-        )
-        k2.markdown(
-            f"<div class='txn-kpi-card'><p class='txn-kpi'>Total Outstanding</p>"
-            f"<p class='txn-kpi-val'>{fmt(tot)}</p></div>",
-            unsafe_allow_html=True,
-        )
-        render_dataframe_html_table(df)
+    if not rows:
+        st.info("No supplier payables for the selected filters.")
+        return
+    df = prepare_report_dataframe(pd.DataFrame(rows), "Supplier Outstanding")
+    tot = float(df["outstanding"].sum())
+    k1, k2 = st.columns(2, gap="small")
+    k1.markdown(
+        f"<div class='txn-kpi-card'><p class='txn-kpi'>Suppliers</p>"
+        f"<p class='txn-kpi-val'>{len(df):,}</p></div>",
+        unsafe_allow_html=True,
+    )
+    k2.markdown(
+        f"<div class='txn-kpi-card'><p class='txn-kpi'>Total Outstanding</p>"
+        f"<p class='txn-kpi-val'>{fmt(tot)}</p></div>",
+        unsafe_allow_html=True,
+    )
+    render_dataframe_html_table(prettify_columns(df))
+    export_df(df, "supplier_outstanding", "Supplier Outstanding")
 
 
 def page_roles():

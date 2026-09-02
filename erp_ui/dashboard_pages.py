@@ -112,8 +112,14 @@ def page_business_overview():
         _kpi_card("Total Liquid", fmt_money(stats.get("liquid_balance", 0)), "Cash + Bank", BLUE, "💰")
     with r2[3]:
         _kpi_card("Receivables", fmt_money(stats.get("receivables", 0)), f"{stats.get('customers', 0)} active customers", RED, "📥")
+        if _can(user, "Customer Outstanding"):
+            if st.button("Party-wise →", key="dash_recv_detail", use_container_width=True):
+                request_nav("Reports", "Customer Outstanding")
     with r2[4]:
         _kpi_card("Payables", fmt_money(stats.get("payables", 0)), f"{stats.get('suppliers', 0)} active suppliers", BLUE, "📤")
+        if _can(user, "Supplier Outstanding"):
+            if st.button("Party-wise →", key="dash_pay_detail", use_container_width=True):
+                request_nav("Reports", "Supplier Outstanding")
 
     # --- Row 3: Operations ---
     section_header("Operations & Inventory")
@@ -251,12 +257,34 @@ def page_business_overview():
             st.caption("No outstanding receivables.")
 
     with b2:
-        st.subheader("Top Payables")
-        st.caption("Dual-role parties (same code) shown **net** — same as combined ledger.")
-        tp = stats.get("top_payables") or []
-        if tp:
-            df = pd.DataFrame(tp).rename(columns={"code": "Code", "name": "Supplier", "balance": "Balance"})
+        st.subheader("Payables — party-wise")
+        st.caption("Outstanding balance due to each supplier. Dual-role parties (same code) are shown **net**.")
+        try:
+            pay_rows = db.get_supplier_outstanding() if hasattr(db, "get_supplier_outstanding") else []
+        except Exception:
+            pay_rows = []
+        if not pay_rows:
+            pay_rows = stats.get("top_payables") or []
+        if pay_rows:
+            from erp_ui.list_paging import page_slice
+
+            def _pay_bal(r):
+                return float(r.get("outstanding") or r.get("balance") or 0)
+
+            pay_rows = sorted(pay_rows, key=_pay_bal, reverse=True)
+            total_pay = sum(_pay_bal(r) for r in pay_rows)
+            st.caption(f"**{len(pay_rows):,}** suppliers · Total **{fmt_money(total_pay)}**")
+            page_rows = page_slice(pay_rows, "dash_payables", default_size=50)
+            df = pd.DataFrame([{
+                "Code": r.get("code") or "",
+                "Supplier": r.get("name") or "",
+                "Phone": r.get("phone") or "",
+                "Outstanding": _pay_bal(r),
+            } for r in page_rows])
             render_dataframe_html_table(df)
+            if _can(user, "Supplier Outstanding"):
+                if st.button("Open Supplier Outstanding report", key="dash_pay_report"):
+                    request_nav("Reports", "Supplier Outstanding")
         else:
             st.caption("No outstanding payables.")
 
