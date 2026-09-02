@@ -899,7 +899,159 @@ def page_purchase_orders():
                         st.error("Add at least one line item.")
 
     elif _po_tab == "Edit / Delete":
-        _edit_picker("PO", lambda: sup_opts, None)
+        po_id, _ = txn.document_picker(
+            "po_edit", db.search_purchase_orders,
+            lambda r: hlp.purchase_order_picker_label(r, show_total=False, show_pending=True),
+            "Supplier", sup_opts, "supplier_id",
+        )
+        if not po_id:
+            st.info("Search and select a purchase order to edit — or use **Open** on the List.")
+        else:
+            order = db.get_purchase_order(po_id)
+            if not order:
+                st.warning("Purchase order not found.")
+            elif not sup_opts:
+                st.warning("Add suppliers first.")
+            else:
+                if st.session_state.get("PO_edit_loaded") != po_id:
+                    ff.clear_session_prefix("PO_edit")
+                    st.session_state["PO_edit_loaded"] = po_id
+                    st.session_state["PO_edit_lines"] = [
+                        {
+                            "product_id": it["product_id"],
+                            "item_id": it["product_id"],
+                            "quantity": float(it.get("ordered_qty") or it.get("quantity") or 0),
+                            "rate": float(it.get("rate") or 0),
+                            "amount": float(it.get("amount") or 0),
+                            "received_qty": float(it.get("received_qty") or 0),
+                        }
+                        for it in (order.get("items") or [])
+                    ] or [{"product_id": None, "quantity": 1, "rate": 0, "amount": 0, "received_qty": 0}]
+
+                st.markdown(
+                    f"**Order:** {order.get('document_no') or '—'} · "
+                    f"**Date:** {order.get('order_date') or '—'} · "
+                    f"**Status:** {order.get('status') or 'open'}"
+                )
+
+                from erp_ui.document_print import document_print_toolbar
+                document_print_toolbar("Purchase Order", po_id, key_prefix=f"po_print_{po_id}")
+
+                ordered_total = sum(
+                    float(it.get("ordered_qty") or it.get("quantity") or 0)
+                    for it in (order.get("items") or [])
+                )
+                received_total = sum(float(it.get("received_qty") or 0) for it in (order.get("items") or []))
+                pending_total = float(order.get("pending_qty") or max(ordered_total - received_total, 0))
+                k1, k2, k3 = st.columns(3)
+                k1.metric("Ordered qty", f"{ordered_total:,.3f}")
+                k2.metric("Received qty", f"{received_total:,.3f}")
+                k3.metric("Pending qty", f"{pending_total:,.3f}")
+
+                fulfill_df = hlp.order_fulfillment_breakdown_df(
+                    order.get("items") or [],
+                    done_key="received_qty",
+                    done_label="Received",
+                )
+                if not fulfill_df.empty:
+                    st.markdown("**Receipt progress (line-wise)**")
+                    hlp.render_dataframe_html_table(fulfill_df)
+
+                sup_labels = list(sup_opts.keys())
+                cur_sid = int(order.get("supplier_id") or 0)
+                default_lbl = next(
+                    (k for k, v in sup_opts.items() if int(v) == cur_sid),
+                    sup_labels[0] if sup_labels else None,
+                )
+                party_lbl = st.selectbox(
+                    "Supplier",
+                    sup_labels,
+                    index=sup_labels.index(default_lbl) if default_lbl in sup_labels else 0,
+                    key=f"po_edit_sup_{po_id}",
+                )
+                new_supplier_id = sup_opts[party_lbl]
+                if int(new_supplier_id) != cur_sid:
+                    st.info(
+                        f"Supplier will change from **{order.get('supplier_name') or '—'}** "
+                        f"to **{party_lbl.split(' - ', 1)[-1]}** when you save."
+                    )
+
+                c1, c2 = st.columns(2)
+                try:
+                    od = date.fromisoformat(str(order.get("order_date") or "")[:10])
+                except Exception:
+                    od = date.today()
+                new_date = c1.date_input("Order Date", value=od, key=f"po_edit_date_{po_id}")
+                new_notes = c2.text_input(
+                    "Notes", value=order.get("notes") or "", key=f"po_edit_notes_{po_id}",
+                )
+                status_opts = ["open", "partial", "closed", "cancelled"]
+                cur_status = (order.get("status") or "open").lower()
+                if cur_status not in status_opts:
+                    status_opts = [cur_status] + status_opts
+                new_status = st.selectbox(
+                    "Status",
+                    status_opts,
+                    index=status_opts.index(cur_status) if cur_status in status_opts else 0,
+                    key=f"po_edit_status_{po_id}",
+                )
+
+                raw_lines, _ = hlp.line_items_editor(
+                    items, "PO_edit", show_weight=True, party_id=new_supplier_id,
+                )
+                received_by_pid = {
+                    int(it["product_id"]): float(it.get("received_qty") or 0)
+                    for it in (order.get("items") or [])
+                }
+                save_lines = []
+                for ln in raw_lines:
+                    pid = ln.get("product_id") or ln.get("item_id")
+                    row = dict(ln)
+                    row["received_qty"] = received_by_pid.get(int(pid), float(ln.get("received_qty") or 0))
+                    save_lines.append(row)
+
+                b1, b2, b3 = st.columns(3)
+                if b1.button("Update Purchase Order", type="primary", key="po_edit_save"):
+                    if not save_lines:
+                        st.error("Add at least one line item.")
+                    else:
+                        try:
+                            data = {
+                                "document_no": order["document_no"],
+                                "supplier_id": new_supplier_id,
+                                "order_date": str(new_date),
+                                "notes": new_notes,
+                                "status": new_status,
+                                "discount_pct": float(order.get("discount") or order.get("discount_pct") or 0),
+                                "tax_rate_id": order.get("tax_rate_id"),
+                                "warehouse_id": order.get("warehouse_id"),
+                                "requisition_id": order.get("requisition_id"),
+                            }
+                            db.save_purchase_order(data, save_lines, po_id, uid())
+                            st.session_state.pop("PO_edit_loaded", None)
+                            ff.clear_session_prefix("PO_edit")
+                            ff.action_done(
+                                f"Purchase order **{order['document_no']}** updated"
+                                + (
+                                    f" — supplier set to **{party_lbl.split(' - ', 1)[-1]}**"
+                                    if int(new_supplier_id) != cur_sid else ""
+                                )
+                                + "."
+                            )
+                        except Exception as e:
+                            st.error(str(e))
+                if b2.button("Delete Purchase Order", key="po_edit_del"):
+                    try:
+                        db.delete_purchase_order(po_id, uid())
+                        st.session_state.pop("PO_edit_loaded", None)
+                        ff.clear_session_prefix("PO_edit")
+                        ff.action_done(f"Purchase order **{order['document_no']}** deleted.")
+                    except Exception as e:
+                        st.error(str(e))
+                if b3.button("Reload from database", key="po_edit_reload"):
+                    st.session_state.pop("PO_edit_loaded", None)
+                    ff.clear_session_prefix("PO_edit")
+                    st.rerun()
 
     elif _po_tab == "Create Invoice":
         open_pos = db.get_purchase_orders_for_invoice()

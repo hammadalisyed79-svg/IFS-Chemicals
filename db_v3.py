@@ -3174,11 +3174,49 @@ def save_purchase_order(data, lines, po_id=None, user_id=None):
             )
             po_id = cur.lastrowid
         for l in lines:
-            conn.execute("INSERT INTO purchase_order_items(order_id,product_id,quantity,rate,amount) VALUES(?,?,?,?,?)",
-                         (po_id, l["product_id"], l["quantity"], l["rate"], l["line_amount"]))
+            qty = float(l.get("quantity") or 0)
+            received = min(float(l.get("received_qty") or 0), qty)
+            conn.execute(
+                "INSERT INTO purchase_order_items(order_id,product_id,quantity,rate,amount,received_qty) VALUES(?,?,?,?,?,?)",
+                (po_id, l["product_id"], qty, l["rate"], l["line_amount"], received),
+            )
+        if po_id:
+            st = (data.get("status") or "open").lower()
+            if st != "cancelled":
+                _refresh_purchase_order_status(conn, po_id)
         if data.get("requisition_id"):
             mark_requisition_converted(conn, data["requisition_id"])
         return po_id
+
+
+def delete_purchase_order(po_id, user_id=None):
+    """Delete a purchase order when nothing has been received against it."""
+    from database import get_connection
+    with get_connection() as conn:
+        linked = conn.execute(
+            """SELECT COUNT(*) FROM purchase_invoices
+               WHERE order_id=? AND COALESCE(status,'draft') NOT IN ('cancelled','rejected')""",
+            (po_id,),
+        ).fetchone()[0]
+        if linked:
+            raise ValueError("Cannot delete — a purchase invoice is linked to this order.")
+        grn_linked = conn.execute(
+            """SELECT COUNT(*) FROM goods_receipt_notes
+               WHERE purchase_order_id=? AND COALESCE(status,'draft') != 'cancelled'""",
+            (po_id,),
+        ).fetchone()[0]
+        if grn_linked:
+            raise ValueError("Cannot delete — a GRN is linked to this order.")
+        received = conn.execute(
+            """SELECT COALESCE(SUM(COALESCE(received_qty,0)),0) FROM purchase_order_items WHERE order_id=?""",
+            (po_id,),
+        ).fetchone()[0]
+        if float(received or 0) > 0.0001:
+            raise ValueError("Cannot delete — quantity already received against this order.")
+        conn.execute("DELETE FROM purchase_order_items WHERE order_id=?", (po_id,))
+        conn.execute("DELETE FROM purchase_orders WHERE id=?", (po_id,))
+        return True
+
 
 def get_grns():
     from database import get_connection, rows_to_list

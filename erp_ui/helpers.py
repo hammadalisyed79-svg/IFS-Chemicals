@@ -1831,6 +1831,32 @@ def purchase_order_picker_label(
     return " — ".join(p for p in parts if p)
 
 
+def order_fulfillment_breakdown_df(
+    items,
+    *,
+    ordered_key: str = "quantity",
+    done_key: str = "delivered_qty",
+    done_label: str = "Delivered",
+):
+    """Line-level ordered / done / pending qty for order edit screens."""
+    import pandas as pd
+
+    rows = []
+    for it in items or []:
+        ordered = float(it.get("ordered_qty") or it.get(ordered_key) or 0)
+        done = float(it.get(done_key) or 0)
+        pending = round(max(ordered - done, 0), 3)
+        code = (it.get("product_code") or "").strip()
+        name = it.get("product_name") or it.get("item_name") or ""
+        rows.append({
+            "Item": f"{code} — {name}" if code else name,
+            "Ordered": ordered,
+            done_label: done,
+            "Pending": pending,
+        })
+    return pd.DataFrame(rows)
+
+
 def sales_order_picker_label(
     order: dict,
     *,
