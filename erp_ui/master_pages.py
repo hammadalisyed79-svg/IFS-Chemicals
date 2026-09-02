@@ -45,9 +45,9 @@ def page_customers():
                     pass
             hlp.master_list_search(
                 "Customers", rows, "cust",
-                ["code", "name", "group_name", "phone", "city", "province", "credit_limit", "balance", "is_active"],
-                {"code": "Code", "name": "Name", "group_name": "Group", "phone": "Phone", "city": "City",
-                 "province": "Province", "credit_limit": "Credit Limit", "balance": "Balance", "is_active": "Active"},
+                ["code", "name", "phone", "city", "credit_limit", "balance", "is_active"],
+                {"code": "Code", "name": "Name", "phone": "Phone", "city": "City",
+                 "credit_limit": "Credit Limit", "balance": "Balance", "is_active": "Active"},
                 show_balance_dr_cr=True,
                 export_title=export_title,
             )
