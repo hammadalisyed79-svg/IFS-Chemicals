@@ -354,16 +354,15 @@ def summary_keys_for_report(report_title: str | None, df: pd.DataFrame) -> dict:
         pcr = _sum_col("period_credit", "Period Credit")
         bals = pd.to_numeric(df.get("balance", df.get("Balance", 0)), errors="coerce").fillna(0)
         net = float(bals.sum())
-        out = {
-            "Total Period Debit": f"{pdr:,.2f}",
-            "Total Period Credit": f"{pcr:,.2f}",
-            "Closing": f"{abs(net):,.2f} {'Dr' if net >= 0 else 'Cr'}",
-        }
         opening = _sum_col("opening", "Opening")
+        out = {}
         if "opening" in df.columns or "Opening" in df.columns:
             out["Total Opening"] = (
                 f"{abs(opening):,.2f} {'Dr' if opening >= 0 else 'Cr'}"
             )
+        out["Total Period Debit"] = f"{pdr:,.2f}"
+        out["Total Period Credit"] = f"{pcr:,.2f}"
+        out["Closing"] = f"{abs(net):,.2f} {'Dr' if net >= 0 else 'Cr'}"
         return out
     ledger_titles = (
         "Customer Ledger", "Supplier Ledger",
