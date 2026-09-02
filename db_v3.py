@@ -179,6 +179,18 @@ def _table_exists(conn, name):
     ).fetchone() is not None
 
 
+def _safe_import(mod_name: str):
+    """Import resilient to Streamlit hot-reload (stale/None sys.modules → KeyError)."""
+    import importlib
+    import sys
+
+    try:
+        return importlib.import_module(mod_name)
+    except (KeyError, ModuleNotFoundError):
+        sys.modules.pop(mod_name, None)
+        return importlib.import_module(mod_name)
+
+
 def apply_v3(conn, db_module):
     """Safe v3 migration - never drops data."""
     ver = _schema_ver(conn)
@@ -224,20 +236,20 @@ def apply_v3(conn, db_module):
             "ON CONFLICT(key) DO UPDATE SET value='8'"
         )
     if _schema_ver(conn) < 9:
-        import db_job_cards
+        db_job_cards = _safe_import("db_job_cards")
         db_job_cards.apply_job_cards(conn, db_module)
         conn.execute(
             "INSERT INTO schema_meta(key,value) VALUES('schema_version','9') "
             "ON CONFLICT(key) DO UPDATE SET value='9'"
         )
     if _schema_ver(conn) < 10:
-        import db_groups
+        db_groups = _safe_import("db_groups")
         db_groups.apply_master_groups(conn, db_module)
     # v11 holidays — groups migration can jump 9→12 and skip this block
-    import db_holidays
+    db_holidays = _safe_import("db_holidays")
     if _schema_ver(conn) < 11 or not _table_exists(conn, "weekly_holidays"):
         db_holidays.apply_holidays(conn, db_module)
-    import db_cash_day
+    db_cash_day = _safe_import("db_cash_day")
     if _schema_ver(conn) < 13 or not _table_exists(conn, "cash_day_closes"):
         db_cash_day.apply_cash_day_schema(conn, db_module)
     if _schema_ver(conn) < 14:
@@ -246,31 +258,31 @@ def apply_v3(conn, db_module):
             "INSERT INTO schema_meta(key,value) VALUES('schema_version','14') "
             "ON CONFLICT(key) DO UPDATE SET value='14'"
         )
-    import db_v13_13
+    db_v13_13 = _safe_import("db_v13_13")
     db_v13_13.migrate_v13_13_professional_workflow_completion(conn, db_module)
-    import db_v13_14
+    db_v13_14 = _safe_import("db_v13_14")
     db_v13_14.migrate_v13_14_enterprise_workflow_integration(conn, db_module)
-    import db_v14_rc1
+    db_v14_rc1 = _safe_import("db_v14_rc1")
     db_v14_rc1.migrate_v14_rc1_enterprise(conn, db_module)
-    import db_v15
+    db_v15 = _safe_import("db_v15")
     db_v15.migrate_v15_0_mobile_portal_distributor(conn, db_module)
-    import db_v16
+    db_v16 = _safe_import("db_v16")
     db_v16.migrate_v16_0_enterprise_platform(conn, db_module)
-    import db_v17
+    db_v17 = _safe_import("db_v17")
     db_v17.migrate_v17_0_extensibility(conn, db_module)
     db_v17.ensure_tenant_columns(conn)
-    import db_v17_1
+    db_v17_1 = _safe_import("db_v17_1")
     db_v17_1.migrate_v17_1_manufacturing(conn, db_module)
-    import db_v17_2
+    db_v17_2 = _safe_import("db_v17_2")
     db_v17_2.migrate_v17_2_validation(conn, db_module)
-    import db_v17_3
+    db_v17_3 = _safe_import("db_v17_3")
     db_v17_3.migrate_v17_3_certification(conn, db_module)
-    import db_stock_costing
+    db_stock_costing = _safe_import("db_stock_costing")
     db_stock_costing.apply_stock_costing(conn, db_module)
     _ensure_expense_bills_schema(conn)
     _ensure_cash_advances_schema(conn)
     _ensure_cash_borrows_schema(conn)
-    import db_contractors
+    db_contractors = _safe_import("db_contractors")
     db_contractors.apply_contract_labour(conn, db_module)
 
 

@@ -203,21 +203,30 @@ def init_db(force=False):
         db_mod = _migration_db_module()
 
         # v3 additive migration (preserves all v2 data)
-        import db_v3
+        # Streamlit hot-reload can leave stale/None entries in sys.modules → KeyError
+        import importlib
+        def _safe_import(mod_name: str):
+            try:
+                return importlib.import_module(mod_name)
+            except (KeyError, ModuleNotFoundError):
+                sys.modules.pop(mod_name, None)
+                return importlib.import_module(mod_name)
+
+        db_v3 = _safe_import("db_v3")
         db_v3.apply_v3(conn, db_mod)
 
         # HR & Payroll module (additive)
-        import db_hr
+        db_hr = _safe_import("db_hr")
         db_hr.apply_hr(conn, db_mod)
 
-        import db_commercial
+        db_commercial = _safe_import("db_commercial")
         db_commercial.apply_commercial(conn, db_mod)
 
         if not _DB_SEQUENCES_SYNCED or force:
             sync_document_sequences(conn)
             _DB_SEQUENCES_SYNCED = True
 
-        import db_audit
+        db_audit = _safe_import("db_audit")
         db_audit.ensure_audit_schema(conn)
         _ensure_user_sessions(conn)
         _migrate_created_at_to_localtime(conn)
