@@ -126,6 +126,7 @@ def summarize_party_outstanding(rows, view_mode):
                 "name": r.get("group_name") or "Unassigned",
                 "phone": "",
                 "city": "",
+                "opening": 0.0,
                 "period_debit": 0.0,
                 "period_credit": 0.0,
                 "debit": 0.0,
@@ -133,6 +134,7 @@ def summarize_party_outstanding(rows, view_mode):
                 "balance": 0.0,
                 "outstanding": 0.0,
             }
+        out[k]["opening"] += float(r.get("opening") or 0)
         out[k]["period_debit"] += float(r.get("period_debit") or 0)
         out[k]["period_credit"] += float(r.get("period_credit") or 0)
         bal = float(r.get("balance") if r.get("balance") is not None else r.get("outstanding") or 0)
@@ -142,11 +144,15 @@ def summarize_party_outstanding(rows, view_mode):
         out[k]["credit"] += float(r.get("credit") or 0)
     # Recompute debit/credit from aggregated signed balance for group summary consistency
     for row in out.values():
-        bal = round(float(row["balance"]), 2)
+        opening = round(float(row["opening"]), 2)
+        pdr = round(float(row["period_debit"]), 2)
+        pcr = round(float(row["period_credit"]), 2)
+        bal = round(opening + pdr - pcr, 2)
+        row["opening"] = opening
+        row["period_debit"] = pdr
+        row["period_credit"] = pcr
         row["balance"] = bal
         row["outstanding"] = bal
-        row["period_debit"] = round(float(row["period_debit"]), 2)
-        row["period_credit"] = round(float(row["period_credit"]), 2)
         row["debit"] = round(bal, 2) if bal > 0.005 else 0.0
         row["credit"] = round(abs(bal), 2) if bal < -0.005 else 0.0
     return sorted(out.values(), key=lambda x: (x["code"] == "—", x["code"]))

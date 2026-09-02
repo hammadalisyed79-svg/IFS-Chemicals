@@ -4487,9 +4487,9 @@ def get_customer_balances_for_period(
 ):
     """Customer list with closing as of To date and optional period Dr/Cr (From–To).
 
+    Identity (always): Opening + Period Debit − Period Credit = Closing (Balance).
     Closing uses customer ledger (+Dr/−Cr). Dual-role parties (same code as supplier)
-    are netted customer_closing + supplier_closing for the Balance/Debit/Credit columns,
-    matching live Outstanding netting spirit while remaining date-aware.
+    net opening, period, and closing on both books so columns stay consistent.
     """
     from datetime import date as _date
 
@@ -4524,12 +4524,12 @@ def get_customer_balances_for_period(
             key = (c.get("code") or "").strip().upper()
             linked = suppliers.get(key)
             dual = False
+            s_id = s_ob = None
             if linked:
                 dual = True
-                s_close = _party_ledger_closing_as_of(
-                    conn, "supplier", int(linked["id"]), as_of,
-                    float(linked.get("opening_balance") or 0),
-                )
+                s_id = int(linked["id"])
+                s_ob = float(linked.get("opening_balance") or 0)
+                s_close = _party_ledger_closing_as_of(conn, "supplier", s_id, as_of, s_ob)
                 closing = round(cust_close + s_close, 2)
             else:
                 closing = cust_close
@@ -4540,13 +4540,13 @@ def get_customer_balances_for_period(
                     conn, "customer", cid, fd, as_of,
                 )
                 if linked:
-                    sd, sc = _party_period_debit_credit(
-                        conn, "supplier", int(linked["id"]), fd, as_of,
-                    )
-                    # Net period activity in signed terms is awkward; show customer-book
-                    # period Dr/Cr only (matches Customer Ledger). Supplier side ignored
-                    # for period columns when dual-role.
-                    _ = (sd, sc)
+                    sd, sc = _party_period_debit_credit(conn, "supplier", s_id, fd, as_of)
+                    period_debit = round(period_debit + sd, 2)
+                    period_credit = round(period_credit + sc, 2)
+
+            # Opening implied so Opening + Period Debit − Period Credit = Closing always.
+            # Closing stays ledger-authoritative (outstanding as of To).
+            opening = round(float(closing) - period_debit + period_credit, 2)
 
             if not include_zero and abs(closing) < EPS and period_debit < EPS and period_credit < EPS:
                 continue
@@ -4561,6 +4561,7 @@ def get_customer_balances_for_period(
                 "group_id": c.get("group_id"),
                 "group_code": c.get("group_code"),
                 "group_name": c.get("group_name"),
+                "opening": opening,
                 "period_debit": period_debit,
                 "period_credit": period_credit,
                 "debit": debit,

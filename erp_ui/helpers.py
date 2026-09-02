@@ -1270,7 +1270,7 @@ def render_dataframe_html_table(df, *, max_rows: int = 1000):
             elif any(k in c_low for k in money_keys):
                 try:
                     num = float(val or 0)
-                    if "balance" in c_low:
+                    if "balance" in c_low or c_low in ("opening", "closing"):
                         txt = fmt_signed_dr_cr(num)
                     elif abs(num) < 0.005:
                         txt = "—"

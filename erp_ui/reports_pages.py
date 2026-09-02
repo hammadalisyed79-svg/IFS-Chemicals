@@ -65,7 +65,7 @@ REPORT_CATALOG = {
             party_required="customer",
         ),
         _r("Customer Outstanding",
-           "Balances as of To date; Period Debit/Credit = activity From–To. Filter by customer group.",
+           "Opening + Period Debit − Period Credit = Balance (as of To). Filter by customer group.",
            date=True, customer_group=True, party_group_view=True),
         _r(
             "Customer Due Aging",
@@ -643,6 +643,30 @@ def _result_summary(df: pd.DataFrame, report: str):
                 )
         st.divider()
         return
+    if report == "Customer Outstanding":
+        totals = summary_keys_for_report(report, df)
+        prefer = [
+            "Total Opening", "Total Period Debit", "Total Period Credit", "Closing",
+        ]
+        cols5 = st.columns(5, gap="small")
+        cols5[0].markdown(
+            f"<div class='txn-kpi-card'><p class='txn-kpi'>Rows</p>"
+            f"<p class='txn-kpi-val'>{n:,}</p></div>",
+            unsafe_allow_html=True,
+        )
+        shown = 0
+        for k in prefer:
+            if k not in totals or shown >= 4:
+                continue
+            shown += 1
+            label = k.replace("Total Period ", "").replace("Total ", "")
+            cols5[shown].markdown(
+                f"<div class='txn-kpi-card'><p class='txn-kpi'>{escape(label)}</p>"
+                f"<p class='txn-kpi-val'>{escape(str(totals[k]))}</p></div>",
+                unsafe_allow_html=True,
+            )
+        st.divider()
+        return
     cols = st.columns(4, gap="small")
     cols[0].markdown(
         f"<div class='txn-kpi-card'><p class='txn-kpi'>Rows</p>"
@@ -1120,8 +1144,8 @@ def _run_report(report, fd, td, cid, sid, pid, wid, eid, payroll_id=None, gf=Non
         ))
     if report == "Customer Outstanding":
         st.caption(
-            "Balances **as of To date**. **Period Debit / Credit** = ledger activity From–To. "
-            "Closing Debit/Credit split from signed balance (+Dr / −Cr)."
+            "**Opening** (before From) + **Period Debit − Period Credit** = **Balance** (as of To). "
+            "KPI Debit/Credit are period totals; Closing is net outstanding."
         )
         return pd.DataFrame(db.get_customer_outstanding(
             customer_group_id=gf.get("customer_group_id"), view_mode=pvm,

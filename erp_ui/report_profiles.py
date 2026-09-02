@@ -36,7 +36,7 @@ REPORT_COLUMNS: dict[str, list[str]] = {
     ],
     "Customer Outstanding": [
         "code", "name", "city",
-        "period_debit", "period_credit", "balance",
+        "opening", "period_debit", "period_credit", "balance",
     ],
     "Customer Due Aging": [
         "code", "name", "phone",
@@ -338,28 +338,32 @@ def summary_keys_for_report(report_title: str | None, df: pd.DataFrame) -> dict:
         return {}
     report_title = _report_profile_key(report_title) or report_title
     if report_title == "Customer Outstanding":
-        # Closing Debit/Credit = split of signed balance; also sum period activity
+        # KPIs must match visible columns: Period Debit/Credit + Closing.
+        # (Older "Debit/Credit" KPIs summed closing receivable/payable sides and
+        # looked wrong next to Period Debit/Credit in the table.)
+        def _sum_col(*names):
+            for col in names:
+                if col in df.columns:
+                    try:
+                        return float(pd.to_numeric(df[col], errors="coerce").fillna(0).sum())
+                    except Exception:
+                        pass
+            return 0.0
+
+        pdr = _sum_col("period_debit", "Period Debit")
+        pcr = _sum_col("period_credit", "Period Credit")
         bals = pd.to_numeric(df.get("balance", df.get("Balance", 0)), errors="coerce").fillna(0)
-        total_dr = float(bals[bals > 0.005].sum())
-        total_cr = float((-bals[bals < -0.005]).sum())
         net = float(bals.sum())
         out = {
-            "Total Debit": f"{total_dr:,.2f}",
-            "Total Credit": f"{total_cr:,.2f}",
-            "Net Balance": f"{abs(net):,.2f} {'Dr' if net >= 0 else 'Cr'}",
+            "Total Period Debit": f"{pdr:,.2f}",
+            "Total Period Credit": f"{pcr:,.2f}",
+            "Closing": f"{abs(net):,.2f} {'Dr' if net >= 0 else 'Cr'}",
         }
-        for col, label in (
-            ("period_debit", "Period Debit"),
-            ("period_credit", "Period Credit"),
-            ("Period Debit", "Period Debit"),
-            ("Period Credit", "Period Credit"),
-        ):
-            if col in df.columns:
-                try:
-                    s = pd.to_numeric(df[col], errors="coerce").fillna(0).sum()
-                    out[f"Total {label}"] = f"{float(s):,.2f}"
-                except Exception:
-                    pass
+        opening = _sum_col("opening", "Opening")
+        if "opening" in df.columns or "Opening" in df.columns:
+            out["Total Opening"] = (
+                f"{abs(opening):,.2f} {'Dr' if opening >= 0 else 'Cr'}"
+            )
         return out
     ledger_titles = (
         "Customer Ledger", "Supplier Ledger",
