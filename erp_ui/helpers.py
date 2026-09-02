@@ -778,12 +778,16 @@ def master_group_select(entity_type, key_prefix, current_id=None):
 def master_list_search(
     label, records, key, columns, rename, extra_fields=None,
     *, show_balance_dr_cr: bool = False, export_title: str | None = None,
+    export_columns: list | None = None, export_layout: str = "landscape",
 ):
     """Searchable list tab for master data.
 
     When ``show_balance_dr_cr`` is True and rows have ``balance`` (signed:
     +Debit / −Credit), Debit & Credit columns plus totals KPIs are shown,
     and PDF / Excel / CSV export is offered.
+
+    ``export_columns`` — optional field list for print/PDF (screen columns unchanged).
+    ``export_layout`` — ``landscape`` | ``portrait`` | ``portrait_full``.
     """
     q = st.text_input(
         f"Search {label}",
@@ -889,19 +893,35 @@ def master_list_search(
         render_dataframe_html_table(df[use].rename(columns=rename))
 
     if show_balance_dr_cr or export_title:
-        export_df = df[use].rename(columns=rename).copy()
+        exp_cols = list(export_columns) if export_columns else list(use)
+        if show_balance_dr_cr:
+            extras = [c for c in ("debit", "credit") if c in df.columns and c not in exp_cols]
+            if extras:
+                if "balance" in exp_cols:
+                    bi = exp_cols.index("balance")
+                    exp_cols = exp_cols[: bi + 1] + extras + exp_cols[bi + 1 :]
+                else:
+                    exp_cols = exp_cols + extras
+        exp_cols = [c for c in exp_cols if c in df.columns]
+        export_df = df[exp_cols].rename(columns=rename).copy()
+        for drop_lbl in ("Active", "is_active", "Phone", "Credit Limit"):
+            if drop_lbl in export_df.columns:
+                export_df = export_df.drop(columns=[drop_lbl])
         title = export_title or f"{label} List"
         summary = None
         if show_balance_dr_cr:
             summary = {
-                "Total Debit": total_dr,
-                "Total Credit": total_cr,
-                "Net Balance": total_dr - total_cr,
+                "Total Debit": f"{total_dr:,.2f}",
+                "Total Credit": f"{total_cr:,.2f}",
+                "Net Balance": fmt_signed_dr_cr(total_dr - total_cr).replace("Rs. ", ""),
             }
         from erp_ui.report_print import report_toolbar
+        layout = export_layout or "landscape"
+        if layout == "portrait":
+            layout = "portrait_full"
         report_toolbar(
             export_df, title, f"{key}_list",
-            summary=summary, key_prefix=f"ml_{key}", layout="landscape",
+            summary=summary, key_prefix=f"ml_{key}", layout=layout,
         )
 
 

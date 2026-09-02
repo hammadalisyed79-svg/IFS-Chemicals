@@ -40,7 +40,12 @@ def page_customers():
                     from db_groups import get_master_group
                     g = get_master_group(gid)
                     if g:
-                        export_title = f"Customers — {g.get('code') or ''} {g.get('name') or ''}".strip()
+                        gcode = (g.get("code") or "").strip()
+                        gname = (g.get("name") or "").strip()
+                        if gcode and gname and gcode.upper() != gname.upper():
+                            export_title = f"Customers — {gcode} {gname}"
+                        else:
+                            export_title = f"Customers — {gcode or gname}"
                 except Exception:
                     pass
             hlp.master_list_search(
@@ -50,6 +55,8 @@ def page_customers():
                  "credit_limit": "Credit Limit", "balance": "Balance", "is_active": "Active"},
                 show_balance_dr_cr=True,
                 export_title=export_title,
+                export_columns=["code", "name", "city", "balance", "debit", "credit"],
+                export_layout="portrait",
             )
         else:
             st.info("No customers yet. Add one in the Add New tab.")
