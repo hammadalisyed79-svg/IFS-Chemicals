@@ -6,8 +6,8 @@ PAYMENT_PRODUCTION_QTY = "production_qty"
 PAYMENT_SKU_CARTON = "sku_carton"
 
 PAYMENT_TYPES = {
-    PAYMENT_PRODUCTION_QTY: "Production quantity (batches / qty × rate)",
-    PAYMENT_SKU_CARTON: "SKU / product / cartons × rate",
+    PAYMENT_PRODUCTION_QTY: "Production quantity (qty × rate per SKU)",
+    PAYMENT_SKU_CARTON: "SKU / cartons × rate per SKU",
 }
 
 
@@ -167,6 +167,44 @@ def get_contractor_product_ids(contractor_id: int) -> list[int]:
     if not c:
         return []
     return [int(p["product_id"]) for p in (c.get("products") or [])]
+
+
+def get_contractor_product_rates(contractor_id: int) -> dict[int, float]:
+    """product_id → rate for saved assignments."""
+    c = get_contractor(contractor_id)
+    if not c:
+        return {}
+    default_rate = float(c.get("default_rate") or 0)
+    out = {}
+    for p in c.get("products") or []:
+        pid = int(p["product_id"])
+        out[pid] = float(p["rate"] if p.get("rate") is not None else default_rate)
+    return out
+
+
+def product_ids_by_code_prefix(prefix: str, *, active_only: bool = True) -> list[dict]:
+    """Active products whose code starts with prefix (case-insensitive), e.g. DW → Dish Wash."""
+    from database import get_connection, rows_to_list
+
+    pref = (prefix or "").strip().upper()
+    if not pref:
+        return []
+    q = """SELECT id, code, name FROM products
+           WHERE UPPER(TRIM(code)) LIKE ?
+           {active}
+           ORDER BY code""".format(
+        active="AND COALESCE(is_active,1)=1" if active_only else "",
+    )
+    with get_connection() as conn:
+        return rows_to_list(conn.execute(q, (f"{pref}%",)).fetchall())
+
+
+# Common finished-goods code families for bulk assign shortcuts
+BULK_PREFIX_HINTS = (
+    ("DW", "Dish Wash (DW*)"),
+    ("DP", "Detergent Powder (DP*)"),
+    ("LQ", "Liquid (LQ*)"),
+)
 
 
 def save_contractor_products(

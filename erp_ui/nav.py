@@ -180,7 +180,7 @@ SCREEN_TAGLINES = {
     "Stock Revaluation": "Revalue on-hand stock",
     "Stock Report": "Valuation and movement",
     "Daily Production": "Post FG output",
-    "Contract Labour": "Qty × rate by product assignment",
+    "Contract Labour": "Per-SKU rates · bulk DW* etc · qty × rate",
     "BOM": "Composition formulas",
     "Production Orders": "Issue materials / receive FG",
     "Job Cards": "Shop-floor execution",
