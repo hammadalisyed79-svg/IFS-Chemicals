@@ -358,6 +358,8 @@ def _tab_products():
 
 
 def _tab_month_preview():
+    from html import escape
+
     rows = list_contractors(active_only=True)
     if not rows:
         st.info("Add a contractor and assign products first.")
@@ -376,53 +378,189 @@ def _tab_month_preview():
         st.error("From must be on or before To.")
         return
 
-    if st.button("Calculate", type="primary", key="cl_prev_go"):
+    cid = pick[sel]
+    st.caption(
+        "**Formula:** Answer = Sold Qty (period) + Stock in hand + Manual Qty · "
+        "**Amount** = Answer × Rate · **Gross** = sum of line amounts."
+    )
+
+    mk = f"cl_manual_{cid}_{fd}_{td}"
+    if st.button("Load / refresh worksheet", type="primary", key="cl_prev_go"):
         try:
-            result = calculate_contractor_month(pick[sel], str(fd), str(td))
+            prior = st.session_state.get(mk) or {}
+            result = calculate_contractor_month(
+                cid, str(fd), str(td), manual_qty=prior,
+            )
             st.session_state["cl_prev_result"] = result
+            st.session_state["cl_prev_meta"] = (cid, str(fd), str(td))
         except Exception as e:
             st.error(str(e))
             return
 
     result = st.session_state.get("cl_prev_result")
-    if not result:
-        st.caption(
-            "Quantities come from **completed** production orders for assigned products. "
-            "Each line uses that SKU’s own rate."
+    meta = st.session_state.get("cl_prev_meta")
+    if not result or not meta or meta[0] != cid:
+        st.info(
+            "Choose period, then **Load / refresh worksheet**. "
+            "Sold qty is from approved sales; stock is current on-hand; "
+            "enter Manual Qty where needed, then amounts update."
         )
         return
 
-    c = result["contractor"]
-    st.markdown(
-        f"**{c.get('supplier_name')}** · {result.get('payment_type_label')} · "
-        f"{result['from_date']} → {result['to_date']}"
-    )
-    k1, k2 = st.columns(2)
-    k1.metric("Lines", len(result.get("lines") or []))
-    k2.metric("Total", f"Rs. {float(result.get('total') or 0):,.2f}")
+    if meta[1] != str(fd) or meta[2] != str(td):
+        st.warning("Period changed — click **Load / refresh worksheet** to recalculate sold qty.")
 
+    c = result["contractor"]
     lines = result.get("lines") or []
-    if lines:
-        df = pd.DataFrame([
-            {
-                "Code": ln.get("product_code"),
-                "Product": ln.get("product_name"),
-                "Batches": ln.get("batch_count"),
-                "Qty": float(ln.get("quantity") or 0),
-                "Rate": float(ln.get("rate") or 0),
-                "Amount": float(ln.get("amount") or 0),
-            }
-            for ln in lines
-        ])
-        hlp.render_dataframe_html_table(df)
-        from erp_ui.report_print import report_toolbar
-        title = f"Contract Labour — {c.get('supplier_name')} ({result['from_date']} to {result['to_date']})"
-        report_toolbar(
-            df, title, "contract_labour_month",
-            period=f"{result['from_date']} to {result['to_date']}",
-            summary={"Total": float(result.get("total") or 0)},
-            key_prefix="cl_month",
-            layout="portrait",
-        )
-    else:
+    if not lines:
         st.info("No products assigned — set them on the **Products** tab.")
+        return
+
+    st.markdown(
+        f"### {escape(str(c.get('supplier_name') or ''))}  \n"
+        f"<span style='color:#64748b;font-size:0.9rem'>"
+        f"{escape(str(result.get('payment_type_label') or ''))} · "
+        f"{escape(result['from_date'])} → {escape(result['to_date'])}"
+        f"</span>",
+        unsafe_allow_html=True,
+    )
+    st.markdown("**Worksheet** — edit **Manual Qty** only; Answer and Amount update below.")
+
+    prior_manual = st.session_state.get(mk) or {
+        int(ln["product_id"]): float(ln.get("manual_qty") or 0) for ln in lines
+    }
+    edit_df = pd.DataFrame([
+        {
+            "product_id": int(ln["product_id"]),
+            "Code": ln.get("product_code"),
+            "Product": ln.get("product_name"),
+            "Sold Qty": float(ln.get("sold_qty") or 0),
+            "Stock in hand": float(ln.get("stock_qty") or 0),
+            "Manual Qty": float(prior_manual.get(int(ln["product_id"]), ln.get("manual_qty") or 0)),
+            "Rate": float(ln.get("rate") or 0),
+        }
+        for ln in lines
+    ])
+
+    edited = st.data_editor(
+        edit_df,
+        hide_index=True,
+        use_container_width=True,
+        num_rows="fixed",
+        disabled=["product_id", "Code", "Product", "Sold Qty", "Stock in hand", "Rate"],
+        column_config={
+            "product_id": None,
+            "Code": st.column_config.TextColumn("Code", width="small"),
+            "Product": st.column_config.TextColumn("Product", width="large"),
+            "Sold Qty": st.column_config.NumberColumn("Sold Qty", format="%.2f"),
+            "Stock in hand": st.column_config.NumberColumn("Stock in hand", format="%.2f"),
+            "Manual Qty": st.column_config.NumberColumn(
+                "Manual Qty", min_value=0.0, step=1.0, format="%.2f",
+                help="Add extra qty manually; included in Answer",
+            ),
+            "Rate": st.column_config.NumberColumn("Rate", format="%.4f"),
+        },
+        key=f"cl_ws_editor_{cid}_{fd}_{td}",
+    )
+
+    manual_map = {}
+    display_rows = []
+    gross = 0.0
+    sum_sold = sum_stock = sum_man = sum_ans = 0.0
+    for _, row in edited.iterrows():
+        pid = int(row["product_id"])
+        sold = float(row["Sold Qty"] or 0)
+        stock = float(row["Stock in hand"] or 0)
+        man = float(row["Manual Qty"] or 0)
+        rate = float(row["Rate"] or 0)
+        answer = round(sold + stock + man, 4)
+        amount = round(answer * rate, 2)
+        manual_map[pid] = man
+        sum_sold += sold
+        sum_stock += stock
+        sum_man += man
+        sum_ans += answer
+        gross += amount
+        display_rows.append({
+            "Code": row["Code"],
+            "Product": row["Product"],
+            "Sold Qty": sold,
+            "Stock in hand": stock,
+            "Manual Qty": man,
+            "Answer": answer,
+            "Rate": rate,
+            "Amount": amount,
+        })
+    st.session_state[mk] = manual_map
+
+    k1, k2, k3, k4, k5 = st.columns(5, gap="small")
+    k1.markdown(
+        f"<div class='txn-kpi-card'><p class='txn-kpi'>Items</p>"
+        f"<p class='txn-kpi-val'>{len(display_rows):,}</p></div>",
+        unsafe_allow_html=True,
+    )
+    k2.markdown(
+        f"<div class='txn-kpi-card'><p class='txn-kpi'>Sold Qty</p>"
+        f"<p class='txn-kpi-val'>{sum_sold:,.2f}</p></div>",
+        unsafe_allow_html=True,
+    )
+    k3.markdown(
+        f"<div class='txn-kpi-card'><p class='txn-kpi'>Stock in hand</p>"
+        f"<p class='txn-kpi-val'>{sum_stock:,.2f}</p></div>",
+        unsafe_allow_html=True,
+    )
+    k4.markdown(
+        f"<div class='txn-kpi-card'><p class='txn-kpi'>Answer Qty</p>"
+        f"<p class='txn-kpi-val'>{sum_ans:,.2f}</p></div>",
+        unsafe_allow_html=True,
+    )
+    k5.markdown(
+        f"<div class='txn-kpi-card'><p class='txn-kpi'>Gross Amount</p>"
+        f"<p class='txn-kpi-val'>Rs. {gross:,.2f}</p></div>",
+        unsafe_allow_html=True,
+    )
+
+    st.markdown("**Computed amounts** — Answer = Sold + Stock + Manual · Amount = Answer × Rate")
+    out_df = pd.DataFrame(display_rows)
+    footer = {
+        "Code": "",
+        "Product": "GROSS TOTAL",
+        "Sold Qty": round(sum_sold, 2),
+        "Stock in hand": round(sum_stock, 2),
+        "Manual Qty": round(sum_man, 2),
+        "Answer": round(sum_ans, 2),
+        "Rate": "",
+        "Amount": round(gross, 2),
+    }
+    show = pd.concat([out_df, pd.DataFrame([footer])], ignore_index=True)
+    hlp.render_dataframe_html_table(show)
+
+    st.markdown(
+        f"<div style='text-align:right;margin-top:8px;padding:12px 16px;"
+        f"background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px'>"
+        f"<div style='font-size:0.75rem;text-transform:uppercase;letter-spacing:0.04em;color:#64748b'>"
+        f"Gross amount ({len(display_rows)} items)</div>"
+        f"<div style='font-size:1.45rem;font-weight:700;color:#0f172a'>Rs. {gross:,.2f}</div>"
+        f"</div>",
+        unsafe_allow_html=True,
+    )
+
+    from erp_ui.report_print import report_toolbar
+    title = (
+        f"Contract Labour — {c.get('supplier_name')} "
+        f"({result['from_date']} to {result['to_date']})"
+    )
+    report_toolbar(
+        out_df, title, "contract_labour_month",
+        period=f"{result['from_date']} to {result['to_date']}",
+        summary={
+            "Items": len(display_rows),
+            "Sold Qty": round(sum_sold, 2),
+            "Stock in hand": round(sum_stock, 2),
+            "Answer Qty": round(sum_ans, 2),
+            "Gross Amount": round(gross, 2),
+        },
+        key_prefix="cl_month",
+        layout="landscape",
+    )
+

@@ -292,34 +292,110 @@ def production_qty_for_products(product_ids: list[int], from_date: str, to_date:
         return rows_to_list(conn.execute(q, params).fetchall())
 
 
-def calculate_contractor_month(contractor_id: int, from_date: str, to_date: str) -> dict:
-    """Preview payment lines: qty from production × rate (editable later)."""
+def sold_qty_for_products(product_ids: list[int], from_date: str, to_date: str) -> dict[int, float]:
+    """Approved sales invoice qty by product in date range."""
+    from database import get_connection
+
+    ids = [int(p) for p in (product_ids or []) if p]
+    if not ids:
+        return {}
+    placeholders = ",".join("?" * len(ids))
+    q = f"""
+        SELECT si.product_id, COALESCE(SUM(si.quantity), 0) AS sold_qty
+        FROM sales_invoice_items si
+        JOIN sales_invoices s ON si.invoice_id = s.id
+        WHERE si.product_id IN ({placeholders})
+          AND COALESCE(s.status, 'approved') = 'approved'
+          AND s.invoice_date >= ? AND s.invoice_date <= ?
+        GROUP BY si.product_id
+    """
+    with get_connection() as conn:
+        rows = conn.execute(q, [*ids, from_date, to_date]).fetchall()
+    return {int(r["product_id"]): float(r["sold_qty"] or 0) for r in rows}
+
+
+def stock_on_hand_for_products(product_ids: list[int]) -> dict[int, float]:
+    """Current stock in hand (all warehouses) by product."""
+    from database import get_connection
+
+    ids = [int(p) for p in (product_ids or []) if p]
+    if not ids:
+        return {}
+    placeholders = ",".join("?" * len(ids))
+    q = f"""
+        SELECT product_id, COALESCE(SUM(quantity), 0) AS stock_qty
+        FROM warehouse_stock
+        WHERE product_id IN ({placeholders})
+        GROUP BY product_id
+    """
+    with get_connection() as conn:
+        rows = conn.execute(q, ids).fetchall()
+    return {int(r["product_id"]): float(r["stock_qty"] or 0) for r in rows}
+
+
+def calculate_contractor_month(
+    contractor_id: int,
+    from_date: str,
+    to_date: str,
+    *,
+    manual_qty: dict | None = None,
+) -> dict:
+    """Payment worksheet lines for the period.
+
+    Billable (Answer) = Sold Qty + Stock in hand + Manual Qty
+    Amount = Answer × Rate
+    Gross = sum of amounts
+
+    For production_qty contractors, production qty is also returned (info);
+    billable still follows Sold + Stock + Manual so SKU payment is consistent.
+    """
     c = get_contractor(contractor_id)
     if not c:
         raise ValueError("Contractor not found.")
     products = c.get("products") or []
     pids = [int(p["product_id"]) for p in products]
-    qty_rows = {
+    sold_map = sold_qty_for_products(pids, from_date, to_date)
+    stock_map = stock_on_hand_for_products(pids)
+    prod_map = {
         int(r["product_id"]): r
         for r in production_qty_for_products(pids, from_date, to_date)
     }
+    manual = {}
+    for k, v in (manual_qty or {}).items():
+        try:
+            manual[int(k)] = float(v or 0)
+        except (TypeError, ValueError):
+            continue
+
     default_rate = float(c.get("default_rate") or 0)
     lines = []
     total = 0.0
+    total_sold = total_stock = total_manual = total_answer = 0.0
     for p in products:
         pid = int(p["product_id"])
-        qinfo = qty_rows.get(pid) or {}
-        qty = float(qinfo.get("quantity") or 0)
-        batches = int(qinfo.get("batch_count") or 0)
+        sold = round(float(sold_map.get(pid) or 0), 4)
+        stock = round(float(stock_map.get(pid) or 0), 4)
+        man = round(float(manual.get(pid) or 0), 4)
+        answer = round(sold + stock + man, 4)
         rate = float(p["rate"] if p.get("rate") is not None else default_rate)
-        amount = round(qty * rate, 2)
+        amount = round(answer * rate, 2)
+        qinfo = prod_map.get(pid) or {}
         total += amount
+        total_sold += sold
+        total_stock += stock
+        total_manual += man
+        total_answer += answer
         lines.append({
             "product_id": pid,
             "product_code": p.get("product_code"),
             "product_name": p.get("product_name"),
-            "batch_count": batches,
-            "quantity": qty,
+            "sold_qty": sold,
+            "stock_qty": stock,
+            "manual_qty": man,
+            "answer_qty": answer,
+            "batch_count": int(qinfo.get("batch_count") or 0),
+            "production_qty": float(qinfo.get("quantity") or 0),
+            "quantity": answer,  # billable
             "rate": rate,
             "amount": amount,
         })
@@ -329,6 +405,15 @@ def calculate_contractor_month(contractor_id: int, from_date: str, to_date: str)
         "to_date": to_date,
         "payment_type": c.get("payment_type"),
         "payment_type_label": PAYMENT_TYPES.get(c.get("payment_type"), c.get("payment_type")),
+        "formula": "Answer = Sold Qty + Stock in hand + Manual Qty; Amount = Answer × Rate",
         "lines": lines,
         "total": round(total, 2),
+        "totals": {
+            "sold_qty": round(total_sold, 4),
+            "stock_qty": round(total_stock, 4),
+            "manual_qty": round(total_manual, 4),
+            "answer_qty": round(total_answer, 4),
+            "gross_amount": round(total, 2),
+            "item_count": len(lines),
+        },
     }
