@@ -34,11 +34,22 @@ def page_customers():
         gid = hlp.master_group_filter("customer", "cust")
         rows = db.get_customers(group_id=gid)
         if rows:
+            export_title = "Customers List"
+            if gid:
+                try:
+                    from db_groups import get_master_group
+                    g = get_master_group(gid)
+                    if g:
+                        export_title = f"Customers — {g.get('code') or ''} {g.get('name') or ''}".strip()
+                except Exception:
+                    pass
             hlp.master_list_search(
                 "Customers", rows, "cust",
                 ["code", "name", "group_name", "phone", "city", "province", "credit_limit", "balance", "is_active"],
                 {"code": "Code", "name": "Name", "group_name": "Group", "phone": "Phone", "city": "City",
                  "province": "Province", "credit_limit": "Credit Limit", "balance": "Balance", "is_active": "Active"},
+                show_balance_dr_cr=True,
+                export_title=export_title,
             )
         else:
             st.info("No customers yet. Add one in the Add New tab.")
@@ -159,11 +170,22 @@ def page_suppliers():
         gid = hlp.master_group_filter("supplier", "sup")
         rows = db.get_suppliers(group_id=gid)
         if rows:
+            export_title = "Suppliers List"
+            if gid:
+                try:
+                    from db_groups import get_master_group
+                    g = get_master_group(gid)
+                    if g:
+                        export_title = f"Suppliers — {g.get('code') or ''} {g.get('name') or ''}".strip()
+                except Exception:
+                    pass
             hlp.master_list_search(
                 "Suppliers", rows, "sup",
                 ["code", "name", "group_name", "phone", "city", "balance", "is_active"],
                 {"code": "Code", "name": "Name", "group_name": "Group", "phone": "Phone", "city": "City",
                  "balance": "Balance", "is_active": "Active"},
+                show_balance_dr_cr=True,
+                export_title=export_title,
             )
         else:
             st.info("No suppliers yet.")

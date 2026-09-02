@@ -775,8 +775,16 @@ def master_group_select(entity_type, key_prefix, current_id=None):
     return opts[sel]
 
 
-def master_list_search(label, records, key, columns, rename, extra_fields=None):
-    """Searchable list tab for master data."""
+def master_list_search(
+    label, records, key, columns, rename, extra_fields=None,
+    *, show_balance_dr_cr: bool = False, export_title: str | None = None,
+):
+    """Searchable list tab for master data.
+
+    When ``show_balance_dr_cr`` is True and rows have ``balance`` (signed:
+    +Debit / −Credit), Debit & Credit columns plus totals KPIs are shown,
+    and PDF / Excel / CSV export is offered.
+    """
     q = st.text_input(
         f"Search {label}",
         key=f"list_{key}",
@@ -795,6 +803,39 @@ def master_list_search(label, records, key, columns, rename, extra_fields=None):
     from html import escape
     df = pd.DataFrame(rows)
     use = [c for c in columns if c in df.columns]
+    rename = dict(rename or {})
+    total_dr = total_cr = 0.0
+    if show_balance_dr_cr and "balance" in df.columns:
+        bals = [float(v or 0) for v in df["balance"].tolist()]
+        total_dr = round(sum(b for b in bals if b > 0.005), 2)
+        total_cr = round(sum(abs(b) for b in bals if b < -0.005), 2)
+        df["debit"] = [round(b, 2) if b > 0.005 else 0.0 for b in bals]
+        df["credit"] = [round(abs(b), 2) if b < -0.005 else 0.0 for b in bals]
+        # Insert Debit / Credit after Balance (or at end)
+        if "balance" in use:
+            bi = use.index("balance")
+            use = use[: bi + 1] + ["debit", "credit"] + use[bi + 1 :]
+        else:
+            use = use + ["debit", "credit"]
+        rename.setdefault("debit", "Debit")
+        rename.setdefault("credit", "Credit")
+        k1, k2, k3 = st.columns(3)
+        k1.markdown(
+            f"<div class='txn-kpi-card'><p class='txn-kpi'>Total Debit</p>"
+            f"<p class='txn-kpi-val'>{escape(fmt_money(total_dr))}</p></div>",
+            unsafe_allow_html=True,
+        )
+        k2.markdown(
+            f"<div class='txn-kpi-card'><p class='txn-kpi'>Total Credit</p>"
+            f"<p class='txn-kpi-val'>{escape(fmt_money(total_cr))}</p></div>",
+            unsafe_allow_html=True,
+        )
+        net = round(total_dr - total_cr, 2)
+        k3.markdown(
+            f"<div class='txn-kpi-card'><p class='txn-kpi'>Net Balance</p>"
+            f"<p class='txn-kpi-val'>{escape(fmt_signed_dr_cr(net))}</p></div>",
+            unsafe_allow_html=True,
+        )
     # Prefer HTML table when Active column present so status badges show
     if "is_active" in use:
         labels = [rename.get(c, c) for c in use]
@@ -815,7 +856,7 @@ def master_list_search(label, records, key, columns, rename, extra_fields=None):
                         )
                         + "</td>"
                     )
-                elif c in ("credit_limit", "balance", "opening_balance", "rate", "cost"):
+                elif c in ("credit_limit", "balance", "opening_balance", "rate", "cost", "debit", "credit"):
                     try:
                         cells.append(f"<td class='txn-num'>{escape(fmt_money(val))}</td>")
                     except Exception:
@@ -823,6 +864,22 @@ def master_list_search(label, records, key, columns, rename, extra_fields=None):
                 else:
                     cells.append(f"<td>{escape(str(val if val is not None else '—'))}</td>")
             body.append("<tr>" + "".join(cells) + "</tr>")
+        if show_balance_dr_cr and ("debit" in use or "credit" in use):
+            foot = []
+            for c in use:
+                if c == "debit":
+                    foot.append(f"<td class='txn-num'><b>{escape(fmt_money(total_dr))}</b></td>")
+                elif c == "credit":
+                    foot.append(f"<td class='txn-num'><b>{escape(fmt_money(total_cr))}</b></td>")
+                elif c == "balance":
+                    foot.append(
+                        f"<td class='txn-num'><b>{escape(fmt_signed_dr_cr(total_dr - total_cr))}</b></td>"
+                    )
+                elif c == use[0]:
+                    foot.append("<td><b>TOTAL</b></td>")
+                else:
+                    foot.append("<td></td>")
+            body.append("<tr>" + "".join(foot) + "</tr>")
         st.markdown(
             '<div class="txn-reg-wrap"><table class="txn-reg-table">'
             f"<thead><tr>{ths}</tr></thead><tbody>{''.join(body)}</tbody></table></div>",
@@ -830,6 +887,22 @@ def master_list_search(label, records, key, columns, rename, extra_fields=None):
         )
     else:
         render_dataframe_html_table(df[use].rename(columns=rename))
+
+    if show_balance_dr_cr or export_title:
+        export_df = df[use].rename(columns=rename).copy()
+        title = export_title or f"{label} List"
+        summary = None
+        if show_balance_dr_cr:
+            summary = {
+                "Total Debit": total_dr,
+                "Total Credit": total_cr,
+                "Net Balance": total_dr - total_cr,
+            }
+        from erp_ui.report_print import report_toolbar
+        report_toolbar(
+            export_df, title, f"{key}_list",
+            summary=summary, key_prefix=f"ml_{key}", layout="landscape",
+        )
 
 
 def stock_status_badge(qty, reorder_level=0):
