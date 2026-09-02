@@ -626,8 +626,9 @@ def _employee_wise_tab():
     leave_n = int((df["status"] == "leave").sum()) if not df.empty else 0
     weekly_n = int((df["status"] == "weekly_holiday").sum()) if not df.empty else 0
     gaz_n = int((df["status"] == "public_holiday").sum()) if not df.empty else 0
+    total_ot = float(df["overtime_hrs"].sum()) if not df.empty else 0.0
 
-    k1, k2, k3, k4, k5, k6 = st.columns(6, gap="small")
+    k1, k2, k3, k4, k5, k6, k7 = st.columns(7, gap="small")
     k1.markdown(
         f"<div class='txn-kpi-card'><p class='txn-kpi'>Days in range</p>"
         f"<p class='txn-kpi-val'>{len(df):,}</p></div>",
@@ -656,6 +657,11 @@ def _employee_wise_tab():
     k6.markdown(
         f"<div class='txn-kpi-card'><p class='txn-kpi'>Weekly / Gazetted</p>"
         f"<p class='txn-kpi-val'>{weekly_n}/{gaz_n}</p></div>",
+        unsafe_allow_html=True,
+    )
+    k7.markdown(
+        f"<div class='txn-kpi-card'><p class='txn-kpi'>Total OT (hrs)</p>"
+        f"<p class='txn-kpi-val'>{total_ot:,.1f}</p></div>",
         unsafe_allow_html=True,
     )
 
