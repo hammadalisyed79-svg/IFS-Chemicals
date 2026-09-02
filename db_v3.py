@@ -270,6 +270,8 @@ def apply_v3(conn, db_module):
     _ensure_expense_bills_schema(conn)
     _ensure_cash_advances_schema(conn)
     _ensure_cash_borrows_schema(conn)
+    import db_contractors
+    db_contractors.apply_contract_labour(conn, db_module)
 
 
 def _ensure_expense_bills_schema(conn):

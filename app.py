@@ -26,6 +26,7 @@ from erp_ui import finance_pages as fin
 from erp_ui import coa_pages as coa
 from erp_ui import fiscal_pages as fiscal
 from erp_ui import production_pages as prod
+from erp_ui import contractor_pages as clab
 from erp_ui import stock_reval_pages as srv
 from erp_ui import download_pages as dl
 from erp_ui import job_card_pages as jc
@@ -522,6 +523,7 @@ PAGES = {
     "BOM": prod.page_bom_composition,
     "BOM / Formula": prod.page_bom_composition,
     "Daily Production": prod.page_daily_production,
+    "Contract Labour": clab.page_contract_labour,
     "Plant Shift": plant_shift.page_plant_shift,
     "Production Orders": prod.page_production_orders,
     "Job Cards": jc.page_job_cards,
