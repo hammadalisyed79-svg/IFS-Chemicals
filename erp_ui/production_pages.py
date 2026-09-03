@@ -807,6 +807,14 @@ def page_production_orders():
         if not active:
             st.info("No production orders.")
             return
+        # Draft + issued first (by order date desc), then completed unchanged (id desc from query)
+        open_pos = [r for r in active if r.get("status") in ("draft", "issued")]
+        done = [r for r in active if r.get("status") == "completed"]
+        open_pos.sort(
+            key=lambda r: (r.get("order_date") or "", int(r.get("id") or 0)),
+            reverse=True,
+        )
+        active = open_pos + done
         sel = st.selectbox(
             "Production Order",
             [
