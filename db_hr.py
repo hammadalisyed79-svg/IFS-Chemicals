@@ -1598,6 +1598,53 @@ def pay_payroll_line(line_id, user_id, payment_mode="cash", payment_date=None, b
         return {"document_no": doc_no, "amount": amt, "payment_mode": mode, "employee": row["employee_name"]}
 
 
+def settle_payroll_line_adjustment(line_id, user_id, note="", payment_date=None):
+    """Mark a payroll line paid without cash/bank voucher.
+
+    Use when net salary was already settled outside payroll cash (e.g. folded into
+    a contractor/employee ledger such as Hafiz Zaman). Does not post GL or Cash Book.
+    """
+    from database import get_connection
+
+    note = (note or "").strip() or "Ledger adjustment (no cash)"
+    with get_connection() as conn:
+        row = conn.execute(
+            """SELECT pl.*, pr.document_no AS payroll_no, pr.status AS payroll_status, pr.run_date,
+                      e.full_name AS employee_name, e.code AS emp_code
+               FROM payroll_lines pl
+               JOIN payroll_runs pr ON pl.payroll_id=pr.id
+               JOIN employees e ON pl.employee_id=e.id
+               WHERE pl.id=?""",
+            (line_id,),
+        ).fetchone()
+        if not row:
+            raise ValueError("Payroll line not found.")
+        row = dict(row)
+        if row["payroll_status"] not in ("posted", "paid"):
+            raise ValueError("Payroll must be posted (or paid) before settling lines.")
+        if row.get("paid_status") == "paid":
+            raise ValueError(f"Already paid ({row.get('payment_document_no') or '—'}).")
+        amt = round(float(row.get("net_salary") or 0), 2)
+        if amt <= 0:
+            raise ValueError("Net salary is zero — nothing to settle.")
+        pay_date = str(payment_date or row.get("paid_date") or row.get("run_date") or now()[:10])
+        doc = f"ADJ/{row['payroll_no']}/{row['emp_code']}"
+        # Truncate note into payment_document_no-friendly ref; keep full note via mode label
+        conn.execute(
+            """UPDATE payroll_lines SET paid_status='paid', paid_amount=?, paid_date=?,
+               payment_mode=?, payment_document_no=?, paid_by=?, paid_at=? WHERE id=?""",
+            (amt, pay_date, "adjustment", doc[:80], user_id, now(), line_id),
+        )
+        _refresh_payroll_paid_status(conn, row["payroll_id"], user_id)
+        return {
+            "document_no": doc,
+            "amount": amt,
+            "payment_mode": "adjustment",
+            "employee": row["employee_name"],
+            "note": note,
+        }
+
+
 def pay_payroll(payroll_id, user_id, payment_mode="cash", payment_date=None, bank_account_id=None):
     """Pay all unpaid employees on this payroll (one cash/bank entry per employee)."""
     from database import get_connection

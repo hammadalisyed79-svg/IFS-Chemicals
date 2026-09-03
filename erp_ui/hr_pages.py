@@ -744,7 +744,8 @@ def _render_employee_cash_payments(pid, pr):
         unsafe_allow_html=True,
     )
     st.caption(
-        f"Paid so far {fmt(paid_amt)}. Each payment creates one Cash Book / bank voucher (CP-…)."
+        f"Paid so far {fmt(paid_amt)}. Cash/bank creates a Cash Book voucher (CP-…). "
+        "Ledger adjustments (contractor settle) do not create cash."
     )
 
     c1, c2, c3 = st.columns([1.2, 1.2, 2])
@@ -821,11 +822,13 @@ def _render_employee_cash_payments(pid, pr):
     body = []
     for line in page:
         paid = (line.get("paid_status") or "") == "paid"
-        badge = (
-            '<span class="inv-badge inv-badge-approved">PAID</span>'
-            if paid
-            else '<span class="inv-badge inv-badge-pending">UNPAID</span>'
-        )
+        mode = (line.get("payment_mode") or "").lower()
+        if paid and mode == "adjustment":
+            badge = '<span class="inv-badge inv-badge-approved">ADJ</span>'
+        elif paid:
+            badge = '<span class="inv-badge inv-badge-approved">PAID</span>'
+        else:
+            badge = '<span class="inv-badge inv-badge-pending">UNPAID</span>'
         voucher = escape(str(line.get("payment_document_no") or "—"))
         body.append(
             "<tr>"
