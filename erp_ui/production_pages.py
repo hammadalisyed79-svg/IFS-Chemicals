@@ -809,7 +809,10 @@ def page_production_orders():
             return
         sel = st.selectbox(
             "Production Order",
-            [f"{r['document_no']} — {r.get('product_name')} [{r.get('status')}]" for r in active],
+            [
+                f"{r['document_no']} — {r.get('product_name')} | {r.get('order_date') or '—'} [{r.get('status')}]"
+                for r in active
+            ],
             key="prod_proc_sel",
         )
         po = next(r for r in active if r["document_no"] in sel)
@@ -819,7 +822,9 @@ def page_production_orders():
         reqs = db.calc_bom_requirements(po["bom_id"], po["planned_qty"])
         if reqs:
             st.subheader("Material Requirements (incl. wastage)")
+            order_date = po.get("order_date") or "—"
             render_dataframe_html_table(pd.DataFrame([{
+                "Date": order_date,
                 "Material": r.get("product_name"),
                 "Required Qty": float(r.get("quantity") or 0),
                 "Weight (kg)": float(r.get("weight") or 0),
@@ -842,7 +847,9 @@ def page_production_orders():
                     "**Insufficient stock** for one or more materials. "
                     "You can still issue after confirming — warehouse qty may go negative."
                 )
+                order_date = po.get("order_date") or "—"
                 render_dataframe_html_table(pd.DataFrame([{
+                    "Date": order_date,
                     "Material": s["product_name"],
                     "Required": float(s["required"]),
                     "Available": float(s["available"]),
@@ -891,10 +898,27 @@ def page_production_orders():
             )
             if detail.get("issues"):
                 st.subheader("Materials Issued")
-                render_dataframe_html_table(pd.DataFrame(detail["issues"]))
+                order_date = detail.get("order_date") or po.get("order_date") or "—"
+                iss_rows = []
+                for it in detail["issues"]:
+                    row = dict(it)
+                    row["Date"] = order_date
+                    iss_rows.append(row)
+                # Prefer Date first in display
+                df_iss = pd.DataFrame(iss_rows)
+                cols = ["Date"] + [c for c in df_iss.columns if c != "Date"]
+                render_dataframe_html_table(df_iss[cols])
             if detail.get("receipts"):
                 st.subheader("Finished Goods Receipts")
-                render_dataframe_html_table(pd.DataFrame(detail["receipts"]))
+                order_date = detail.get("order_date") or po.get("order_date") or "—"
+                rc_rows = []
+                for it in detail["receipts"]:
+                    row = dict(it)
+                    row["Date"] = order_date
+                    rc_rows.append(row)
+                df_rc = pd.DataFrame(rc_rows)
+                cols = ["Date"] + [c for c in df_rc.columns if c != "Date"]
+                render_dataframe_html_table(df_rc[cols])
             st.divider()
             st.subheader("Rollback QC / completion")
             st.caption(
