@@ -721,8 +721,10 @@ def _render_employee_cash_payments(pid, pr):
     unpaid_n = len(lines) - paid_n
     paid_amt = sum(float(l.get("net_salary") or 0) for l in lines if l.get("paid_status") == "paid")
     unpaid_amt = sum(float(l.get("net_salary") or 0) for l in lines if l.get("paid_status") != "paid")
+    adv_sum = sum(float(l.get("advance_recovery") or 0) for l in lines)
+    loan_sum = sum(float(l.get("loan_recovery") or 0) for l in lines)
 
-    k1, k2, k3, k4 = st.columns(4, gap="small")
+    k1, k2, k3, k4, k5, k6 = st.columns(6, gap="small")
     k1.markdown(
         f"<div class='txn-kpi-card'><p class='txn-kpi'>Employees</p>"
         f"<p class='txn-kpi-val'>{len(lines):,}</p></div>",
@@ -743,9 +745,20 @@ def _render_employee_cash_payments(pid, pr):
         f"<p class='txn-kpi-val' style='font-size:1.05rem'>{escape(fmt(unpaid_amt))}</p></div>",
         unsafe_allow_html=True,
     )
+    k5.markdown(
+        f"<div class='txn-kpi-card'><p class='txn-kpi'>Advance Rec.</p>"
+        f"<p class='txn-kpi-val' style='font-size:1.05rem'>{escape(fmt(adv_sum))}</p></div>",
+        unsafe_allow_html=True,
+    )
+    k6.markdown(
+        f"<div class='txn-kpi-card'><p class='txn-kpi'>Loan Rec.</p>"
+        f"<p class='txn-kpi-val' style='font-size:1.05rem'>{escape(fmt(loan_sum))}</p></div>",
+        unsafe_allow_html=True,
+    )
     st.caption(
-        f"Paid so far {fmt(paid_amt)}. Cash/bank creates a Cash Book voucher (CP-…). "
-        "Ledger adjustments (contractor settle) do not create cash."
+        f"Paid so far {fmt(paid_amt)}. Advance Rec. / Loan Rec. are this run’s recoveries "
+        "(separate from net cash pay). Cash/bank creates a Cash Book voucher (CP-…); "
+        "ledger adjustments do not."
     )
 
     c1, c2, c3 = st.columns([1.2, 1.2, 2])
@@ -817,7 +830,8 @@ def _render_employee_cash_payments(pid, pr):
     from erp_ui.list_paging import page_slice
     page = page_slice(view, f"hr_pay_emp_{pid}", default_size=40)
     ths = "".join(
-        f"<th>{h}</th>" for h in ("Employee", "Code", "Net", "Status", "Voucher")
+        f"<th>{h}</th>"
+        for h in ("Employee", "Code", "Advance Rec.", "Loan Rec.", "Net", "Status", "Voucher")
     )
     body = []
     for line in page:
@@ -834,6 +848,8 @@ def _render_employee_cash_payments(pid, pr):
             "<tr>"
             f"<td><strong>{escape(str(line.get('employee_name') or '—'))}</strong></td>"
             f"<td>{escape(str(line.get('emp_code') or '—'))}</td>"
+            f"<td style='text-align:right'>{escape(fmt(line.get('advance_recovery')))}</td>"
+            f"<td style='text-align:right'>{escape(fmt(line.get('loan_recovery')))}</td>"
             f"<td style='text-align:right'><strong>{escape(fmt(line.get('net_salary')))}</strong></td>"
             f"<td class='txn-status-cell'>{badge}</td>"
             f"<td>{voucher}</td>"
@@ -846,6 +862,13 @@ def _render_employee_cash_payments(pid, pr):
         unsafe_allow_html=True,
     )
 
+    page_adv = sum(float(l.get("advance_recovery") or 0) for l in page)
+    page_loan = sum(float(l.get("loan_recovery") or 0) for l in page)
+    page_net = sum(float(l.get("net_salary") or 0) for l in page)
+    st.caption(
+        f"This page — Advance Rec. {fmt(page_adv)} · Loan Rec. {fmt(page_loan)} · Net {fmt(page_net)}"
+    )
+
     st.markdown("##### Pay / undo (this page)")
     for line in page:
         lid = line["id"]
@@ -853,7 +876,9 @@ def _render_employee_cash_payments(pid, pr):
         net = float(line.get("net_salary") or 0)
         a1, a2, a3 = st.columns([3.2, 1.2, 1.2])
         a1.write(
-            f"**{line.get('employee_name')}** ({line.get('emp_code')}) — {fmt(net)}"
+            f"**{line.get('employee_name')}** ({line.get('emp_code')}) — "
+            f"Adv {fmt(line.get('advance_recovery'))} · Loan {fmt(line.get('loan_recovery'))} · "
+            f"Net {fmt(net)}"
         )
         if paid:
             if a2.button("Undo payment", key=f"pr_unpay_{lid}"):
@@ -1085,6 +1110,8 @@ def page_payroll():
                 period = _payroll_period_label(pr["payroll_month"], pr["payroll_year"])
                 status_u = (pr.get("status") or "").upper()
                 paid_n = sum(1 for l in pr["lines"] if l.get("paid_status") == "paid")
+                adv_sum = sum(float(l.get("advance_recovery") or 0) for l in pr["lines"])
+                loan_sum = sum(float(l.get("loan_recovery") or 0) for l in pr["lines"])
                 st.markdown(
                     f"**{escape(pr['document_no'])}** · {escape(period)} · "
                     f"{_payroll_status_badge(pr.get('status'))} · "
@@ -1094,26 +1121,40 @@ def page_payroll():
                 steps = ["draft", "approved", "posted", "paid"]
                 st.progress((steps.index(pr["status"]) + 1) / len(steps) if pr["status"] in steps else 0.25)
 
-                m1, m2, m3, m4 = st.columns(4, gap="small")
+                m1, m2, m3, m4, m5, m6 = st.columns(6, gap="small")
                 m1.markdown(
                     f"<div class='txn-kpi-card'><p class='txn-kpi'>Gross</p>"
                     f"<p class='txn-kpi-val' style='font-size:1.05rem'>{escape(fmt(pr['total_gross']))}</p></div>",
                     unsafe_allow_html=True,
                 )
                 m2.markdown(
-                    f"<div class='txn-kpi-card'><p class='txn-kpi'>Deductions</p>"
-                    f"<p class='txn-kpi-val' style='font-size:1.05rem'>{escape(fmt(pr['total_deductions']))}</p></div>",
+                    f"<div class='txn-kpi-card'><p class='txn-kpi'>Advance Rec.</p>"
+                    f"<p class='txn-kpi-val' style='font-size:1.05rem'>{escape(fmt(adv_sum))}</p></div>",
                     unsafe_allow_html=True,
                 )
                 m3.markdown(
+                    f"<div class='txn-kpi-card'><p class='txn-kpi'>Loan Rec.</p>"
+                    f"<p class='txn-kpi-val' style='font-size:1.05rem'>{escape(fmt(loan_sum))}</p></div>",
+                    unsafe_allow_html=True,
+                )
+                m4.markdown(
+                    f"<div class='txn-kpi-card'><p class='txn-kpi'>All Deductions</p>"
+                    f"<p class='txn-kpi-val' style='font-size:1.05rem'>{escape(fmt(pr['total_deductions']))}</p></div>",
+                    unsafe_allow_html=True,
+                )
+                m5.markdown(
                     f"<div class='txn-kpi-card'><p class='txn-kpi'>Net</p>"
                     f"<p class='txn-kpi-val' style='font-size:1.05rem'>{escape(fmt(pr['total_net']))}</p></div>",
                     unsafe_allow_html=True,
                 )
-                m4.markdown(
+                m6.markdown(
                     f"<div class='txn-kpi-card'><p class='txn-kpi'>Staff</p>"
                     f"<p class='txn-kpi-val'>{len(pr['lines']):,}</p></div>",
                     unsafe_allow_html=True,
+                )
+                st.caption(
+                    "Advance Rec. and Loan Rec. are separate recoveries (from HR → Advance / Loan). "
+                    "All Deductions also includes tax / EOBI / SS / other."
                 )
 
                 st.markdown("##### Workflow")
