@@ -841,21 +841,40 @@ def _recover_advances(conn, employee_id, payroll_id, due_date):
         if amt <= 0:
             continue
         total += amt
-        new_out = a["outstanding_amount"] - amt
-        new_rec = conn.execute("SELECT recovered_amount FROM employee_advances WHERE id=?", (a["id"],)).fetchone()[0] + amt
+        new_out = round(float(a["outstanding_amount"]) - amt, 2)
+        new_rec = float(conn.execute(
+            "SELECT recovered_amount FROM employee_advances WHERE id=?", (a["id"],)
+        ).fetchone()[0] or 0) + amt
         conn.execute(
-            "UPDATE employee_advances SET recovered_amount=?,outstanding_amount=? WHERE id=?",
-            (new_rec, new_out, a["id"]),
+            "UPDATE employee_advances SET recovered_amount=?, outstanding_amount=?, status=? WHERE id=?",
+            (new_rec, new_out, "closed" if new_out <= 0.01 else "issued", a["id"]),
         )
         sched = conn.execute(
             "SELECT id FROM advance_recovery_schedule WHERE advance_id=? AND recovered=0 ORDER BY installment_no LIMIT 1",
             (a["id"],),
         ).fetchone()
-        if sched:
-            conn.execute(
-                "UPDATE advance_recovery_schedule SET recovered=1,recovered_date=?,payroll_id=? WHERE id=?",
-                (due_date, payroll_id, sched[0]),
+        if not sched:
+            # Ensure a schedule row exists so delete/undo payroll can reverse this recovery
+            max_no = conn.execute(
+                "SELECT COALESCE(MAX(installment_no),0) FROM advance_recovery_schedule WHERE advance_id=?",
+                (a["id"],),
+            ).fetchone()[0]
+            cur = conn.execute(
+                """INSERT INTO advance_recovery_schedule(advance_id, installment_no, due_date, amount)
+                   VALUES(?,?,?,?)""",
+                (a["id"], int(max_no) + 1, due_date, amt),
             )
+            sched_id = cur.lastrowid
+        else:
+            sched_id = sched[0]
+            conn.execute(
+                "UPDATE advance_recovery_schedule SET amount=? WHERE id=?",
+                (amt, sched_id),
+            )
+        conn.execute(
+            "UPDATE advance_recovery_schedule SET recovered=1, recovered_date=?, payroll_id=? WHERE id=?",
+            (due_date, payroll_id, sched_id),
+        )
     return total
 
 
@@ -867,13 +886,16 @@ def _undo_payroll_recoveries(conn, payroll_id):
     ).fetchall():
         sched_id, adv_id, amt = row[0], row[1], float(row[2] or 0)
         adv = conn.execute(
-            "SELECT recovered_amount, outstanding_amount FROM employee_advances WHERE id=?",
+            "SELECT recovered_amount, outstanding_amount, amount FROM employee_advances WHERE id=?",
             (adv_id,),
         ).fetchone()
         if adv and amt > 0:
+            new_rec = max(0.0, float(adv[0] or 0) - amt)
+            new_out = min(float(adv[2] or 0), float(adv[1] or 0) + amt)
+            new_status = "closed" if new_out <= 0.01 else "issued"
             conn.execute(
-                "UPDATE employee_advances SET recovered_amount=?, outstanding_amount=? WHERE id=?",
-                (max(0, float(adv[0] or 0) - amt), float(adv[1] or 0) + amt, adv_id),
+                "UPDATE employee_advances SET recovered_amount=?, outstanding_amount=?, status=? WHERE id=?",
+                (new_rec, new_out, new_status, adv_id),
             )
         conn.execute(
             "UPDATE advance_recovery_schedule SET recovered=0, recovered_date=NULL, payroll_id=NULL WHERE id=?",
@@ -885,13 +907,16 @@ def _undo_payroll_recoveries(conn, payroll_id):
     ).fetchall():
         inst_id, loan_id, amt = row[0], row[1], float(row[2] or 0)
         ln = conn.execute(
-            "SELECT recovered_amount, outstanding_amount FROM employee_loans WHERE id=?",
+            "SELECT recovered_amount, outstanding_amount, amount FROM employee_loans WHERE id=?",
             (loan_id,),
         ).fetchone()
         if ln and amt > 0:
+            new_rec = max(0.0, float(ln[0] or 0) - amt)
+            new_out = min(float(ln[2] or 0), float(ln[1] or 0) + amt)
+            new_status = "closed" if new_out <= 0.01 else "issued"
             conn.execute(
-                "UPDATE employee_loans SET recovered_amount=?, outstanding_amount=? WHERE id=?",
-                (max(0, float(ln[0] or 0) - amt), float(ln[1] or 0) + amt, loan_id),
+                "UPDATE employee_loans SET recovered_amount=?, outstanding_amount=?, status=? WHERE id=?",
+                (new_rec, new_out, new_status, loan_id),
             )
         conn.execute(
             "UPDATE loan_installments SET recovered=0, recovered_date=NULL, payroll_id=NULL WHERE id=?",
@@ -922,16 +947,28 @@ def _recover_loans(conn, employee_id, payroll_id, due_date):
         if amt <= 0:
             continue
         total += amt
-        new_out = l["outstanding_amount"] - amt
-        new_rec = conn.execute("SELECT recovered_amount FROM employee_loans WHERE id=?", (l["id"],)).fetchone()[0] + amt
+        new_out = round(float(l["outstanding_amount"]) - amt, 2)
+        new_rec = float(conn.execute(
+            "SELECT recovered_amount FROM employee_loans WHERE id=?", (l["id"],)
+        ).fetchone()[0] or 0) + amt
         conn.execute(
-            "UPDATE employee_loans SET recovered_amount=?,outstanding_amount=? WHERE id=?",
-            (new_rec, new_out, l["id"]),
+            "UPDATE employee_loans SET recovered_amount=?, outstanding_amount=?, status=? WHERE id=?",
+            (new_rec, new_out, "closed" if new_out <= 0.01 else "issued", l["id"]),
         )
         if inst:
             conn.execute(
-                "UPDATE loan_installments SET recovered=1,recovered_date=?,payroll_id=? WHERE id=?",
-                (due_date, payroll_id, inst[0]),
+                "UPDATE loan_installments SET amount=?, recovered=1, recovered_date=?, payroll_id=? WHERE id=?",
+                (amt, due_date, payroll_id, inst[0]),
+            )
+        else:
+            max_no = conn.execute(
+                "SELECT COALESCE(MAX(installment_no),0) FROM loan_installments WHERE loan_id=?",
+                (l["id"],),
+            ).fetchone()[0]
+            conn.execute(
+                """INSERT INTO loan_installments(loan_id, installment_no, due_date, amount, recovered, recovered_date, payroll_id)
+                   VALUES(?,?,?,?,1,?,?)""",
+                (l["id"], int(max_no) + 1, due_date, amt, due_date, payroll_id),
             )
     return total
 
@@ -1599,7 +1636,8 @@ def save_loan(data, user_id=None):
 
 def get_loans(status=None, employee_id=None):
     from database import get_connection, rows_to_list
-    q = """SELECT l.*, e.full_name AS employee_name FROM employee_loans l
+    q = """SELECT l.*, e.full_name AS employee_name, e.code AS employee_code
+           FROM employee_loans l
            JOIN employees e ON l.employee_id=e.id WHERE 1=1"""
     p = []
     if status:
@@ -1608,7 +1646,13 @@ def get_loans(status=None, employee_id=None):
         q += " AND l.employee_id=?"; p.append(employee_id)
     q += " ORDER BY l.issue_date DESC"
     with get_connection() as conn:
-        return rows_to_list(conn.execute(q, p).fetchall())
+        rows = rows_to_list(conn.execute(q, p).fetchall())
+    for r in rows:
+        code = (r.get("employee_code") or "").strip()
+        name = (r.get("employee_name") or "").strip()
+        if code and name:
+            r["employee_name"] = f"{code} - {name}"
+    return rows
 
 
 def approve_loan(loan_id, user_id, approve=True):
