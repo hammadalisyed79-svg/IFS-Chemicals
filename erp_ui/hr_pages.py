@@ -1084,35 +1084,44 @@ def page_payroll():
                 export_df(_payroll_lines_df(pr["lines"]), f"salary_sheet_{pr['document_no']}")
 
 
-def _adv_loan_register_rows():
+def _adv_loan_register_rows(employee_id=None):
     """Combine salary advances + loans for one register (newest date first)."""
     rows = []
-    for r in db.get_advances() or []:
+    for r in db.get_advances(employee_id=employee_id) or []:
+        months = int(r.get("recovery_months") or 1)
         rows.append({
             "Type": "Salary Advance",
             "Document": r.get("document_no"),
             "Employee": r.get("employee_name"),
             "Date": r.get("request_date"),
             "Amount": float(r.get("amount") or 0),
-            "Recovery": "100% next salary" if int(r.get("recovery_months") or 1) <= 1
-            else f"{int(r.get('recovery_months') or 1)} months",
+            "Recovery": "100% next salary" if months <= 1 else f"{months} months",
+            "Recovered": float(r.get("recovered_amount") or 0),
             "Outstanding": float(r.get("outstanding_amount") or 0),
-            "Status": r.get("status"),
+            "Status": (r.get("status") or "").upper(),
+            "Reason": r.get("reason") or "",
             "_sort": r.get("request_date") or "",
             "_id": r.get("id"),
+            "_employee_id": r.get("employee_id"),
+            "_emp_key": f"{(r.get('employee_name') or '').lower()} {(r.get('document_no') or '').lower()}",
         })
-    for r in db.get_loans() or []:
+    for r in db.get_loans(employee_id=employee_id) or []:
+        inst = int(r.get("installments") or 1)
         rows.append({
             "Type": "Loan",
             "Document": r.get("document_no"),
             "Employee": r.get("employee_name"),
             "Date": r.get("issue_date"),
             "Amount": float(r.get("amount") or 0),
-            "Recovery": f"{int(r.get('installments') or 1)} installments",
+            "Recovery": f"{inst} installments",
+            "Recovered": float(r.get("recovered_amount") or 0),
             "Outstanding": float(r.get("outstanding_amount") or 0),
-            "Status": r.get("status"),
+            "Status": (r.get("status") or "").upper(),
+            "Reason": r.get("reason") or "",
             "_sort": r.get("issue_date") or "",
             "_id": r.get("id"),
+            "_employee_id": r.get("employee_id"),
+            "_emp_key": f"{(r.get('employee_name') or '').lower()} {(r.get('document_no') or '').lower()}",
         })
     rows.sort(key=lambda x: (x.get("_sort") or "", x.get("Document") or ""), reverse=True)
     return rows
@@ -1133,28 +1142,91 @@ def page_advances():
     )
     tab = sticky_page_tabs(["Advance List", "New Request", "Approve / Issue"], "hr_adv_tab")
     if tab == "Advance List":
-        rows = _adv_loan_register_rows()
-        if rows:
-            from erp_ui.list_paging import page_slice
-            view = page_slice(rows, "hr_adv_list_pg", default_size=40)
-            show = [{k: v for k, v in r.items() if not str(k).startswith("_")} for r in view]
-            render_dataframe_html_table(pd.DataFrame(show))
-        else:
+        emps = _emp_opts()
+        emp_labels = ["All employees"] + list(emps.keys())
+        f1, f2, f3 = st.columns([2.2, 1.4, 1.2])
+        emp_lbl = f1.selectbox("Employee", emp_labels, key="hr_adv_emp_filter")
+        search = f2.text_input("Search", placeholder="Name / document / reason…", key="hr_adv_search")
+        status_lbl = f3.selectbox(
+            "Status",
+            ["All", "Pending", "Approved", "Issued", "Closed", "Rejected"],
+            key="hr_adv_status_filter",
+        )
+        emp_id = None if emp_lbl == "All employees" else emps.get(emp_lbl)
+        rows = _adv_loan_register_rows(employee_id=emp_id)
+        q = (search or "").strip().lower()
+        if q:
+            rows = [
+                r for r in rows
+                if q in (r.get("_emp_key") or "")
+                or q in (r.get("Reason") or "").lower()
+                or q in (r.get("Type") or "").lower()
+                or q in (r.get("Status") or "").lower()
+            ]
+        if status_lbl != "All":
+            want = status_lbl.lower()
+            rows = [r for r in rows if (r.get("Status") or "").lower() == want]
+
+        show_cols = ["Type", "Document", "Employee", "Date", "Amount", "Recovery",
+                     "Recovered", "Outstanding", "Status", "Reason"]
+        show_all = [{k: r.get(k) for k in show_cols} for r in rows]
+        df_all = pd.DataFrame(show_all) if show_all else pd.DataFrame(columns=show_cols)
+
+        if not rows:
             st.markdown(
-                '<div class="erp-empty-state"><p>No employee advances or loans yet.</p></div>',
+                '<div class="erp-empty-state"><p>No advances/loans for this filter.</p></div>',
                 unsafe_allow_html=True,
             )
-            if st.button("New Request", type="primary", key="adv_empty_cta"):
-                st.session_state["hr_adv_tab"] = "New Request"
-                st.rerun()
-        out_a = db.report_outstanding_advances() or []
-        out_l = db.report_outstanding_loans() or []
-        if out_a:
-            st.markdown("**Outstanding Salary Advances**")
-            render_dataframe_html_table(pd.DataFrame(out_a))
-        if out_l:
-            st.markdown("**Outstanding Loans**")
-            render_dataframe_html_table(pd.DataFrame(out_l))
+            if emp_lbl == "All employees" and not q and status_lbl == "All":
+                if st.button("New Request", type="primary", key="adv_empty_cta"):
+                    st.session_state["hr_adv_tab"] = "New Request"
+                    st.rerun()
+        else:
+            tot_amt = sum(float(r.get("Amount") or 0) for r in rows)
+            tot_out = sum(float(r.get("Outstanding") or 0) for r in rows)
+            k1, k2, k3 = st.columns(3)
+            k1.metric("Records", f"{len(rows):,}")
+            k2.metric("Total Amount", fmt(tot_amt))
+            k3.metric("Outstanding", fmt(tot_out))
+
+            from erp_ui.list_paging import page_slice
+            view = page_slice(rows, "hr_adv_list_pg", default_size=40)
+            show = [{k: r.get(k) for k in show_cols} for r in view]
+            render_dataframe_html_table(pd.DataFrame(show))
+
+            from erp_ui.report_print import report_toolbar
+            emp_part = "all"
+            if emp_lbl != "All employees":
+                emp_part = (emp_lbl.split(" - ")[0] if " - " in emp_lbl else emp_lbl).replace(" ", "_")
+            report_toolbar(
+                df_all,
+                title="Employee Advances & Loans",
+                filename=f"employee_advances_{emp_part}",
+                period=str(date.today()),
+                filters={
+                    "Employee": emp_lbl,
+                    "Status": status_lbl,
+                    "Search": search or "—",
+                },
+                summary={
+                    "Records": f"{len(rows):,}",
+                    "Total Amount": fmt(tot_amt),
+                    "Outstanding": fmt(tot_out),
+                },
+                key_prefix="hr_adv_list",
+                layout="landscape",
+            )
+
+        # Outstanding only when viewing all (avoid clutter on individual filter)
+        if emp_lbl == "All employees" and not q and status_lbl == "All":
+            out_a = db.report_outstanding_advances() or []
+            out_l = db.report_outstanding_loans() or []
+            if out_a:
+                st.markdown("**Outstanding Salary Advances**")
+                render_dataframe_html_table(pd.DataFrame(out_a))
+            if out_l:
+                st.markdown("**Outstanding Loans**")
+                render_dataframe_html_table(pd.DataFrame(out_l))
     elif tab == "New Request":
         emps = _emp_opts()
         if not emps:

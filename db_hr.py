@@ -1518,7 +1518,8 @@ def save_advance(data, user_id=None):
 
 def get_advances(status=None, employee_id=None):
     from database import get_connection, rows_to_list
-    q = """SELECT a.*, e.full_name AS employee_name FROM employee_advances a
+    q = """SELECT a.*, e.full_name AS employee_name, e.code AS employee_code
+           FROM employee_advances a
            JOIN employees e ON a.employee_id=e.id WHERE 1=1"""
     p = []
     if status:
@@ -1527,7 +1528,13 @@ def get_advances(status=None, employee_id=None):
         q += " AND a.employee_id=?"; p.append(employee_id)
     q += " ORDER BY a.request_date DESC"
     with get_connection() as conn:
-        return rows_to_list(conn.execute(q, p).fetchall())
+        rows = rows_to_list(conn.execute(q, p).fetchall())
+    for r in rows:
+        code = (r.get("employee_code") or "").strip()
+        name = (r.get("employee_name") or "").strip()
+        if code and name:
+            r["employee_name"] = f"{code} - {name}"
+    return rows
 
 
 def approve_advance(advance_id, user_id, approve=True):
