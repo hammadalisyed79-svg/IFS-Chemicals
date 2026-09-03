@@ -1,9 +1,37 @@
 """IFS Chemicals ERP - HR & Payroll module."""
 
+import calendar
 from datetime import datetime
 from pathlib import Path
 
 SCHEMA_HR_PATH = Path(__file__).parent / "schema_hr.sql"
+
+
+def days_in_month(year, month):
+    """Calendar days in month (28/29/30/31)."""
+    return calendar.monthrange(int(year), int(month))[1]
+
+
+def overtime_hourly_rate(basic_salary, year, month):
+    """OT rate = Basic ÷ days_in_month ÷ 6 (IFS payroll rule)."""
+    basic = float(basic_salary or 0)
+    days = days_in_month(year, month)
+    if basic <= 0 or days <= 0:
+        return 0.0
+    return basic / days / 6.0
+
+
+def calc_overtime_amount(basic_salary, year, month, hours):
+    """Overtime pay = (Basic / month_days / 6) × hours."""
+    return round(float(hours or 0) * overtime_hourly_rate(basic_salary, year, month), 2)
+
+
+def calc_overtime_hours(basic_salary, year, month, ot_amount):
+    """Reverse: hours from a paid overtime amount (for prior months)."""
+    rate = overtime_hourly_rate(basic_salary, year, month)
+    if rate <= 0:
+        return 0.0
+    return round(float(ot_amount or 0) / rate, 2)
 
 HR_AC = {
     "salary_expense": "6200",
@@ -806,8 +834,8 @@ def _calc_payroll_line(conn, employee_id, month, year, payroll_id):
             days_absent += r["cnt"]
         overtime_hrs += r["ot"] or 0
 
-    hourly = basic / 30 / 8 if basic else 0
-    overtime = overtime_hrs * hourly * 1.5
+    # OT = Basic / calendar days in month / 6 × hours (from attendance)
+    overtime = calc_overtime_amount(basic, year, month, overtime_hrs)
     bonus = 0
     gross = basic + allowances + overtime + bonus
 
@@ -973,12 +1001,27 @@ def _recover_loans(conn, employee_id, payroll_id, due_date):
     return total
 
 
-def _recalc_payroll_line_fields(data):
-    """Recompute gross, total deductions, and net from editable components."""
+def _recalc_payroll_line_fields(data, year=None, month=None, sync_ot=None):
+    """Recompute gross, total deductions, and net from editable components.
+
+    sync_ot:
+      - "from_hours": Overtime = (Basic / days / 6) × OT hrs (default when hrs > 0)
+      - "from_amount": OT hrs derived from Overtime amount (prior months)
+      - None: keep both values as provided (legacy / manual)
+    """
     basic = float(data.get("basic_salary") or 0)
     allowances = float(data.get("allowances") or 0)
     overtime = float(data.get("overtime") or 0)
+    ot_hrs = float(data.get("overtime_hrs") or 0)
     bonus = float(data.get("bonus") or 0)
+
+    if year and month:
+        if sync_ot == "from_amount":
+            ot_hrs = calc_overtime_hours(basic, year, month, overtime)
+        elif sync_ot == "from_hours" or (sync_ot is None and ot_hrs > 0):
+            # Hours drive pay whenever OT hours are entered
+            overtime = calc_overtime_amount(basic, year, month, ot_hrs)
+
     gross = round(basic + allowances + overtime + bonus, 2)
     tax = float(data.get("tax_deduction") or 0)
     eobi = float(data.get("eobi") or 0)
@@ -1002,6 +1045,7 @@ def _recalc_payroll_line_fields(data):
         "other_deductions": other,
         "total_deductions": total_ded,
         "net_salary": net,
+        "overtime_hrs": ot_hrs,
     }
 
 
@@ -1019,8 +1063,12 @@ def _refresh_payroll_run_totals(conn, payroll_id):
     )
 
 
-def update_payroll_line(line_id, data, user_id=None):
-    """Edit one payroll line (draft payroll only). Recalculates gross/net and run totals."""
+def update_payroll_line(line_id, data, user_id=None, sync_ot=None):
+    """Edit one payroll line (draft payroll only). Recalculates gross/net and run totals.
+
+    When OT hours > 0, overtime pay is calculated as Basic / month_days / 6 × hours
+    unless sync_ot="from_amount" (derive hours from overtime amount).
+    """
     from database import get_connection
     editable = (
         "basic_salary", "allowances", "overtime", "bonus",
@@ -1030,7 +1078,8 @@ def update_payroll_line(line_id, data, user_id=None):
     )
     with get_connection() as conn:
         row = conn.execute(
-            """SELECT pl.*, pr.status AS payroll_status
+            """SELECT pl.*, pr.status AS payroll_status,
+                      pr.payroll_year, pr.payroll_month
                FROM payroll_lines pl
                JOIN payroll_runs pr ON pl.payroll_id=pr.id
                WHERE pl.id=?""",
@@ -1045,7 +1094,12 @@ def update_payroll_line(line_id, data, user_id=None):
         for k in editable:
             if k in data:
                 merged[k] = data[k]
-        calc = _recalc_payroll_line_fields(merged)
+        calc = _recalc_payroll_line_fields(
+            merged,
+            year=int(row["payroll_year"]),
+            month=int(row["payroll_month"]),
+            sync_ot=sync_ot,
+        )
         conn.execute(
             """UPDATE payroll_lines SET
                basic_salary=?, allowances=?, overtime=?, bonus=?, gross_salary=?,
@@ -1060,7 +1114,8 @@ def update_payroll_line(line_id, data, user_id=None):
                 calc["total_deductions"], calc["net_salary"],
                 float(merged.get("days_present") or 0),
                 float(merged.get("days_absent") or 0),
-                float(merged.get("overtime_hrs") or 0),
+                float(calc.get("overtime_hrs") if calc.get("overtime_hrs") is not None
+                      else merged.get("overtime_hrs") or 0),
                 line_id,
             ),
         )
@@ -1068,10 +1123,11 @@ def update_payroll_line(line_id, data, user_id=None):
         return calc
 
 
-def update_payroll_lines_bulk(updates, user_id=None):
+def update_payroll_lines_bulk(updates, user_id=None, sync_ot=None):
     """Update many draft payroll lines in one transaction.
 
     updates: [{line_id, basic_salary, ...}, ...]
+    When OT hours > 0, overtime amount is auto-calculated from the IFS formula.
     """
     from database import get_connection
 
@@ -1091,7 +1147,8 @@ def update_payroll_lines_bulk(updates, user_id=None):
             if not line_id:
                 continue
             row = conn.execute(
-                """SELECT pl.*, pr.status AS payroll_status
+                """SELECT pl.*, pr.status AS payroll_status,
+                          pr.payroll_year, pr.payroll_month
                    FROM payroll_lines pl
                    JOIN payroll_runs pr ON pl.payroll_id=pr.id
                    WHERE pl.id=?""",
@@ -1106,7 +1163,12 @@ def update_payroll_lines_bulk(updates, user_id=None):
             for k in editable:
                 if k in data:
                     merged[k] = data[k]
-            calc = _recalc_payroll_line_fields(merged)
+            calc = _recalc_payroll_line_fields(
+                merged,
+                year=int(row["payroll_year"]),
+                month=int(row["payroll_month"]),
+                sync_ot=sync_ot,
+            )
             conn.execute(
                 """UPDATE payroll_lines SET
                    basic_salary=?, allowances=?, overtime=?, bonus=?, gross_salary=?,
@@ -1121,7 +1183,8 @@ def update_payroll_lines_bulk(updates, user_id=None):
                     calc["total_deductions"], calc["net_salary"],
                     float(merged.get("days_present") or 0),
                     float(merged.get("days_absent") or 0),
-                    float(merged.get("overtime_hrs") or 0),
+                    float(calc.get("overtime_hrs") if calc.get("overtime_hrs") is not None
+                          else merged.get("overtime_hrs") or 0),
                     int(line_id),
                 ),
             )
@@ -1130,6 +1193,47 @@ def update_payroll_lines_bulk(updates, user_id=None):
         for pid in payroll_ids:
             _refresh_payroll_run_totals(conn, pid)
     return saved
+
+
+def sync_payroll_overtime(payroll_id, mode="from_hours", user_id=None):
+    """Apply OT formula across a draft payroll run.
+
+    mode="from_hours": Overtime pay = Basic / days / 6 × OT hrs (for upcoming payroll).
+    mode="from_amount": Fill OT hrs from existing Overtime amount (prior months already paid).
+    """
+    if mode not in ("from_hours", "from_amount"):
+        raise ValueError("mode must be 'from_hours' or 'from_amount'")
+    from database import get_connection
+    with get_connection() as conn:
+        pr = conn.execute(
+            "SELECT id, status, payroll_year, payroll_month FROM payroll_runs WHERE id=?",
+            (payroll_id,),
+        ).fetchone()
+        if not pr:
+            raise ValueError("Payroll run not found.")
+        pr = dict(pr)
+        if pr["status"] != "draft":
+            raise ValueError("Only draft payroll can be synced.")
+        year, month = int(pr["payroll_year"]), int(pr["payroll_month"])
+        lines = conn.execute(
+            "SELECT * FROM payroll_lines WHERE payroll_id=?", (payroll_id,)
+        ).fetchall()
+        n = 0
+        for row in lines:
+            merged = dict(row)
+            calc = _recalc_payroll_line_fields(merged, year=year, month=month, sync_ot=mode)
+            conn.execute(
+                """UPDATE payroll_lines SET
+                   overtime=?, gross_salary=?, total_deductions=?, net_salary=?, overtime_hrs=?
+                   WHERE id=?""",
+                (
+                    calc["overtime"], calc["gross_salary"], calc["total_deductions"],
+                    calc["net_salary"], calc["overtime_hrs"], merged["id"],
+                ),
+            )
+            n += 1
+        _refresh_payroll_run_totals(conn, payroll_id)
+        return n
 
 
 def approve_payroll(payroll_id, user_id):

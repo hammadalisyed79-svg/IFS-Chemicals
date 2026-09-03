@@ -400,6 +400,10 @@ def page_hr_employees():
                     except Exception as ex:
                         st.error(str(ex))
         st.markdown("**Salary Structure**")
+        st.caption(
+            "Housing / Transport / Medical / Other roll into the payroll **Allowances** column. "
+            "Variable pay above basic is **Overtime** (Basic ÷ month days ÷ 6 × hours), not allowance."
+        )
         with st.form("sal_struct"):
             ss = db.get_salary_structure(eid) or {}
             c1, c2, c3 = st.columns(3)
@@ -1006,9 +1010,9 @@ def page_payroll():
         if db.user_can_hr(st.session_state.user, "add"):
             st.caption(
                 "Create one salary run for a calendar month. "
-                "**Advance Rec.** and **Loan Rec.** are separate columns "
-                "(from **HR → Advance** and **HR → Loan**). "
-                "Edit statutory deductions on **Edit Lines**."
+                "OT hours from attendance → **Overtime** = Basic ÷ month days ÷ 6 × hours. "
+                "**Advance Rec.** / **Loan Rec.** are separate. "
+                "Edit lines or OT on **Edit Lines**."
             )
             c1, c2, c3 = st.columns([1, 1, 1.4])
             month = c1.number_input("Month", 1, 12, date.today().month, key="pay_gen_month")
@@ -1138,8 +1142,9 @@ def page_payroll():
 
                 st.markdown("##### Salary sheet")
                 st.caption(
-                    "**Allowances** = housing + transport + medical + other from salary structure. "
-                    "Advance Rec. / Loan Rec. are salary recoveries."
+                    "**Allowances** = fixed housing + transport + medical + other from salary structure "
+                    "(not extra pay). **Overtime** = Basic ÷ days in month (28/29/30/31) ÷ 6 × OT hours. "
+                    "Gross = Basic + Allowances + Overtime + Bonus. Advance / Loan Rec. are recoveries."
                 )
                 render_dataframe_html_table(_payroll_lines_df(pr["lines"]))
                 with st.expander("Full breakdown (Tax / EOBI / SS / attendance)", expanded=False):
@@ -1225,9 +1230,34 @@ def page_payroll():
                 st.warning("No payroll lines found.")
             else:
                 st.markdown(
-                    "**Tabular edit** — change cells in the grid, then **Save all lines**. "
-                    "Gross / deductions / net recalculate automatically on save."
+                    "**Tabular edit** — enter **OT Hrs**; on save, **Overtime** = Basic ÷ days in month ÷ 6 × hours. "
+                    "Gross / deductions / net recalculate automatically. "
+                    "Allowances are fixed structure only (housing/transport/medical/other) — not OT."
                 )
+                py = int(pr.get("payroll_year") or 0)
+                pm = int(pr.get("payroll_month") or 0)
+                mdays = db.days_in_month(py, pm) if py and pm else 30
+                st.caption(
+                    f"Period days = **{mdays}**. Example: Basic 30,000 → hourly OT rate = "
+                    f"{fmt(30000 / mdays / 6)} per hour."
+                )
+                if pr.get("status") == "draft":
+                    b1, b2, b3 = st.columns([1.2, 1.6, 2])
+                    if b1.button("Recalc OT from hours", key=f"pr_ot_from_hrs_{pid}",
+                                 help="Overtime pay = Basic / month days / 6 × OT Hrs"):
+                        try:
+                            n = db.sync_payroll_overtime(pid, mode="from_hours", user_id=uid())
+                            ff.action_done(f"Recalculated overtime for **{n}** line(s) from OT hours.")
+                        except Exception as e:
+                            st.error(str(e))
+                    if b2.button("Fill hours from OT amount", key=f"pr_ot_from_amt_{pid}",
+                                 help="For prior months already paid: reverse-calc OT hours from Overtime amount"):
+                        try:
+                            n = db.sync_payroll_overtime(pid, mode="from_amount", user_id=uid())
+                            ff.action_done(f"Filled OT hours for **{n}** line(s) from overtime amounts.")
+                        except Exception as e:
+                            st.error(str(e))
+                    b3.caption("Use **Fill hours** on past paid figures; use **Recalc OT** for next month hours.")
                 edit_rows = []
                 for l in pr["lines"]:
                     basic = float(l.get("basic_salary") or 0)
@@ -1351,12 +1381,17 @@ def page_payroll():
                         st.warning("No changes to save.")
                     else:
                         try:
+                            # OT Hrs > 0 → Overtime amount from formula automatically
                             n = db.update_payroll_lines_bulk(updates, uid())
-                            ff.action_done(f"Updated **{n}** payroll line(s).")
+                            ff.action_done(
+                                f"Updated **{n}** payroll line(s). "
+                                "Where OT Hrs > 0, Overtime was recalculated from the formula."
+                            )
                         except Exception as e:
                             st.error(str(e))
                 c2.caption(
                     "Editable: earnings, deductions, attendance. "
+                    "When OT Hrs > 0, Overtime = Basic ÷ month days ÷ 6 × hours on save. "
                     "Gross / Total Ded. / Net are calculated on save."
                 )
                 with st.expander("Single-employee form (optional)"):
@@ -1366,14 +1401,31 @@ def page_payroll():
                     }
                     sel_line = st.selectbox("Employee", list(line_opts.keys()), key="pr_edit_line")
                     line = line_opts[sel_line]
+                    rate = db.overtime_hourly_rate(
+                        float(line.get("basic_salary") or 0), py, pm
+                    ) if py and pm else 0
+                    st.caption(
+                        f"OT rate for this employee: **{fmt(rate)}**/hr "
+                        f"(Basic ÷ {mdays} ÷ 6). Enter hours to auto-calc overtime on save."
+                    )
                     with st.form("payroll_line_edit"):
                         e1, e2, e3, e4 = st.columns(4)
                         with e1:
                             basic = money_input("Basic Salary", value=float(line.get("basic_salary") or 0), min_value=0.0, key="pr_ed_basic")
                         with e2:
-                            allowances = money_input("Allowances", value=float(line.get("allowances") or 0), min_value=0.0, key="pr_ed_allw")
+                            allowances = money_input(
+                                "Allowances (structure)",
+                                value=float(line.get("allowances") or 0),
+                                min_value=0.0,
+                                key="pr_ed_allw",
+                            )
                         with e3:
-                            overtime = money_input("Overtime", value=float(line.get("overtime") or 0), min_value=0.0, key="pr_ed_ot")
+                            overtime = money_input(
+                                "Overtime (auto if hours)",
+                                value=float(line.get("overtime") or 0),
+                                min_value=0.0,
+                                key="pr_ed_ot",
+                            )
                         with e4:
                             bonus = money_input("Bonus", value=float(line.get("bonus") or 0), min_value=0.0, key="pr_ed_bonus")
                         d1, d2, d3, d4, d5, d6 = st.columns(6)
@@ -1389,10 +1441,15 @@ def page_payroll():
                             loan = money_input("Loan Recovery", value=float(line.get("loan_recovery") or 0), min_value=0.0, key="pr_ed_loan")
                         with d6:
                             other = money_input("Other Deductions", value=float(line.get("other_deductions") or 0), min_value=0.0, key="pr_ed_other")
-                        a1, a2, a3 = st.columns(3)
+                        a1, a2, a3, a4 = st.columns(4)
                         days_present = a1.number_input("Days Present", min_value=0.0, value=float(line.get("days_present") or 0), step=0.5)
                         days_absent = a2.number_input("Days Absent", min_value=0.0, value=float(line.get("days_absent") or 0), step=0.5)
                         ot_hrs = a3.number_input("Overtime Hours", min_value=0.0, value=float(line.get("overtime_hrs") or 0), step=0.5)
+                        derive_hrs = a4.checkbox(
+                            "Derive hrs from OT amt",
+                            value=False,
+                            help="For prior months: keep Overtime amount and reverse-calculate hours",
+                        )
                         if st.form_submit_button("Save this employee", type="primary"):
                             try:
                                 db.update_payroll_line(line["id"], {
@@ -1403,7 +1460,7 @@ def page_payroll():
                                     "loan_recovery": loan, "other_deductions": other,
                                     "days_present": days_present, "days_absent": days_absent,
                                     "overtime_hrs": ot_hrs,
-                                }, uid())
+                                }, uid(), sync_ot=("from_amount" if derive_hrs else None))
                                 ff.action_done("Payroll line updated.")
                             except Exception as e:
                                 st.error(str(e))
