@@ -221,7 +221,7 @@ SCREEN_TAGLINES = {
     "Attendance": "Daily attendance",
     "Leave Management": "Requests and approvals",
     "Payroll": "Salary runs",
-    "Employee Advances": "Advances and recoveries",
+    "Employee Advances": "Salary advance (100% next pay) or loan (installments)",
     "Employee Ledger": "Staff ledger",
     "Weight Entry": "Weighbridge tickets",
     "Weight Reports": "History and summaries",
