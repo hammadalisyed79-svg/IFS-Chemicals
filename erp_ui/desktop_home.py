@@ -381,6 +381,7 @@ def _pending_count() -> int:
             p.get("leave", 0),
             p.get("payroll_draft", 0),
             p.get("advances", 0),
+            p.get("loans", 0),
             p.get("gate_pass_open", 0),
             p.get("journal_draft", 0),
         ]))

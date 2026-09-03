@@ -203,6 +203,7 @@ def page_business_overview():
             ("Leave requests", pending.get("leave", 0), "HR", "Leave Management", "Leave Management"),
             ("Payroll (draft)", pending.get("payroll_draft", 0), "HR", "Payroll", "Payroll"),
             ("Employee advances", pending.get("advances", 0), "HR", "Employee Advances", "Employee Advances"),
+            ("Employee loans", pending.get("loans", 0), "HR", "Employee Loans", "Employee Loans"),
             ("Open dispatch gate passes", pending.get("gate_pass_open", 0), "Gate Pass", "Gate Pass Entry", "Gate Pass Entry"),
             ("Draft deliveries", pending.get("delivery_draft", 0), "Sales", "Delivery Notes", "Delivery Notes"),
             ("Open sales orders", pending.get("sales_orders_open", 0), "Sales", "Sales Orders", "Sales Orders"),

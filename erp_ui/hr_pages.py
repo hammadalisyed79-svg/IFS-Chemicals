@@ -884,7 +884,9 @@ def page_payroll():
         if db.user_can_hr(st.session_state.user, "add"):
             st.caption(
                 "Create one salary run for a calendar month. "
-                "Loan recovery is automatic for issued loans; edit statutory deductions on **Edit Lines**."
+                "**Advance Rec.** and **Loan Rec.** are separate columns "
+                "(from **HR → Advance** and **HR → Loan**). "
+                "Edit statutory deductions on **Edit Lines**."
             )
             c1, c2, c3 = st.columns([1, 1, 1.4])
             month = c1.number_input("Month", 1, 12, date.today().month, key="pay_gen_month")
@@ -1256,10 +1258,23 @@ def page_payroll():
                             except Exception as e:
                                 st.error(str(e))
     elif tab == "Salary Slips":
-        runs = db.get_payroll_runs()
+        runs = db.get_payroll_runs() or []
         if runs:
-            sel = st.selectbox("Payroll for Slips", [f"{r['document_no']} — {r['payroll_month']}/{r['payroll_year']}" for r in runs])
-            pid = next(r["id"] for r in runs if r["document_no"] in sel)
+            runs_sorted = sorted(
+                runs,
+                key=lambda r: (int(r.get("payroll_year") or 0), int(r.get("payroll_month") or 0), int(r.get("id") or 0)),
+                reverse=True,
+            )
+            sel = st.selectbox(
+                "Payroll for slips",
+                [
+                    f"{r['document_no']} — {_payroll_period_label(r['payroll_month'], r['payroll_year'])} "
+                    f"[{(r.get('status') or '').upper()}]"
+                    for r in runs_sorted
+                ],
+                key="hr_pay_slips_sel",
+            )
+            pid = next(r["id"] for r in runs_sorted if r["document_no"] in sel)
             pr = db.get_payroll_run(pid)
             if pr and pr.get("lines"):
                 for line in pr["lines"]:
@@ -1269,15 +1284,16 @@ def page_payroll():
                         st.write(f"Deductions: {fmt(line['total_deductions'])} | Net: {fmt(line['net_salary'])}")
                         st.write(f"Bank: {line.get('bank_account') or '—'}")
                 export_df(_payroll_lines_df(pr["lines"]), f"salary_sheet_{pr['document_no']}")
+        else:
+            st.info("No payroll runs yet.")
 
 
-def _adv_loan_register_rows(employee_id=None):
-    """Combine salary advances + loans for one register (newest date first)."""
+def _advance_register_rows(employee_id=None):
+    """Salary advances only (100% next salary)."""
     rows = []
     for r in db.get_advances(employee_id=employee_id) or []:
         months = int(r.get("recovery_months") or 1)
         rows.append({
-            "Type": "Salary Advance",
             "Document": r.get("document_no"),
             "Employee": r.get("employee_name"),
             "Date": r.get("request_date"),
@@ -1289,33 +1305,140 @@ def _adv_loan_register_rows(employee_id=None):
             "Reason": r.get("reason") or "",
             "_sort": r.get("request_date") or "",
             "_id": r.get("id"),
-            "_employee_id": r.get("employee_id"),
-            "_emp_key": f"{(r.get('employee_name') or '').lower()} {(r.get('document_no') or '').lower()}",
-        })
-    for r in db.get_loans(employee_id=employee_id) or []:
-        inst = int(r.get("installments") or 1)
-        rows.append({
-            "Type": "Loan",
-            "Document": r.get("document_no"),
-            "Employee": r.get("employee_name"),
-            "Date": r.get("issue_date"),
-            "Amount": float(r.get("amount") or 0),
-            "Recovery": f"{inst} installments",
-            "Recovered": float(r.get("recovered_amount") or 0),
-            "Outstanding": float(r.get("outstanding_amount") or 0),
-            "Status": (r.get("status") or "").upper(),
-            "Reason": r.get("reason") or "",
-            "_sort": r.get("issue_date") or "",
-            "_id": r.get("id"),
-            "_employee_id": r.get("employee_id"),
             "_emp_key": f"{(r.get('employee_name') or '').lower()} {(r.get('document_no') or '').lower()}",
         })
     rows.sort(key=lambda x: (x.get("_sort") or "", x.get("Document") or ""), reverse=True)
     return rows
 
 
+def _loan_register_rows(employee_id=None):
+    """Employee loans only (installment recovery)."""
+    rows = []
+    for r in db.get_loans(employee_id=employee_id) or []:
+        inst = int(r.get("installments") or 1)
+        rows.append({
+            "Document": r.get("document_no"),
+            "Employee": r.get("employee_name"),
+            "Date": r.get("issue_date"),
+            "Amount": float(r.get("amount") or 0),
+            "Installments": inst,
+            "Monthly": float(r.get("monthly_installment") or 0),
+            "Recovered": float(r.get("recovered_amount") or 0),
+            "Outstanding": float(r.get("outstanding_amount") or 0),
+            "Status": (r.get("status") or "").upper(),
+            "Reason": r.get("reason") or "",
+            "_sort": r.get("issue_date") or "",
+            "_id": r.get("id"),
+            "_emp_key": f"{(r.get('employee_name') or '').lower()} {(r.get('document_no') or '').lower()}",
+        })
+    rows.sort(key=lambda x: (x.get("_sort") or "", x.get("Document") or ""), reverse=True)
+    return rows
+
+
+def _render_hr_payment_register(
+    *,
+    kind: str,
+    show_cols: list,
+    filter_prefix: str,
+    page_key: str,
+    empty_tab_key: str,
+    empty_cta_label: str,
+    report_title: str,
+    report_filename: str,
+    toolbar_prefix: str,
+    outstanding_fn=None,
+    outstanding_heading: str = "",
+):
+    """Shared employee filter + list + PDF for Advance or Loan register."""
+    emps = _emp_opts()
+    emp_labels = ["All employees"] + list(emps.keys())
+    f1, f2, f3 = st.columns([2.2, 1.4, 1.2])
+    emp_lbl = f1.selectbox("Employee", emp_labels, key=f"{filter_prefix}_emp_filter")
+    search = f2.text_input("Search", placeholder="Name / document / reason…", key=f"{filter_prefix}_search")
+    status_lbl = f3.selectbox(
+        "Status",
+        ["All", "Pending", "Approved", "Issued", "Closed", "Rejected"],
+        key=f"{filter_prefix}_status_filter",
+    )
+    emp_id = None if emp_lbl == "All employees" else emps.get(emp_lbl)
+    rows = _advance_register_rows(employee_id=emp_id) if kind == "advance" else _loan_register_rows(employee_id=emp_id)
+
+    q = (search or "").strip().lower()
+    if q:
+        rows = [
+            r for r in rows
+            if q in (r.get("_emp_key") or "")
+            or q in (r.get("Reason") or "").lower()
+            or q in (r.get("Status") or "").lower()
+            or q in (r.get("Document") or "").lower()
+        ]
+    if status_lbl != "All":
+        want = status_lbl.lower()
+        rows = [r for r in rows if (r.get("Status") or "").lower() == want]
+
+    show_all = [{k: r.get(k) for k in show_cols} for r in rows]
+    df_all = pd.DataFrame(show_all) if show_all else pd.DataFrame(columns=show_cols)
+
+    if not rows:
+        st.markdown(
+            f'<div class="erp-empty-state"><p>No {kind}s for this filter.</p></div>',
+            unsafe_allow_html=True,
+        )
+        if emp_lbl == "All employees" and not q and status_lbl == "All":
+            if st.button(empty_cta_label, type="primary", key=f"{filter_prefix}_empty_cta"):
+                st.session_state[empty_tab_key] = (
+                    "New Request" if kind == "advance" else "New Loan"
+                )
+                st.rerun()
+        return
+
+    tot_amt = sum(float(r.get("Amount") or 0) for r in rows)
+    tot_out = sum(float(r.get("Outstanding") or 0) for r in rows)
+    tot_rec = sum(float(r.get("Recovered") or 0) for r in rows)
+    k1, k2, k3, k4 = st.columns(4, gap="small")
+    k1.metric("Records", f"{len(rows):,}")
+    k2.metric("Total Amount", fmt(tot_amt))
+    k3.metric("Recovered", fmt(tot_rec))
+    k4.metric("Outstanding", fmt(tot_out))
+
+    from erp_ui.list_paging import page_slice
+    view = page_slice(rows, page_key, default_size=40)
+    show = [{k: r.get(k) for k in show_cols} for r in view]
+    render_dataframe_html_table(pd.DataFrame(show))
+
+    from erp_ui.report_print import report_toolbar
+    emp_part = "all"
+    if emp_lbl != "All employees":
+        emp_part = (emp_lbl.split(" - ")[0] if " - " in emp_lbl else emp_lbl).replace(" ", "_")
+    report_toolbar(
+        df_all,
+        title=report_title,
+        filename=f"{report_filename}_{emp_part}",
+        period=str(date.today()),
+        filters={
+            "Employee": emp_lbl,
+            "Status": status_lbl,
+            "Search": search or "—",
+        },
+        summary={
+            "Records": f"{len(rows):,}",
+            "Total Amount": fmt(tot_amt),
+            "Recovered": fmt(tot_rec),
+            "Outstanding": fmt(tot_out),
+        },
+        key_prefix=toolbar_prefix,
+        layout="landscape",
+    )
+
+    if outstanding_fn and emp_lbl == "All employees" and not q and status_lbl == "All":
+        out = outstanding_fn() or []
+        if out:
+            st.markdown(f"**{outstanding_heading}**")
+            render_dataframe_html_table(pd.DataFrame(out))
+
+
 def page_advances():
-    """Salary advance (100% next salary) and loan (installments) in one place."""
+    """Salary advances only — recovered 100% from next salary."""
     require_hr("view")
     peek = st.session_state.get("hr_adv_tab") or "Advance List"
     std_page_header(
@@ -1324,96 +1447,25 @@ def page_advances():
         status_kind="shell" if peek == "Advance List" else "invoice",
     )
     st.caption(
-        "**Salary Advance** — issued and recovered **100%** from the next salary. "
-        "**Loan** — recovered from salary in **installments**."
+        "**Salary Advance** only — issued and recovered **100%** from the next salary. "
+        "For installment loans use **HR → Loan**."
     )
     tab = sticky_page_tabs(["Advance List", "New Request", "Approve / Issue"], "hr_adv_tab")
     if tab == "Advance List":
-        emps = _emp_opts()
-        emp_labels = ["All employees"] + list(emps.keys())
-        f1, f2, f3 = st.columns([2.2, 1.4, 1.2])
-        emp_lbl = f1.selectbox("Employee", emp_labels, key="hr_adv_emp_filter")
-        search = f2.text_input("Search", placeholder="Name / document / reason…", key="hr_adv_search")
-        status_lbl = f3.selectbox(
-            "Status",
-            ["All", "Pending", "Approved", "Issued", "Closed", "Rejected"],
-            key="hr_adv_status_filter",
+        _render_hr_payment_register(
+            kind="advance",
+            show_cols=["Document", "Employee", "Date", "Amount", "Recovery",
+                       "Recovered", "Outstanding", "Status", "Reason"],
+            filter_prefix="hr_adv",
+            page_key="hr_adv_list_pg",
+            empty_tab_key="hr_adv_tab",
+            empty_cta_label="New Advance Request",
+            report_title="Employee Advances",
+            report_filename="employee_advances",
+            toolbar_prefix="hr_adv_list",
+            outstanding_fn=db.report_outstanding_advances,
+            outstanding_heading="Outstanding Salary Advances",
         )
-        emp_id = None if emp_lbl == "All employees" else emps.get(emp_lbl)
-        rows = _adv_loan_register_rows(employee_id=emp_id)
-        q = (search or "").strip().lower()
-        if q:
-            rows = [
-                r for r in rows
-                if q in (r.get("_emp_key") or "")
-                or q in (r.get("Reason") or "").lower()
-                or q in (r.get("Type") or "").lower()
-                or q in (r.get("Status") or "").lower()
-            ]
-        if status_lbl != "All":
-            want = status_lbl.lower()
-            rows = [r for r in rows if (r.get("Status") or "").lower() == want]
-
-        show_cols = ["Type", "Document", "Employee", "Date", "Amount", "Recovery",
-                     "Recovered", "Outstanding", "Status", "Reason"]
-        show_all = [{k: r.get(k) for k in show_cols} for r in rows]
-        df_all = pd.DataFrame(show_all) if show_all else pd.DataFrame(columns=show_cols)
-
-        if not rows:
-            st.markdown(
-                '<div class="erp-empty-state"><p>No advances/loans for this filter.</p></div>',
-                unsafe_allow_html=True,
-            )
-            if emp_lbl == "All employees" and not q and status_lbl == "All":
-                if st.button("New Request", type="primary", key="adv_empty_cta"):
-                    st.session_state["hr_adv_tab"] = "New Request"
-                    st.rerun()
-        else:
-            tot_amt = sum(float(r.get("Amount") or 0) for r in rows)
-            tot_out = sum(float(r.get("Outstanding") or 0) for r in rows)
-            k1, k2, k3 = st.columns(3)
-            k1.metric("Records", f"{len(rows):,}")
-            k2.metric("Total Amount", fmt(tot_amt))
-            k3.metric("Outstanding", fmt(tot_out))
-
-            from erp_ui.list_paging import page_slice
-            view = page_slice(rows, "hr_adv_list_pg", default_size=40)
-            show = [{k: r.get(k) for k in show_cols} for r in view]
-            render_dataframe_html_table(pd.DataFrame(show))
-
-            from erp_ui.report_print import report_toolbar
-            emp_part = "all"
-            if emp_lbl != "All employees":
-                emp_part = (emp_lbl.split(" - ")[0] if " - " in emp_lbl else emp_lbl).replace(" ", "_")
-            report_toolbar(
-                df_all,
-                title="Employee Advances & Loans",
-                filename=f"employee_advances_{emp_part}",
-                period=str(date.today()),
-                filters={
-                    "Employee": emp_lbl,
-                    "Status": status_lbl,
-                    "Search": search or "—",
-                },
-                summary={
-                    "Records": f"{len(rows):,}",
-                    "Total Amount": fmt(tot_amt),
-                    "Outstanding": fmt(tot_out),
-                },
-                key_prefix="hr_adv_list",
-                layout="landscape",
-            )
-
-        # Outstanding only when viewing all (avoid clutter on individual filter)
-        if emp_lbl == "All employees" and not q and status_lbl == "All":
-            out_a = db.report_outstanding_advances() or []
-            out_l = db.report_outstanding_loans() or []
-            if out_a:
-                st.markdown("**Outstanding Salary Advances**")
-                render_dataframe_html_table(pd.DataFrame(out_a))
-            if out_l:
-                st.markdown("**Outstanding Loans**")
-                render_dataframe_html_table(pd.DataFrame(out_l))
     elif tab == "New Request":
         emps = _emp_opts()
         if not emps:
@@ -1422,61 +1474,36 @@ def page_advances():
         if not db.user_can_hr(st.session_state.user, "add"):
             st.warning("You do not have permission to create requests.")
             return
-        adv_type = st.radio(
-            "Type",
-            ["Salary Advance", "Loan"],
-            horizontal=True,
-            key="hr_adv_type",
-            help="Salary Advance: full amount deducted from next salary. "
-                 "Loan: recovered in monthly installments from payroll.",
-        )
+        st.info("Recovered **100%** from the next salary payroll (single deduction).")
         with st.form("adv_req"):
             emp = st.selectbox("Employee", list(emps.keys()))
             amt = money_input("Amount", value=0.0, min_value=0.0, key="hr_adv_amt")
-            if adv_type == "Loan":
-                months = st.number_input("Installments (months)", 2, 60, 12)
-                st.caption("Each payroll recovers one installment until the loan is cleared.")
-            else:
-                months = 1
-                st.info("Recovered **100%** from the next salary payroll (single deduction).")
             req_date = st.date_input("Request Date", value=date.today())
             reason = st.text_input("Reason")
             if st.form_submit_button("Submit"):
                 try:
                     if float(amt or 0) <= 0:
                         raise ValueError("Enter an amount greater than zero.")
-                    if adv_type == "Loan":
-                        db.save_loan({
-                            "employee_id": emps[emp],
-                            "amount": amt,
-                            "installments": int(months),
-                            "issue_date": str(req_date),
-                            "reason": reason,
-                        }, uid())
-                        ff.action_done("Loan request submitted — approve & issue next.")
-                    else:
-                        db.save_advance({
-                            "employee_id": emps[emp],
-                            "amount": amt,
-                            "recovery_months": 1,
-                            "request_date": str(req_date),
-                            "reason": reason,
-                        }, uid())
-                        ff.action_done("Salary advance submitted — full recovery on next salary.")
+                    db.save_advance({
+                        "employee_id": emps[emp],
+                        "amount": amt,
+                        "recovery_months": 1,
+                        "request_date": str(req_date),
+                        "reason": reason,
+                    }, uid())
+                    ff.action_done("Salary advance submitted — full recovery on next salary.")
                 except Exception as e:
                     st.error(str(e))
     elif tab == "Approve / Issue":
-        pending_a = db.get_advances(status="pending") or []
-        pending_l = db.get_loans(status="pending") or []
-        approved_a = db.get_advances(status="approved") or []
-        approved_l = db.get_loans(status="approved") or []
+        pending = db.get_advances(status="pending") or []
+        approved = db.get_advances(status="approved") or []
         if db.user_can_hr(st.session_state.user, "approve"):
             st.subheader("Pending approval")
-            if not pending_a and not pending_l:
+            if not pending:
                 st.caption("Nothing pending.")
-            for r in pending_a:
+            for r in pending:
                 st.write(
-                    f"**Salary Advance** `{r['document_no']}` — {r['employee_name']} — {fmt(r['amount'])} "
+                    f"**{r['document_no']}** — {r['employee_name']} — {fmt(r['amount'])} "
                     f"(100% next salary)"
                 )
                 c1, c2 = st.columns(2)
@@ -1486,9 +1513,85 @@ def page_advances():
                 if c2.button("Reject", key=f"adv_r_{r['id']}"):
                     db.approve_advance(r["id"], uid(), False)
                     st.rerun()
-            for r in pending_l:
+        if db.user_can_hr(st.session_state.user, "post"):
+            st.subheader("Ready to issue")
+            if not approved:
+                st.caption("Nothing to issue.")
+            for r in approved:
+                st.write(f"**{r['document_no']}** — {r['employee_name']} — {fmt(r['amount'])}")
+                if st.button("Issue Advance", key=f"adv_i_{r['id']}"):
+                    db.issue_advance(r["id"], uid())
+                    st.rerun()
+
+
+def page_loans():
+    """Employee loans only — recovered in payroll installments."""
+    require_hr("view")
+    peek = st.session_state.get("hr_loan_tab") or "Loan List"
+    std_page_header(
+        "Employee Loans",
+        status="register" if peek == "Loan List" else None,
+        status_kind="shell" if peek == "Loan List" else "invoice",
+    )
+    st.caption(
+        "**Employee Loan** — recovered from salary in **monthly installments**. "
+        "For one-time salary advances use **HR → Advance**."
+    )
+    tab = sticky_page_tabs(["Loan List", "New Loan", "Approve / Issue"], "hr_loan_tab")
+    if tab == "Loan List":
+        _render_hr_payment_register(
+            kind="loan",
+            show_cols=["Document", "Employee", "Date", "Amount", "Installments", "Monthly",
+                       "Recovered", "Outstanding", "Status", "Reason"],
+            filter_prefix="hr_loan",
+            page_key="hr_loan_list_pg",
+            empty_tab_key="hr_loan_tab",
+            empty_cta_label="New Loan Request",
+            report_title="Employee Loans",
+            report_filename="employee_loans",
+            toolbar_prefix="hr_loan_list",
+            outstanding_fn=db.report_outstanding_loans,
+            outstanding_heading="Outstanding Loans",
+        )
+    elif tab == "New Loan":
+        emps = _emp_opts()
+        if not emps:
+            st.info("No active employees.")
+            return
+        if not db.user_can_hr(st.session_state.user, "add"):
+            st.warning("You do not have permission to create loans.")
+            return
+        st.caption("Each payroll recovers one installment until the loan is cleared.")
+        with st.form("loan_req"):
+            emp = st.selectbox("Employee", list(emps.keys()))
+            amt = money_input("Loan Amount", value=0.0, min_value=0.0, key="hr_loan_amt")
+            inst = st.number_input("Installments (months)", 2, 60, 12)
+            issue_date = st.date_input("Request Date", value=date.today())
+            reason = st.text_input("Reason")
+            if st.form_submit_button("Submit"):
+                try:
+                    if float(amt or 0) <= 0:
+                        raise ValueError("Enter an amount greater than zero.")
+                    db.save_loan({
+                        "employee_id": emps[emp],
+                        "amount": amt,
+                        "installments": int(inst),
+                        "issue_date": str(issue_date),
+                        "reason": reason,
+                    }, uid())
+                    ff.action_done("Loan request submitted — approve & issue next.")
+                except Exception as e:
+                    st.error(str(e))
+    elif tab == "Approve / Issue":
+        pending = db.get_loans(status="pending") or []
+        approved = db.get_loans(status="approved") or []
+        if db.user_can_hr(st.session_state.user, "approve"):
+            st.subheader("Pending approval")
+            if not pending:
+                st.caption("Nothing pending.")
+            for r in pending:
                 st.write(
-                    f"**Loan** `{r['document_no']}` — {r['employee_name']} — {fmt(r['amount'])} "
+                    f"**{r['document_no']}** — {r['employee_name']} — {fmt(r['amount'])} "
                     f"({int(r.get('installments') or 1)} installments)"
                 )
                 c1, c2 = st.columns(2)
@@ -1500,16 +1603,11 @@ def page_advances():
                     st.rerun()
         if db.user_can_hr(st.session_state.user, "post"):
             st.subheader("Ready to issue")
-            if not approved_a and not approved_l:
+            if not approved:
                 st.caption("Nothing to issue.")
-            for r in approved_a:
-                st.write(f"**Salary Advance** `{r['document_no']}` — {r['employee_name']} — {fmt(r['amount'])}")
-                if st.button("Issue Advance", key=f"adv_i_{r['id']}"):
-                    db.issue_advance(r["id"], uid())
-                    st.rerun()
-            for r in approved_l:
+            for r in approved:
                 st.write(
-                    f"**Loan** `{r['document_no']}` — {r['employee_name']} — {fmt(r['amount'])} "
+                    f"**{r['document_no']}** — {r['employee_name']} — {fmt(r['amount'])} "
                     f"({int(r.get('installments') or 1)} installments)"
                 )
                 if st.button("Issue Loan", key=f"ln_i_{r['id']}"):
@@ -1517,18 +1615,11 @@ def page_advances():
                     st.rerun()
 
 
-def page_loans():
-    """Loans are managed under Employee Advances (Type = Loan)."""
-    st.session_state["hr_adv_tab"] = st.session_state.get("hr_adv_tab") or "Advance List"
-    page_advances()
-
-
 def page_expense_claims():
     require_hr("view")
     peek = st.session_state.get("exp_claim_tab") or "Claims"
     std_page_header(
-        "Employee Advances",
-        title="Expense Claims",
+        "Expense Claims",
         status="register" if peek == "Claims" else None,
         status_kind="shell" if peek == "Claims" else "invoice",
     )

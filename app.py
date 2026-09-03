@@ -488,6 +488,7 @@ PAGES = {
     "Leave Management": hr.page_leave,
     "Payroll": hr.page_payroll,
     "Employee Advances": hr.page_advances,
+    "Employee Loans": hr.page_loans,
     "Employee Ledger": hr.page_employee_ledger,
     "Tax Rates": v3.page_tax_rates,
     "Payment Terms": v3.page_payment_terms,

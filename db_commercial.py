@@ -1980,6 +1980,7 @@ def get_dashboard_stats_v2():
             "purchase_approval": _safe_count(conn, "SELECT COUNT(*) FROM purchase_invoices WHERE status='pending_approval'"),
             "leave": _safe_count(conn, "SELECT COUNT(*) FROM leave_requests WHERE status='pending'"),
             "advances": _safe_count(conn, "SELECT COUNT(*) FROM employee_advances WHERE status='pending'"),
+            "loans": _safe_count(conn, "SELECT COUNT(*) FROM employee_loans WHERE status='pending'"),
             "payroll_draft": _safe_count(conn, "SELECT COUNT(*) FROM payroll_runs WHERE status='draft'"),
             "gate_pass_open": _safe_count(conn, gate_pass_pending_count_sql()) if _table_exists(conn, "gate_passes") else 0,
             "delivery_draft": _safe_count(conn, "SELECT COUNT(*) FROM delivery_notes WHERE status='draft'") if _table_exists(conn, "delivery_notes") else 0,
