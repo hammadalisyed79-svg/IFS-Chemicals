@@ -18,7 +18,33 @@ def fmt(v):
 
 
 def _payroll_lines_df(lines):
-    """Payroll grid with employee name/code first (not raw IDs)."""
+    """Payroll grid — earnings, recoveries, and net (operator-facing columns)."""
+    rows = []
+    for r in lines:
+        rows.append({
+            "Employee": r.get("employee_name") or r.get("full_name") or "—",
+            "Code": r.get("emp_code") or r.get("code") or "—",
+            "Basic": float(r.get("basic_salary") or 0),
+            "Allowances": float(r.get("allowances") or 0),
+            "Overtime": float(r.get("overtime") or 0),
+            "Bonus": float(r.get("bonus") or 0),
+            "Gross": float(r.get("gross_salary") or 0),
+            "Advance Rec.": float(r.get("advance_recovery") or 0),
+            "Loan Rec.": float(r.get("loan_recovery") or 0),
+            "Other Ded.": float(r.get("other_deductions") or 0)
+                + float(r.get("tax_deduction") or 0)
+                + float(r.get("eobi") or 0)
+                + float(r.get("social_security") or 0),
+            "Total Ded.": float(r.get("total_deductions") or 0),
+            "Net Salary": float(r.get("net_salary") or 0),
+            "Paid": (r.get("paid_status") or "unpaid").title(),
+            "Voucher": r.get("payment_document_no") or "—",
+        })
+    return pd.DataFrame(rows)
+
+
+def _payroll_lines_detail_df(lines):
+    """Full payroll breakdown including tax/EOBI/SS and attendance."""
     rows = []
     for r in lines:
         rows.append({
@@ -38,7 +64,7 @@ def _payroll_lines_df(lines):
             "Total Ded.": float(r.get("total_deductions") or 0),
             "Net Salary": float(r.get("net_salary") or 0),
             "Paid": (r.get("paid_status") or "unpaid").title(),
-            "Cash Doc": r.get("payment_document_no") or "—",
+            "Voucher": r.get("payment_document_no") or "—",
             "Present": float(r.get("days_present") or 0),
             "Absent": float(r.get("days_absent") or 0),
             "OT Hrs": float(r.get("overtime_hrs") or 0),
@@ -670,33 +696,74 @@ def _ensure_hr_schema():
 
 def _render_employee_cash_payments(pid, pr):
     """Per-employee Pay cash / Pay bank — requires payroll status posted or paid."""
+    from html import escape
+
     status = pr.get("status")
     can_pay = db.user_can_hr(st.session_state.user, "post") or db.user_can_hr(st.session_state.user, "add")
 
-    st.markdown("### Pay employees (cash / bank)")
+    st.markdown("### Salary payments")
     if status not in ("posted", "paid"):
         st.warning(
-            f"Payroll status is **{status}**. To pay in cash: **Approve** → **Post to GL** → then use the buttons here. "
-            "(Draft payroll cannot be paid yet.)"
+            f"Payroll is **{(status or '').upper()}**. "
+            "Approve → **Post to GL** → then pay staff here."
         )
         return
     if not can_pay:
         st.info("You need HR **post** or **add** permission to record salary payments.")
         return
 
-    paid_n = sum(1 for l in pr["lines"] if l.get("paid_status") == "paid")
-    st.caption(
-        f"One **Cash Book** voucher (CP-…) per employee. Paid: **{paid_n} / {len(pr['lines'])}**"
+    lines = list(pr.get("lines") or [])
+    paid_n = sum(1 for l in lines if l.get("paid_status") == "paid")
+    unpaid_n = len(lines) - paid_n
+    paid_amt = sum(float(l.get("net_salary") or 0) for l in lines if l.get("paid_status") == "paid")
+    unpaid_amt = sum(float(l.get("net_salary") or 0) for l in lines if l.get("paid_status") != "paid")
+
+    k1, k2, k3, k4 = st.columns(4, gap="small")
+    k1.markdown(
+        f"<div class='txn-kpi-card'><p class='txn-kpi'>Employees</p>"
+        f"<p class='txn-kpi-val'>{len(lines):,}</p></div>",
+        unsafe_allow_html=True,
     )
-    pay_date = st.date_input(
+    k2.markdown(
+        f"<div class='txn-kpi-card'><p class='txn-kpi'>Paid</p>"
+        f"<p class='txn-kpi-val'>{paid_n:,}</p></div>",
+        unsafe_allow_html=True,
+    )
+    k3.markdown(
+        f"<div class='txn-kpi-card'><p class='txn-kpi'>Unpaid</p>"
+        f"<p class='txn-kpi-val'>{unpaid_n:,}</p></div>",
+        unsafe_allow_html=True,
+    )
+    k4.markdown(
+        f"<div class='txn-kpi-card'><p class='txn-kpi'>Unpaid Net</p>"
+        f"<p class='txn-kpi-val' style='font-size:1.05rem'>{escape(fmt(unpaid_amt))}</p></div>",
+        unsafe_allow_html=True,
+    )
+    st.caption(
+        f"Paid so far {fmt(paid_amt)}. Each payment creates one Cash Book / bank voucher (CP-…)."
+    )
+
+    c1, c2, c3 = st.columns([1.2, 1.2, 2])
+    pay_date = c1.date_input(
         "Payment date",
         value=date.fromisoformat(str(pr["run_date"])[:10]) if pr.get("run_date") else date.today(),
         key=f"pr_pay_date_{pid}",
     )
-    pmode = st.radio("Payment mode", ["cash", "bank"], horizontal=True, key=f"pr_pay_mode_{pid}")
+    pmode = c2.radio("Mode", ["cash", "bank"], horizontal=True, key=f"pr_pay_mode_{pid}")
+    pay_filter = c3.selectbox(
+        "Show",
+        ["Unpaid only", "All employees", "Paid only"],
+        key=f"pr_pay_filter_{pid}",
+    )
+    search = st.text_input(
+        "Find employee",
+        placeholder="Name or code…",
+        key=f"pr_pay_search_{pid}",
+    )
+
     if pmode == "cash" and db.is_cash_day_closed(str(pay_date)):
         st.warning(
-            f"Cash book for **{pay_date}** is closed — change date or reopen the day in **Finance → Cash Book**."
+            f"Cash book for **{pay_date}** is closed — change date or reopen in **Finance → Cash Book**."
         )
     bank_id = None
     if pmode == "bank":
@@ -711,40 +778,95 @@ def _render_employee_cash_payments(pid, pr):
         else:
             st.warning("Add a bank account in Chart of Accounts first.")
 
-    unpaid = [l for l in pr["lines"] if l.get("paid_status") != "paid"]
+    unpaid = [l for l in lines if l.get("paid_status") != "paid" and float(l.get("net_salary") or 0) > 0]
     if unpaid and (pmode == "cash" or (pmode == "bank" and bank_id)):
-        if st.button(f"Pay all {len(unpaid)} unpaid in {pmode}", type="primary", key=f"pr_pay_all_{pid}"):
+        if st.button(
+            f"Pay all unpaid ({len(unpaid)}) via {pmode}",
+            type="primary",
+            key=f"pr_pay_all_{pid}",
+        ):
             try:
                 docs = db.pay_payroll(pid, uid(), pmode, str(pay_date), bank_id)
                 ff.action_done(f"Paid {len(docs)} employee(s). Check **Finance → Cash Book**.")
             except Exception as e:
                 st.error(str(e))
 
-    for line in pr["lines"]:
-        lc1, lc2, lc3, lc4 = st.columns([3, 1.2, 1, 1])
-        lc1.write(
-            f"**{line.get('employee_name')}** ({line.get('emp_code')}) — Net **{fmt(line.get('net_salary'))}**"
+    view = lines
+    if pay_filter == "Unpaid only":
+        view = [l for l in view if l.get("paid_status") != "paid"]
+    elif pay_filter == "Paid only":
+        view = [l for l in view if l.get("paid_status") == "paid"]
+    q = (search or "").strip().lower()
+    if q:
+        view = [
+            l for l in view
+            if q in (l.get("employee_name") or "").lower()
+            or q in (l.get("emp_code") or "").lower()
+            or q in (l.get("payment_document_no") or "").lower()
+        ]
+
+    if not view:
+        st.info("No employees match this payment filter.")
+        return
+
+    from erp_ui.list_paging import page_slice
+    page = page_slice(view, f"hr_pay_emp_{pid}", default_size=40)
+    ths = "".join(
+        f"<th>{h}</th>" for h in ("Employee", "Code", "Net", "Status", "Voucher")
+    )
+    body = []
+    for line in page:
+        paid = (line.get("paid_status") or "") == "paid"
+        badge = (
+            '<span class="inv-badge inv-badge-approved">PAID</span>'
+            if paid
+            else '<span class="inv-badge inv-badge-pending">UNPAID</span>'
         )
-        if line.get("paid_status") == "paid":
-            lc2.success(line.get("payment_document_no") or "Paid")
-            if lc3.button("Undo", key=f"pr_unpay_{line['id']}"):
+        voucher = escape(str(line.get("payment_document_no") or "—"))
+        body.append(
+            "<tr>"
+            f"<td><strong>{escape(str(line.get('employee_name') or '—'))}</strong></td>"
+            f"<td>{escape(str(line.get('emp_code') or '—'))}</td>"
+            f"<td style='text-align:right'><strong>{escape(fmt(line.get('net_salary')))}</strong></td>"
+            f"<td class='txn-status-cell'>{badge}</td>"
+            f"<td>{voucher}</td>"
+            "</tr>"
+        )
+    st.markdown(
+        '<div class="txn-reg-wrap"><table class="txn-reg-table">'
+        f"<thead><tr>{ths}</tr></thead><tbody>{''.join(body)}</tbody>"
+        "</table></div>",
+        unsafe_allow_html=True,
+    )
+
+    st.markdown("##### Pay / undo (this page)")
+    for line in page:
+        lid = line["id"]
+        paid = (line.get("paid_status") or "") == "paid"
+        net = float(line.get("net_salary") or 0)
+        a1, a2, a3 = st.columns([3.2, 1.2, 1.2])
+        a1.write(
+            f"**{line.get('employee_name')}** ({line.get('emp_code')}) — {fmt(net)}"
+        )
+        if paid:
+            if a2.button("Undo payment", key=f"pr_unpay_{lid}"):
                 try:
-                    db.rollback_payroll_line_payment(line["id"], uid(), "Undo payment")
+                    db.rollback_payroll_line_payment(lid, uid(), "Undo payment")
                     st.rerun()
                 except Exception as e:
                     st.error(str(e))
-        elif float(line.get("net_salary") or 0) > 0:
+        elif net > 0:
             btn_label = "Pay cash" if pmode == "cash" else "Pay bank"
-            if lc4.button(btn_label, type="primary", key=f"pr_pay_{line['id']}"):
+            if a3.button(btn_label, type="primary", key=f"pr_pay_{lid}"):
                 try:
                     if pmode == "bank" and not bank_id:
                         raise ValueError("Select bank account.")
-                    res = db.pay_payroll_line(line["id"], uid(), pmode, str(pay_date), bank_id)
+                    res = db.pay_payroll_line(lid, uid(), pmode, str(pay_date), bank_id)
                     ff.action_done(f"**{res['document_no']}** — Cash Book")
                 except Exception as e:
                     st.error(str(e))
         else:
-            lc2.caption("No net pay")
+            a2.caption("No net pay")
 
 
 def page_payroll():
@@ -931,7 +1053,9 @@ def page_payroll():
             st.info("You need HR add permission to generate payroll.")
     elif tab == "Process / Pay":
         runs = [r for r in (db.get_payroll_runs() or []) if r["status"] in ("draft", "approved", "posted", "paid")]
-        if runs:
+        if not runs:
+            st.info("No payroll runs to process.")
+        else:
             runs_sorted = sorted(
                 runs,
                 key=lambda r: (int(r.get("payroll_year") or 0), int(r.get("payroll_month") or 0), int(r.get("id") or 0)),
@@ -948,49 +1072,53 @@ def page_payroll():
             )
             pid = next(r["id"] for r in runs_sorted if r["document_no"] in sel)
             pr = db.get_payroll_run(pid)
-            if pr and pr.get("lines"):
-                st.info(
-                    f"**{pr['document_no']}** · {_payroll_period_label(pr['payroll_month'], pr['payroll_year'])} · "
-                    f"Status: **{(pr.get('status') or '').upper()}**"
+            if not pr or not pr.get("lines"):
+                st.warning("No payroll lines found for this run.")
+            else:
+                period = _payroll_period_label(pr["payroll_month"], pr["payroll_year"])
+                status_u = (pr.get("status") or "").upper()
+                paid_n = sum(1 for l in pr["lines"] if l.get("paid_status") == "paid")
+                st.markdown(
+                    f"**{escape(pr['document_no'])}** · {escape(period)} · "
+                    f"{_payroll_status_badge(pr.get('status'))} · "
+                    f"Paid {paid_n}/{len(pr['lines'])}",
+                    unsafe_allow_html=True,
                 )
                 steps = ["draft", "approved", "posted", "paid"]
                 st.progress((steps.index(pr["status"]) + 1) / len(steps) if pr["status"] in steps else 0.25)
 
-                m1, m2, m3 = st.columns(3, gap="small")
+                m1, m2, m3, m4 = st.columns(4, gap="small")
                 m1.markdown(
                     f"<div class='txn-kpi-card'><p class='txn-kpi'>Gross</p>"
-                    f"<p class='txn-kpi-val' style='font-size:1.1rem'>{escape(fmt(pr['total_gross']))}</p></div>",
+                    f"<p class='txn-kpi-val' style='font-size:1.05rem'>{escape(fmt(pr['total_gross']))}</p></div>",
                     unsafe_allow_html=True,
                 )
                 m2.markdown(
                     f"<div class='txn-kpi-card'><p class='txn-kpi'>Deductions</p>"
-                    f"<p class='txn-kpi-val' style='font-size:1.1rem'>{escape(fmt(pr['total_deductions']))}</p></div>",
+                    f"<p class='txn-kpi-val' style='font-size:1.05rem'>{escape(fmt(pr['total_deductions']))}</p></div>",
                     unsafe_allow_html=True,
                 )
                 m3.markdown(
                     f"<div class='txn-kpi-card'><p class='txn-kpi'>Net</p>"
-                    f"<p class='txn-kpi-val' style='font-size:1.1rem'>{escape(fmt(pr['total_net']))}</p></div>",
+                    f"<p class='txn-kpi-val' style='font-size:1.05rem'>{escape(fmt(pr['total_net']))}</p></div>",
+                    unsafe_allow_html=True,
+                )
+                m4.markdown(
+                    f"<div class='txn-kpi-card'><p class='txn-kpi'>Staff</p>"
+                    f"<p class='txn-kpi-val'>{len(pr['lines']):,}</p></div>",
                     unsafe_allow_html=True,
                 )
 
-                _render_employee_cash_payments(pid, pr)
-                st.divider()
-
-                if pr["status"] == "draft":
-                    st.caption("Need to change amounts? Use **Edit Lines** (draft only).")
-                elif pr["status"] == "approved":
-                    st.caption("Next step: click **Post to GL** below, then pay each employee in cash above.")
-                if db.payroll_gl_posted(pid):
-                    st.caption(f"GL accrual posted — ref: payroll / {pr['document_no']}")
-                render_dataframe_html_table(_payroll_lines_df(pr["lines"]))
+                st.markdown("##### Workflow")
                 c1, c2, c3 = st.columns(3)
                 if pr["status"] == "draft" and db.user_can_hr(st.session_state.user, "approve"):
-                    if c1.button("Approve Payroll"):
+                    if c1.button("Approve Payroll", type="primary", key=f"pr_approve_{pid}"):
                         try:
                             db.approve_payroll(pid, uid())
                             st.rerun()
                         except Exception as e:
                             st.error(str(e))
+                    st.caption("Need amount changes first? Open **Edit Lines** (draft only).")
                 if pr["status"] == "approved" and db.user_can_hr(st.session_state.user, "approve"):
                     if c1.button("Unapprove → Edit", key=f"unapprove_pr_{pid}"):
                         try:
@@ -999,61 +1127,80 @@ def page_payroll():
                         except Exception as e:
                             st.error(str(e))
                 if pr["status"] in ("draft", "approved") and db.user_can_hr(st.session_state.user, "post"):
-                    if c2.button("Post to GL"):
+                    if c2.button("Post to GL", type="primary", key=f"pr_post_{pid}"):
                         try:
                             db.post_payroll_gl(pid, uid())
                             ff.action_done("Posted to general ledger.")
                         except Exception as e:
                             st.error(str(e))
+                if db.payroll_gl_posted(pid):
+                    st.caption(f"GL accrual posted — ref: payroll / {pr['document_no']}")
+
+                st.markdown("##### Salary sheet")
+                st.caption(
+                    "**Allowances** = housing + transport + medical + other from salary structure. "
+                    "Advance Rec. / Loan Rec. are salary recoveries."
+                )
+                render_dataframe_html_table(_payroll_lines_df(pr["lines"]))
+                with st.expander("Full breakdown (Tax / EOBI / SS / attendance)", expanded=False):
+                    render_dataframe_html_table(_payroll_lines_detail_df(pr["lines"]))
+                export_df(
+                    _payroll_lines_detail_df(pr["lines"]),
+                    f"payroll_lines_{pr['document_no']}",
+                    title=f"Payroll Lines {pr['document_no']}",
+                )
+
+                st.divider()
+                _render_employee_cash_payments(pid, pr)
+
                 if pr["status"] in ("posted", "paid") and db.user_can_hr(st.session_state.user, "post"):
                     st.divider()
-                    st.markdown("**Rollback posted salary voucher**")
-                    rb_reason = st.text_input(
-                        "Reason (required)",
-                        key=f"pr_rb_reason_{pid}",
-                        placeholder="e.g. Wrong amounts — re-post after correction",
-                    )
-                    rb_label = (
-                        "Rollback payment & GL voucher"
-                        if pr["status"] == "paid"
-                        else "Rollback GL voucher"
-                    )
-                    if st.button(rb_label, type="secondary", key=f"pr_rb_{pid}"):
-                        try:
-                            db.rollback_payroll_gl(pid, uid(), rb_reason)
-                            ff.action_done("Payroll GL reversed. Status is **approved** — unapprove to edit lines, "
-                                "then post again when ready.")
-                        except Exception as e:
-                            st.error(str(e))
+                    with st.expander("Rollback posted GL / payments", expanded=False):
+                        rb_reason = st.text_input(
+                            "Reason (required)",
+                            key=f"pr_rb_reason_{pid}",
+                            placeholder="e.g. Wrong amounts — re-post after correction",
+                        )
+                        rb_label = (
+                            "Rollback payment & GL voucher"
+                            if pr["status"] == "paid"
+                            else "Rollback GL voucher"
+                        )
+                        if st.button(rb_label, type="secondary", key=f"pr_rb_{pid}"):
+                            try:
+                                db.rollback_payroll_gl(pid, uid(), rb_reason)
+                                ff.action_done(
+                                    "Payroll GL reversed. Status is **approved** — unapprove to edit lines, "
+                                    "then post again when ready."
+                                )
+                            except Exception as e:
+                                st.error(str(e))
 
                 can_rb_gen = (
                     db.user_can_hr(st.session_state.user, "delete")
                     or db.user_can_hr(st.session_state.user, "add")
                 )
                 if can_rb_gen:
-                    st.divider()
-                    st.markdown("**Rollback generated payroll (delete run)**")
-                    st.caption(
-                        "Removes this payroll completely (lines, GL vouchers, advance/loan recoveries). "
-                        f"Then regenerate for **{_payroll_period_label(pr['payroll_month'], pr['payroll_year'])}** "
-                        "on **Generate Payroll**."
-                    )
-                    del_reason = st.text_input(
-                        "Delete reason (required)",
-                        key=f"pr_del_reason_{pid}",
-                        placeholder="e.g. Wrong month generated — regenerate",
-                    )
-                    if st.button("Rollback generated payroll", type="secondary", key=f"pr_del_{pid}"):
-                        try:
-                            doc = pr["document_no"]
-                            period = _payroll_period_label(pr["payroll_month"], pr["payroll_year"])
-                            db.rollback_generated_payroll(pid, uid(), del_reason)
-                            ff.action_done(f"Deleted **{doc}** ({period}). GL reversed if posted. "
-                                "Open **Generate Payroll** to create a new run.")
-                        except Exception as e:
-                            st.error(str(e))
-        else:
-            st.info("No payroll runs to process.")
+                    with st.expander("Delete generated payroll (full rollback)", expanded=False):
+                        st.caption(
+                            "Removes this payroll completely (lines, GL vouchers, advance/loan recoveries). "
+                            f"Then regenerate for **{period}** on **Generate Payroll**."
+                        )
+                        del_reason = st.text_input(
+                            "Delete reason (required)",
+                            key=f"pr_del_reason_{pid}",
+                            placeholder="e.g. Wrong month generated — regenerate",
+                        )
+                        if st.button("Rollback generated payroll", type="secondary", key=f"pr_del_{pid}"):
+                            try:
+                                doc = pr["document_no"]
+                                db.rollback_generated_payroll(pid, uid(), del_reason)
+                                ff.action_done(
+                                    f"Deleted **{doc}** ({period}). GL reversed if posted. "
+                                    "Open **Generate Payroll** to create a new run."
+                                )
+                            except Exception as e:
+                                st.error(str(e))
     elif tab == "Edit Lines":
         runs = [r for r in db.get_payroll_runs() if r["status"] == "draft"]
         if not runs:
@@ -1066,7 +1213,10 @@ def page_payroll():
         else:
             sel = st.selectbox(
                 "Draft Payroll",
-                [f"{r['document_no']} — {r['payroll_month']}/{r['payroll_year']}" for r in runs],
+                [
+                    f"{r['document_no']} — {_payroll_period_label(r['payroll_month'], r['payroll_year'])}"
+                    for r in runs
+                ],
                 key="pr_edit_run",
             )
             pid = next(r["id"] for r in runs if r["document_no"] in sel)
