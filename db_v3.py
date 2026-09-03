@@ -2015,7 +2015,7 @@ def _unissue_production_materials(conn, production_order_id, po, user_id=None):
             f"""DELETE FROM inventory_movements
                WHERE reference_type='production' AND reference_id=?
                  AND movement_type='in' AND product_id IN ({placeholders})
-                 AND description LIKE 'Material unissue%'""",
+                 AND IFNULL(reason,'') LIKE 'Material unissue%'""",
             (production_order_id, *issue_pids),
         )
     conn.execute(
@@ -2073,7 +2073,7 @@ def rollback_production_completion(production_order_id, user_id=None, reason="",
             """DELETE FROM inventory_movements
                WHERE reference_type='production' AND reference_id=?
                  AND product_id=? AND movement_type='out'
-                 AND description LIKE 'FG rollback%'""",
+                 AND IFNULL(reason,'') LIKE 'FG rollback%'""",
             (production_order_id, fp_id),
         )
         _apply_product_batch_delta(conn, batch_no, fp_id, wh, -receipt_qty, user_id)
