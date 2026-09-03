@@ -309,23 +309,41 @@ def apply(src: Path, year_filter: int | None):
 
             existing = access_to_ifs.get(aid)
             if existing:
-                # Do not overwrite is_active / employment_status — ERP may have
-                # inactivated staff after import; reactivation is intentional.
-                conn.execute(
-                    """UPDATE employees SET full_name=?, gender=?, mobile=?, address=?, cnic=?,
-                       department_id=?, designation_id=?, department=?, designation=?,
-                       joining_date=?, date_of_birth=?,
-                       basic_salary=?, bank_account=?, confirmation_date=COALESCE(confirmation_date,?),
-                       modified_by=?, modified_at=?
-                       WHERE id=?""",
-                    (
-                        name, gender, mobile, address, cnic,
-                        dept_id, desig_id, dept, desig,
-                        join_on, dob,
-                        payscale, bank_account, left_on,
-                        uid, ts, existing,
-                    ),
-                )
+                # Sync profile from Access. If Access still marks Active, restore
+                # is_active — bulk ERP inactivation can hide staff who remain on payroll.
+                if active:
+                    conn.execute(
+                        """UPDATE employees SET full_name=?, gender=?, mobile=?, address=?, cnic=?,
+                           department_id=?, designation_id=?, department=?, designation=?,
+                           joining_date=?, date_of_birth=?,
+                           basic_salary=?, bank_account=?, confirmation_date=COALESCE(confirmation_date,?),
+                           is_active=1, employment_status='active',
+                           modified_by=?, modified_at=?
+                           WHERE id=?""",
+                        (
+                            name, gender, mobile, address, cnic,
+                            dept_id, desig_id, dept, desig,
+                            join_on, dob,
+                            payscale, bank_account, left_on,
+                            uid, ts, existing,
+                        ),
+                    )
+                else:
+                    conn.execute(
+                        """UPDATE employees SET full_name=?, gender=?, mobile=?, address=?, cnic=?,
+                           department_id=?, designation_id=?, department=?, designation=?,
+                           joining_date=?, date_of_birth=?,
+                           basic_salary=?, bank_account=?, confirmation_date=COALESCE(confirmation_date,?),
+                           modified_by=?, modified_at=?
+                           WHERE id=?""",
+                        (
+                            name, gender, mobile, address, cnic,
+                            dept_id, desig_id, dept, desig,
+                            join_on, dob,
+                            payscale, bank_account, left_on,
+                            uid, ts, existing,
+                        ),
+                    )
                 updated_emp += 1
             else:
                 # Prefer stable Access-based code; fall back if taken
