@@ -54,6 +54,67 @@ def export_df(df, name, title=None):
         report_toolbar(df, lbl, name, key_prefix=f"hr_{name}", layout=report_layout(lbl))
 
 
+_MONTH_ABBR = (
+    "", "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+)
+
+
+def _payroll_period_label(month, year):
+    try:
+        m = int(month or 0)
+        y = int(year or 0)
+    except (TypeError, ValueError):
+        return "—"
+    if 1 <= m <= 12 and y:
+        return f"{_MONTH_ABBR[m]} {y}"
+    return f"{month}/{year}" if month or year else "—"
+
+
+def _payroll_status_badge(status: str) -> str:
+    from html import escape
+    s = (status or "").strip().lower()
+    cls = {
+        "draft": "inv-badge-draft",
+        "approved": "inv-badge-pending",
+        "posted": "inv-badge-approved",
+        "paid": "inv-badge-approved",
+        "cancelled": "inv-badge-cancelled",
+    }.get(s, "inv-badge-draft")
+    label = (status or "—").strip().upper() or "—"
+    return f'<span class="inv-badge {cls}">{escape(label)}</span>'
+
+
+def _payroll_runs_view(runs):
+    """Operator-facing register rows (no raw DB id / audit columns)."""
+    out = []
+    for r in runs or []:
+        notes = (r.get("notes") or "").strip()
+        if len(notes) > 60:
+            notes = notes[:57] + "…"
+        out.append({
+            "Document": r.get("document_no") or "—",
+            "Period": _payroll_period_label(r.get("payroll_month"), r.get("payroll_year")),
+            "Run Date": (str(r.get("run_date") or "")[:10] or "—"),
+            "Status": (r.get("status") or "").upper(),
+            "Gross": float(r.get("total_gross") or 0),
+            "Deductions": float(r.get("total_deductions") or 0),
+            "Net": float(r.get("total_net") or 0),
+            "Notes": notes or "—",
+            "_id": r.get("id"),
+            "_status": (r.get("status") or "").lower(),
+            "_year": int(r.get("payroll_year") or 0),
+            "_month": int(r.get("payroll_month") or 0),
+            "_sort": (
+                int(r.get("payroll_year") or 0),
+                int(r.get("payroll_month") or 0),
+                int(r.get("id") or 0),
+            ),
+        })
+    out.sort(key=lambda x: x["_sort"], reverse=True)
+    return out
+
+
 def require_hr(action="view"):
     user = st.session_state.get("user")
     if not db.user_can_hr(user, action):
@@ -687,6 +748,8 @@ def _render_employee_cash_payments(pid, pr):
 
 
 def page_payroll():
+    from html import escape
+
     require_hr("view")
     _ensure_hr_schema()
     peek = st.session_state.get("hr_pay_tab") or "Payroll Runs"
@@ -701,25 +764,8 @@ def page_payroll():
         "hr_pay_tab",
     )
     if tab == "Payroll Runs":
-        runs = db.get_payroll_runs()
-        if runs:
-            k1, k2 = st.columns(2, gap="small")
-            k1.markdown(
-                f"<div class='txn-kpi-card'><p class='txn-kpi'>Payroll Runs</p>"
-                f"<p class='txn-kpi-val'>{len(runs):,}</p></div>",
-                unsafe_allow_html=True,
-            )
-            paid_n = sum(1 for r in runs if (r.get("status") or "").lower() == "paid")
-            k2.markdown(
-                f"<div class='txn-kpi-card'><p class='txn-kpi'>Paid</p>"
-                f"<p class='txn-kpi-val'>{paid_n:,}</p></div>",
-                unsafe_allow_html=True,
-            )
-            from erp_ui.list_paging import page_slice
-            view = page_slice(runs, "hr_pay_runs_pg", default_size=40)
-            render_dataframe_html_table(pd.DataFrame(view))
-            export_df(pd.DataFrame(runs), "payroll_register")
-        else:
+        runs = db.get_payroll_runs() or []
+        if not runs:
             st.markdown(
                 '<div class="erp-empty-state"><p>No payroll runs yet.</p></div>',
                 unsafe_allow_html=True,
@@ -727,16 +773,133 @@ def page_payroll():
             if st.button("Generate Payroll", type="primary", key="pay_empty_cta"):
                 st.session_state["hr_pay_tab"] = "Generate Payroll"
                 st.rerun()
+            return
+
+        years = sorted({int(r.get("payroll_year") or 0) for r in runs if r.get("payroll_year")}, reverse=True)
+        f1, f2, f3 = st.columns([1.1, 1.2, 2.0])
+        year_opts = ["All years"] + [str(y) for y in years]
+        year_lbl = f1.selectbox("Year", year_opts, key="hr_pay_year_filter")
+        status_lbl = f2.selectbox(
+            "Status",
+            ["All", "Draft", "Approved", "Posted", "Paid"],
+            key="hr_pay_status_filter",
+        )
+        search = f3.text_input(
+            "Search",
+            placeholder="Document / notes…",
+            key="hr_pay_search",
+        )
+
+        view_rows = _payroll_runs_view(runs)
+        if year_lbl != "All years":
+            y = int(year_lbl)
+            view_rows = [r for r in view_rows if r.get("_year") == y]
+        if status_lbl != "All":
+            want = status_lbl.lower()
+            view_rows = [r for r in view_rows if r.get("_status") == want]
+        q = (search or "").strip().lower()
+        if q:
+            view_rows = [
+                r for r in view_rows
+                if q in (r.get("Document") or "").lower()
+                or q in (r.get("Notes") or "").lower()
+                or q in (r.get("Period") or "").lower()
+                or q in (r.get("Status") or "").lower()
+            ]
+
+        draft_n = sum(1 for r in view_rows if r.get("_status") == "draft")
+        appr_n = sum(1 for r in view_rows if r.get("_status") == "approved")
+        posted_n = sum(1 for r in view_rows if r.get("_status") == "posted")
+        paid_n = sum(1 for r in view_rows if r.get("_status") == "paid")
+        tot_gross = sum(float(r.get("Gross") or 0) for r in view_rows)
+        tot_ded = sum(float(r.get("Deductions") or 0) for r in view_rows)
+        tot_net = sum(float(r.get("Net") or 0) for r in view_rows)
+
+        k1, k2, k3, k4, k5 = st.columns(5, gap="small")
+        k1.markdown(
+            f"<div class='txn-kpi-card'><p class='txn-kpi'>Runs</p>"
+            f"<p class='txn-kpi-val'>{len(view_rows):,}</p></div>",
+            unsafe_allow_html=True,
+        )
+        k2.markdown(
+            f"<div class='txn-kpi-card'><p class='txn-kpi'>Draft / Approved</p>"
+            f"<p class='txn-kpi-val'>{draft_n + appr_n:,}</p></div>",
+            unsafe_allow_html=True,
+        )
+        k3.markdown(
+            f"<div class='txn-kpi-card'><p class='txn-kpi'>Posted</p>"
+            f"<p class='txn-kpi-val'>{posted_n:,}</p></div>",
+            unsafe_allow_html=True,
+        )
+        k4.markdown(
+            f"<div class='txn-kpi-card'><p class='txn-kpi'>Paid</p>"
+            f"<p class='txn-kpi-val'>{paid_n:,}</p></div>",
+            unsafe_allow_html=True,
+        )
+        k5.markdown(
+            f"<div class='txn-kpi-card'><p class='txn-kpi'>Net (filtered)</p>"
+            f"<p class='txn-kpi-val' style='font-size:1.05rem'>{escape(fmt(tot_net))}</p></div>",
+            unsafe_allow_html=True,
+        )
+
+        if not view_rows:
+            st.info("No payroll runs match these filters.")
+            return
+
+        from erp_ui.list_paging import page_slice
+        page = page_slice(view_rows, "hr_pay_runs_pg", default_size=40)
+        show_cols = ["Document", "Period", "Run Date", "Status", "Gross", "Deductions", "Net", "Notes"]
+        ths = "".join(f"<th>{escape(h)}</th>" for h in show_cols)
+        body = []
+        for r in page:
+            body.append(
+                "<tr>"
+                f"<td><strong>{escape(str(r.get('Document') or '—'))}</strong></td>"
+                f"<td>{escape(str(r.get('Period') or '—'))}</td>"
+                f"<td>{escape(str(r.get('Run Date') or '—'))}</td>"
+                f"<td class='txn-status-cell'>{_payroll_status_badge(r.get('Status'))}</td>"
+                f"<td style='text-align:right'>{escape(fmt(r.get('Gross')))}</td>"
+                f"<td style='text-align:right'>{escape(fmt(r.get('Deductions')))}</td>"
+                f"<td style='text-align:right'><strong>{escape(fmt(r.get('Net')))}</strong></td>"
+                f"<td>{escape(str(r.get('Notes') or '—'))}</td>"
+                "</tr>"
+            )
+        st.markdown(
+            '<div class="txn-reg-wrap"><table class="txn-reg-table">'
+            f"<thead><tr>{ths}</tr></thead><tbody>{''.join(body)}</tbody>"
+            "</table></div>",
+            unsafe_allow_html=True,
+        )
+        st.caption(
+            f"Filtered totals — Gross {fmt(tot_gross)} · Deductions {fmt(tot_ded)} · Net {fmt(tot_net)}"
+        )
+
+        export_cols = ["Document", "Period", "Run Date", "Status", "Gross", "Deductions", "Net", "Notes"]
+        export_df(
+            pd.DataFrame([{c: r.get(c) for c in export_cols} for r in view_rows]),
+            "payroll_register",
+            title="Payroll Register",
+        )
     elif tab == "Generate Payroll":
         if db.user_can_hr(st.session_state.user, "add"):
-            c1, c2 = st.columns(2)
+            st.caption(
+                "Create one salary run for a calendar month. "
+                "Loan recovery is automatic for issued loans; edit statutory deductions on **Edit Lines**."
+            )
+            c1, c2, c3 = st.columns([1, 1, 1.4])
             month = c1.number_input("Month", 1, 12, date.today().month, key="pay_gen_month")
             year = c2.number_input("Year", 2020, 2035, date.today().year, key="pay_gen_year")
+            c3.markdown(
+                f"<div class='txn-kpi-card' style='margin-top:1.55rem'><p class='txn-kpi'>Period</p>"
+                f"<p class='txn-kpi-val' style='font-size:1.15rem'>"
+                f"{escape(_payroll_period_label(month, year))}</p></div>",
+                unsafe_allow_html=True,
+            )
             existing = db.get_payroll_for_period(int(month), int(year))
             if existing:
                 st.warning(
-                    f"Payroll already exists for **{month}/{year}**: "
-                    f"**{existing['document_no']}** ({existing['status']}). "
+                    f"Payroll already exists for **{_payroll_period_label(month, year)}**: "
+                    f"**{existing['document_no']}** ({(existing.get('status') or '').upper()}). "
                     "Rollback below to delete it, then generate again."
                 )
                 can_rb_gen = (
@@ -756,13 +919,7 @@ def page_payroll():
                                 "Advance/loan recoveries restored. You can generate payroll again.")
                         except Exception as e:
                             st.error(str(e))
-            st.caption(
-                "Defaults: **Tax, EOBI & Social Security = 0**. "
-                "**Loan recovery** is automatic for issued loans. "
-                "Use **Edit Lines** to add statutory deductions if needed. "
-                "View balances on **Employee Ledger**."
-            )
-            if st.button("Generate Monthly Payroll"):
+            if st.button("Generate Monthly Payroll", type="primary"):
                 try:
                     pid = db.generate_payroll(int(month), int(year), uid())
                     ff.action_done(f"Payroll generated (ID {pid}).")
@@ -771,17 +928,48 @@ def page_payroll():
         elif db.user_can_hr(st.session_state.user, "view"):
             st.info("You need HR add permission to generate payroll.")
     elif tab == "Process / Pay":
-        runs = [r for r in db.get_payroll_runs() if r["status"] in ("draft", "approved", "posted", "paid")]
+        runs = [r for r in (db.get_payroll_runs() or []) if r["status"] in ("draft", "approved", "posted", "paid")]
         if runs:
-            sel = st.selectbox("Select Payroll", [f"{r['document_no']} — {r['payroll_month']}/{r['payroll_year']} ({r['status']})" for r in runs])
-            pid = next(r["id"] for r in runs if r["document_no"] in sel)
+            runs_sorted = sorted(
+                runs,
+                key=lambda r: (int(r.get("payroll_year") or 0), int(r.get("payroll_month") or 0), int(r.get("id") or 0)),
+                reverse=True,
+            )
+            sel = st.selectbox(
+                "Payroll run",
+                [
+                    f"{r['document_no']} — {_payroll_period_label(r['payroll_month'], r['payroll_year'])} "
+                    f"[{(r.get('status') or '').upper()}]"
+                    for r in runs_sorted
+                ],
+                key="hr_pay_process_sel",
+            )
+            pid = next(r["id"] for r in runs_sorted if r["document_no"] in sel)
             pr = db.get_payroll_run(pid)
             if pr and pr.get("lines"):
                 st.info(
-                    f"**{pr['document_no']}** — {pr['payroll_month']}/{pr['payroll_year']} — Status: **{pr['status'].upper()}**"
+                    f"**{pr['document_no']}** · {_payroll_period_label(pr['payroll_month'], pr['payroll_year'])} · "
+                    f"Status: **{(pr.get('status') or '').upper()}**"
                 )
                 steps = ["draft", "approved", "posted", "paid"]
                 st.progress((steps.index(pr["status"]) + 1) / len(steps) if pr["status"] in steps else 0.25)
+
+                m1, m2, m3 = st.columns(3, gap="small")
+                m1.markdown(
+                    f"<div class='txn-kpi-card'><p class='txn-kpi'>Gross</p>"
+                    f"<p class='txn-kpi-val' style='font-size:1.1rem'>{escape(fmt(pr['total_gross']))}</p></div>",
+                    unsafe_allow_html=True,
+                )
+                m2.markdown(
+                    f"<div class='txn-kpi-card'><p class='txn-kpi'>Deductions</p>"
+                    f"<p class='txn-kpi-val' style='font-size:1.1rem'>{escape(fmt(pr['total_deductions']))}</p></div>",
+                    unsafe_allow_html=True,
+                )
+                m3.markdown(
+                    f"<div class='txn-kpi-card'><p class='txn-kpi'>Net</p>"
+                    f"<p class='txn-kpi-val' style='font-size:1.1rem'>{escape(fmt(pr['total_net']))}</p></div>",
+                    unsafe_allow_html=True,
+                )
 
                 _render_employee_cash_payments(pid, pr)
                 st.divider()
@@ -793,10 +981,6 @@ def page_payroll():
                 if db.payroll_gl_posted(pid):
                     st.caption(f"GL accrual posted — ref: payroll / {pr['document_no']}")
                 render_dataframe_html_table(_payroll_lines_df(pr["lines"]))
-                m1, m2, m3 = st.columns(3)
-                m1.metric("Total Gross", fmt(pr["total_gross"]))
-                m2.metric("Total Deductions", fmt(pr["total_deductions"]))
-                m3.metric("Total Net", fmt(pr["total_net"]))
                 c1, c2, c3 = st.columns(3)
                 if pr["status"] == "draft" and db.user_can_hr(st.session_state.user, "approve"):
                     if c1.button("Approve Payroll"):
@@ -849,7 +1033,8 @@ def page_payroll():
                     st.markdown("**Rollback generated payroll (delete run)**")
                     st.caption(
                         "Removes this payroll completely (lines, GL vouchers, advance/loan recoveries). "
-                        f"Then regenerate for **{pr['payroll_month']}/{pr['payroll_year']}** on **Generate Payroll**."
+                        f"Then regenerate for **{_payroll_period_label(pr['payroll_month'], pr['payroll_year'])}** "
+                        "on **Generate Payroll**."
                     )
                     del_reason = st.text_input(
                         "Delete reason (required)",
@@ -859,12 +1044,14 @@ def page_payroll():
                     if st.button("Rollback generated payroll", type="secondary", key=f"pr_del_{pid}"):
                         try:
                             doc = pr["document_no"]
-                            period = f"{pr['payroll_month']}/{pr['payroll_year']}"
+                            period = _payroll_period_label(pr["payroll_month"], pr["payroll_year"])
                             db.rollback_generated_payroll(pid, uid(), del_reason)
                             ff.action_done(f"Deleted **{doc}** ({period}). GL reversed if posted. "
                                 "Open **Generate Payroll** to create a new run.")
                         except Exception as e:
                             st.error(str(e))
+        else:
+            st.info("No payroll runs to process.")
     elif tab == "Edit Lines":
         runs = [r for r in db.get_payroll_runs() if r["status"] == "draft"]
         if not runs:
