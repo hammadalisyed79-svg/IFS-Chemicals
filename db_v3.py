@@ -1981,28 +1981,43 @@ def reopen_rolled_back_production_to_draft(production_order_id, user_id=None):
 
 
 def _unissue_production_materials(conn, production_order_id, po, user_id=None):
-    """Reverse material issue — raw stock restored, movements & WIP GL cleared."""
+    """Reverse material issue — every consumed RM/Pack line is returned to warehouse.
+
+    Stock: each production_material_issues qty is added back to warehouse_stock.
+    Movements: original material-issue **out** rows for those products are removed.
+    Does **not** touch finished-goods movements (FG rollback handles those separately).
+    GL: Material issue WIP / inventory postings for this order are deleted.
+    """
     import database as db
     wh = po.get("warehouse_id") or db._default_warehouse_id(conn)
-    doc_no = po.get("document_no") or ""
     issues = conn.execute(
         "SELECT product_id, quantity FROM production_material_issues WHERE production_order_id=?",
         (production_order_id,),
     ).fetchall()
+    issue_pids = []
     for row in issues:
+        pid = int(row[0])
         qty = float(row[1] or 0)
         if qty <= 0:
             continue
-        db._adjust_warehouse_stock(conn, row[0], wh, qty)
-        db._record_movement(
-            conn, row[0], wh, "in", qty, "production", production_order_id,
-            f"Material unissue: {doc_no}", user_id,
+        issue_pids.append(pid)
+        db._adjust_warehouse_stock(conn, pid, wh, qty)
+    if issue_pids:
+        placeholders = ",".join("?" * len(issue_pids))
+        conn.execute(
+            f"""DELETE FROM inventory_movements
+               WHERE reference_type='production' AND reference_id=?
+                 AND movement_type='out' AND product_id IN ({placeholders})""",
+            (production_order_id, *issue_pids),
         )
-    conn.execute(
-        """DELETE FROM inventory_movements
-           WHERE reference_type='production' AND reference_id=? AND movement_type='out'""",
-        (production_order_id,),
-    )
+        # Clear any leftover unissue "in" rows from older rollbacks
+        conn.execute(
+            f"""DELETE FROM inventory_movements
+               WHERE reference_type='production' AND reference_id=?
+                 AND movement_type='in' AND product_id IN ({placeholders})
+                 AND description LIKE 'Material unissue%'""",
+            (production_order_id, *issue_pids),
+        )
     conn.execute(
         "DELETE FROM production_material_issues WHERE production_order_id=?",
         (production_order_id,),
@@ -2011,7 +2026,10 @@ def _unissue_production_materials(conn, production_order_id, po, user_id=None):
 
 
 def rollback_production_completion(production_order_id, user_id=None, reason="", allow_force=False):
-    """Undo QC completion / FG receipt — order returns to **draft** (materials un-issued) for Edit Draft."""
+    """Undo completion: FG out of stock + **all BOM materials returned**, order → draft.
+
+    After rollback you Edit Draft, then Issue (materials debited again) → Complete (FG in again).
+    """
     import database as db
     reason = (reason or "").strip()
     if not reason:
@@ -2043,15 +2061,19 @@ def rollback_production_completion(production_order_id, user_id=None, reason="",
                 "Some quantity may already have been sold or transferred. "
                 "Enable **negative stock** in settings, or tick **Confirm rollback** to reverse anyway."
             )
+        # 1) Reverse finished goods (warehouse + batch + FG GL)
         db._adjust_warehouse_stock(conn, fp_id, wh, -receipt_qty)
-        db._record_movement(
-            conn, fp_id, wh, "out", receipt_qty, "production", production_order_id,
-            f"FG rollback: {po.get('document_no', '')}", user_id,
-        )
         conn.execute(
             """DELETE FROM inventory_movements
                WHERE reference_type='production' AND reference_id=?
                  AND product_id=? AND movement_type='in'""",
+            (production_order_id, fp_id),
+        )
+        conn.execute(
+            """DELETE FROM inventory_movements
+               WHERE reference_type='production' AND reference_id=?
+                 AND product_id=? AND movement_type='out'
+                 AND description LIKE 'FG rollback%'""",
             (production_order_id, fp_id),
         )
         _apply_product_batch_delta(conn, batch_no, fp_id, wh, -receipt_qty, user_id)
@@ -2060,8 +2082,9 @@ def rollback_production_completion(production_order_id, user_id=None, reason="",
             (production_order_id,),
         )
         _delete_gl_production_phase(conn, production_order_id, "FG receipt")
+        # 2) Return every consumed raw/pack line to stock + clear WIP material GL
         _unissue_production_materials(conn, production_order_id, po, user_id)
-        note = f"\nQC/completion rolled back: {reason}"
+        note = f"\nQC/completion rolled back (FG + all materials restored): {reason}"
         conn.execute(
             """UPDATE production_orders SET status='draft', actual_qty=0, wastage_qty=0,
                actual_cost=0, cost_per_unit=0, qc_status='Pending',
@@ -2075,7 +2098,7 @@ def rollback_production_completion(production_order_id, user_id=None, reason="",
         log_event(
             "production_orders", production_order_id, "rollback_completion",
             user_id=user_id, module="Production", document_no=po["document_no"],
-            summary=f"Rolled back completion on {po['document_no']}",
+            summary=f"Rolled back completion on {po['document_no']} (FG + materials restored)",
             details={"reason": reason, "qty_reversed": receipt_qty},
         )
     except Exception:

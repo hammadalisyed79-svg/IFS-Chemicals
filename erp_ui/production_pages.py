@@ -898,13 +898,14 @@ def page_production_orders():
             st.divider()
             st.subheader("Rollback QC / completion")
             st.caption(
-                "Reverses FG receipt, un-issues materials to stock, and sets order back to **draft**. "
-                "Use **Edit Draft** to fix BOM/qty, then **Issue / Complete** again."
+                "**Rollback reverses everything:** finished goods leave stock, and **all BOM materials "
+                "consumed are returned** to warehouse (inventory + WIP GL cleared). Order becomes **draft**. "
+                "Then **Edit Draft** → **Issue Materials** (materials debited again) → **Complete** (FG received again)."
             )
             rb_reason = st.text_input(
                 "Reason for rollback *",
                 key=f"prod_rb_reason_{po['id']}",
-                placeholder="e.g. wrong QC qty, failed batch to rework",
+                placeholder="e.g. wrong qty / wrong BOM / failed batch to rework",
             )
             rb_force = st.checkbox(
                 "Confirm rollback even if batch FG was partly used (warehouse qty may go negative)",
@@ -915,8 +916,10 @@ def page_production_orders():
                     db.rollback_production_completion(
                         po["id"], uid(), rb_reason, allow_force=rb_force,
                     )
-                    ff.action_done(f"**{detail['document_no']}** is **draft** again — open **Edit Draft** to change, "
-                        f"then **Issue / Complete** to re-issue and complete.")
+                    ff.action_done(
+                        f"**{detail['document_no']}** rolled back — FG removed and **all materials restored**. "
+                        "Open **Edit Draft**, then **Issue / Complete** to debit inventory again."
+                    )
                 except Exception as e:
                     st.error(str(e))
         else:

@@ -1257,12 +1257,16 @@ def page_production():
                 db.complete_production(po["id"], aq, wq, qc, uid()); ff.action_done("Completed")
         if po["status"] == "completed":
             st.success(f"Completed — QC **{po.get('qc_status')}**, output **{float(po.get('actual_qty') or 0):,.4f}**")
+            st.caption(
+                "Rollback removes FG from stock and **returns all consumed materials** to warehouse. "
+                "After Edit Draft, Issue debits materials again; Complete receives FG again."
+            )
             rb_reason = st.text_input("Rollback reason *", key=f"prod_v3_rb_{po['id']}")
             rb_force = st.checkbox("Confirm rollback (allow negative stock)", key=f"prod_v3_rb_force_{po['id']}")
             if st.button("Rollback QC / Reopen", key=f"prod_v3_rb_btn_{po['id']}"):
                 try:
                     db.rollback_production_completion(po["id"], uid(), rb_reason, allow_force=rb_force)
-                    ff.action_done("Reopened for correction.")
+                    ff.action_done("Reopened — materials restored to stock. Issue again after edits.")
                 except Exception as e:
                     st.error(str(e))
 
