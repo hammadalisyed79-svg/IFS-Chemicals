@@ -110,34 +110,50 @@ def _tab_contractors():
     avail = [s for s in suppliers if int(s["id"]) not in already]
     if not avail:
         st.warning("All active suppliers are already set up, or add a supplier under Masters first.")
-        return
-
-    sup_opts = {f"{s['code']} — {s['name']}": int(s["id"]) for s in avail}
-    type_labels = list(PAYMENT_TYPES.values())
-    type_by_label = {v: k for k, v in PAYMENT_TYPES.items()}
-
-    with st.form("cl_add"):
+    else:
+        # Outside st.form — sticky tab buttons + forms can miss submits in Streamlit.
+        type_keys = list(PAYMENT_TYPES.keys())
+        sup_opts = {f"{s['code']} — {s['name']}": int(s["id"]) for s in avail}
         c1, c2 = st.columns(2)
-        sup_lbl = c1.selectbox("Contractor (supplier)", list(sup_opts.keys()))
-        type_lbl = c2.selectbox("Payment type", type_labels)
-        notes = st.text_input("Notes (optional)")
+        with c1:
+            sup_lbl = st.selectbox(
+                "Contractor (supplier)",
+                list(sup_opts.keys()),
+                key="cl_add_sup",
+            )
+        with c2:
+            type_key = st.selectbox(
+                "Payment type",
+                type_keys,
+                format_func=lambda k: PAYMENT_TYPES.get(k, k),
+                key="cl_add_type",
+            )
+        notes = st.text_input("Notes (optional)", key="cl_add_notes")
         st.caption("Rates are set **per SKU** on the Products tab — not a single fixed rate.")
-        if st.form_submit_button("Save contractor", type="primary"):
+        if st.button("Save contractor", type="primary", key="cl_add_save"):
             try:
+                sid = int(sup_opts[sup_lbl])
                 cid = add_contractor(
                     {
-                        "supplier_id": sup_opts[sup_lbl],
-                        "payment_type": type_by_label[type_lbl],
+                        "supplier_id": sid,
+                        "payment_type": type_key,
                         "default_rate": 0,
                         "notes": notes,
                     },
                     hlp.uid(),
                 )
+                saved = get_contractor(cid)
+                if not saved:
+                    raise RuntimeError("Save did not persist — please try again.")
                 st.session_state.pop(_draft_key(cid), None)
                 st.session_state.pop(_rates_key(cid), None)
-                ff.action_done(f"Contractor saved. Open **Products** to assign SKUs and rates for **{sup_lbl}**.")
+                st.session_state.pop("cl_add_notes", None)
+                ff.action_done(
+                    f"Contractor **{saved.get('supplier_code')} — {saved.get('supplier_name')}** saved. "
+                    "Open the **Products** tab to assign SKUs and rates."
+                )
             except Exception as e:
-                st.error(str(e))
+                st.error(f"Could not save contractor: {e}")
 
     if rows:
         st.subheader("Edit / delete")
@@ -149,42 +165,41 @@ def _tab_contractors():
         cur = get_contractor(cid)
         if not cur:
             return
-        with st.form("cl_edit"):
-            type_lbl = st.selectbox(
-                "Payment type",
-                type_labels,
-                index=type_labels.index(PAYMENT_TYPES.get(cur["payment_type"], type_labels[0]))
-                if PAYMENT_TYPES.get(cur["payment_type"]) in type_labels else 0,
-            )
-            notes = st.text_input("Notes", value=cur.get("notes") or "")
-            active = st.checkbox("Active", value=bool(cur.get("is_active", 1)))
-            b1, b2 = st.columns(2)
-            save = b1.form_submit_button("Update", type="primary")
-            delete = b2.form_submit_button("Delete")
-            if save:
-                try:
-                    update_contractor(
-                        cid,
-                        {
-                            "payment_type": type_by_label[type_lbl],
-                            "default_rate": float(cur.get("default_rate") or 0),
-                            "notes": notes,
-                            "is_active": int(active),
-                        },
-                        hlp.uid(),
-                    )
-                    ff.action_done("Contractor updated.")
-                except Exception as e:
-                    st.error(str(e))
-            if delete:
-                try:
-                    delete_contractor(cid)
-                    st.session_state.pop(_draft_key(cid), None)
-                    st.session_state.pop(_rates_key(cid), None)
-                    ff.action_done("Contractor deleted.")
-                except Exception as e:
-                    st.error(str(e))
-
+        type_keys = list(PAYMENT_TYPES.keys())
+        cur_type = cur.get("payment_type") if cur.get("payment_type") in type_keys else type_keys[0]
+        type_key = st.selectbox(
+            "Payment type",
+            type_keys,
+            index=type_keys.index(cur_type),
+            format_func=lambda k: PAYMENT_TYPES.get(k, k),
+            key=f"cl_edit_type_{cid}",
+        )
+        notes = st.text_input("Notes", value=cur.get("notes") or "", key=f"cl_edit_notes_{cid}")
+        active = st.checkbox("Active", value=bool(cur.get("is_active", 1)), key=f"cl_edit_active_{cid}")
+        b1, b2 = st.columns(2)
+        if b1.button("Update", type="primary", key=f"cl_edit_save_{cid}"):
+            try:
+                update_contractor(
+                    cid,
+                    {
+                        "payment_type": type_key,
+                        "default_rate": float(cur.get("default_rate") or 0),
+                        "notes": notes,
+                        "is_active": int(active),
+                    },
+                    hlp.uid(),
+                )
+                ff.action_done("Contractor updated.")
+            except Exception as e:
+                st.error(f"Could not update: {e}")
+        if b2.button("Delete", key=f"cl_edit_del_{cid}"):
+            try:
+                delete_contractor(cid)
+                st.session_state.pop(_draft_key(cid), None)
+                st.session_state.pop(_rates_key(cid), None)
+                ff.action_done("Contractor deleted.")
+            except Exception as e:
+                st.error(f"Could not delete: {e}")
 
 def _tab_products():
     rows = list_contractors(active_only=True)

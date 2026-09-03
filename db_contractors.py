@@ -6,8 +6,8 @@ PAYMENT_PRODUCTION_QTY = "production_qty"
 PAYMENT_SKU_CARTON = "sku_carton"
 
 PAYMENT_TYPES = {
-    PAYMENT_PRODUCTION_QTY: "Production quantity (qty × rate per SKU)",
-    PAYMENT_SKU_CARTON: "SKU / cartons × rate per SKU",
+    PAYMENT_PRODUCTION_QTY: "Production quantity (qty x rate per SKU)",
+    PAYMENT_SKU_CARTON: "SKU / cartons x rate per SKU",
 }
 
 
