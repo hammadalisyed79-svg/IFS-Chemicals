@@ -826,8 +826,9 @@ def _period_bounds(month, year):
 def _attendance_days_for_period(conn, employee_id, period_start, period_end):
     """Present / absent / OT hours for payroll.
 
-    Present includes present/late/overtime, plus public & weekly holidays,
-    unless marked leave/absent.
+    Present includes present/late/overtime, plus public & weekly holidays
+    when the employee actually worked at least one day in the period.
+    Holidays alone never create Present for someone with zero work marks.
 
     Sandwich rule (always applied): a public or weekly holiday that sits
     between the employee's own leaves counts as leave (not present); between
@@ -862,6 +863,8 @@ def _attendance_days_for_period(conn, employee_id, period_start, period_end):
     holiday_statuses = {"public_holiday", "weekly_holiday"}
     present_work = {"present", "late", "overtime"}
     flank_statuses = {"leave", "absent", "present", "late", "overtime", "half_day"}
+    # Holidays count as Present only if the employee showed up at least once
+    has_work = any(st in present_work or st == "half_day" for st in att_by_date.values())
 
     # Effective status per calendar day in the period
     try:
@@ -927,8 +930,12 @@ def _attendance_days_for_period(conn, employee_id, period_start, period_end):
     days_absent = 0.0
     days_leave = 0.0
     for d, st in effective.items():
-        if st in present_work or st in holiday_statuses:
+        if st in present_work:
             days_present += 1
+        elif st in holiday_statuses:
+            # Paid holiday only for people who worked in the month
+            if has_work:
+                days_present += 1
         elif st == "absent":
             days_absent += 1
         elif st == "leave":
@@ -1772,9 +1779,9 @@ def sync_payroll_overtime(payroll_id, mode="from_hours", user_id=None):
 def refresh_payroll_attendance_days(payroll_id, user_id=None):
     """Re-pull Present / Absent / OT hrs from attendance for a draft payroll.
 
-    Public holidays and weekly offs count toward Present unless leave/absent,
-    or the sandwich rule applies (holiday between own leaves → leave;
-    between own absents → absent).
+    Public holidays and weekly offs count toward Present only when the
+    employee has at least one work day; sandwich converts holidays between
+    leave→leave or absent→absent. Blank attendance does not earn holiday Present.
     """
     from database import get_connection
     with get_connection() as conn:
