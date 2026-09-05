@@ -52,10 +52,20 @@ def _emp_dept(e):
     return (e.get("department_name") or e.get("department") or "Unassigned").strip() or "Unassigned"
 
 
-def _load_employees(search=None, department=None):
+def _is_contractor_department(dept_name: str) -> bool:
+    """Contractor dept staff are billed separately — excluded from attendance."""
+    name = (dept_name or "").strip().lower()
+    if not name:
+        return False
+    return name == "contractor" or "contractor" in name
+
+
+def _load_employees(search=None, department=None, *, include_contractors=False):
     emps = db.get_employees_hr(active_only=True, search=search) if hasattr(db, "get_employees_hr") else db.get_employees()
     # Always department-wise sort (API already sorts; keep stable if fallback)
     emps = sorted(emps, key=lambda e: (_emp_dept(e).upper(), (e.get("full_name") or "").upper(), e.get("code") or ""))
+    if not include_contractors:
+        emps = [e for e in emps if not _is_contractor_department(_emp_dept(e))]
     if department and department != "All departments":
         emps = [e for e in emps if _emp_dept(e) == department]
     return emps
@@ -175,7 +185,8 @@ def _summary_counts(df):
 def _daily_sheet_tab():
     st.markdown(
         "**Daily attendance** — each department has its own register. "
-        "Select a department, mark the sheet, then **Save**."
+        "Select a department, mark the sheet, then **Save**. "
+        "**Contractor** department staff are excluded (not marked here)."
     )
 
     nav = st.columns([1, 1, 1, 2])
@@ -762,7 +773,8 @@ def _missing_attendance_tab():
     """Monthly report: who has no / incomplete saved attendance."""
     st.markdown(
         "**Monthly coverage** — employees whose attendance is **not saved** (or only partly saved). "
-        "Payroll Present uses **saved** rows only. Fix via **Employee Wise → Save period** or **Daily Sheet**."
+        "Payroll Present uses **saved** rows only. Fix via **Employee Wise → Save period** or **Daily Sheet**. "
+        "**Contractor** department is excluded."
     )
     today = date.today()
     all_emps = _load_employees()

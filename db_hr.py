@@ -617,6 +617,8 @@ def report_attendance_monthly_coverage(year, month, department=None, active_only
         p = [period_start, period_end_eff]
         if active_only:
             q += " AND e.is_active=1 AND COALESCE(e.employment_status,'active')='active'"
+        # Contractor department is billed separately — not in attendance coverage
+        q += """ AND LOWER(TRIM(COALESCE(d.name, e.department, ''))) NOT LIKE '%contractor%'"""
         if department and department != "All departments":
             q += " AND COALESCE(d.name, e.department, 'Unassigned')=?"
             p.append(department)
