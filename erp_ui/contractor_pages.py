@@ -395,8 +395,10 @@ def _tab_month_preview():
 
     cid = pick[sel]
     st.caption(
-        "**Formula:** Answer = Sold Qty (period) + Stock in hand + Manual Qty · "
-        "**Amount** = Answer × Rate · **Gross** = sum of line amounts."
+        "**Sold Qty** = sales in period · **Stock in hand** = opening as of From · "
+        "**Sale return** = returns in period · **Physical Manual** = entered stock · "
+        "**Closing** = Sold - Opening - Sale return + Physical Manual · "
+        "**Answer** = Sold + Opening + Physical Manual · **Amount** = Answer x Rate."
     )
 
     mk = f"cl_manual_{cid}_{fd}_{td}"
@@ -417,13 +419,13 @@ def _tab_month_preview():
     if not result or not meta or meta[0] != cid:
         st.info(
             "Choose period, then **Load / refresh worksheet**. "
-            "Sold qty is from approved sales; stock is current on-hand; "
-            "enter Manual Qty where needed, then amounts update."
+            "Sold / sale return are for the period; stock in hand is opening as of From; "
+            "enter **Physical Manual Added Stock** where needed."
         )
         return
 
     if meta[1] != str(fd) or meta[2] != str(td):
-        st.warning("Period changed — click **Load / refresh worksheet** to recalculate sold qty.")
+        st.warning("Period changed — click **Load / refresh worksheet** to recalculate.")
 
     c = result["contractor"]
     lines = result.get("lines") or []
@@ -439,7 +441,10 @@ def _tab_month_preview():
         f"</span>",
         unsafe_allow_html=True,
     )
-    st.markdown("**Worksheet** — edit **Manual Qty** only; Answer and Amount update below.")
+    st.markdown(
+        "**Worksheet** — edit **Physical Manual Added Stock** only; "
+        "Closing, Answer and Amount update below."
+    )
 
     prior_manual = st.session_state.get(mk) or {
         int(ln["product_id"]): float(ln.get("manual_qty") or 0) for ln in lines
@@ -451,7 +456,10 @@ def _tab_month_preview():
             "Product": ln.get("product_name"),
             "Sold Qty": float(ln.get("sold_qty") or 0),
             "Stock in hand": float(ln.get("stock_qty") or 0),
-            "Manual Qty": float(prior_manual.get(int(ln["product_id"]), ln.get("manual_qty") or 0)),
+            "Sale return": float(ln.get("sale_return_qty") or 0),
+            "Physical Manual": float(
+                prior_manual.get(int(ln["product_id"]), ln.get("manual_qty") or 0)
+            ),
             "Rate": float(ln.get("rate") or 0),
         }
         for ln in lines
@@ -462,16 +470,30 @@ def _tab_month_preview():
         hide_index=True,
         use_container_width=True,
         num_rows="fixed",
-        disabled=["product_id", "Code", "Product", "Sold Qty", "Stock in hand", "Rate"],
+        disabled=[
+            "product_id", "Code", "Product", "Sold Qty",
+            "Stock in hand", "Sale return", "Rate",
+        ],
         column_config={
             "product_id": None,
             "Code": st.column_config.TextColumn("Code", width="small"),
             "Product": st.column_config.TextColumn("Product", width="large"),
-            "Sold Qty": st.column_config.NumberColumn("Sold Qty", format="%.2f"),
-            "Stock in hand": st.column_config.NumberColumn("Stock in hand", format="%.2f"),
-            "Manual Qty": st.column_config.NumberColumn(
-                "Manual Qty", min_value=0.0, step=1.0, format="%.2f",
-                help="Add extra qty manually; included in Answer",
+            "Sold Qty": st.column_config.NumberColumn(
+                "Sold Qty", format="%.2f",
+                help="Quantity sold in the selected period",
+            ),
+            "Stock in hand": st.column_config.NumberColumn(
+                "Stock in hand", format="%.2f",
+                help="Opening quantity as of From (start) date",
+            ),
+            "Sale return": st.column_config.NumberColumn(
+                "Sale return", format="%.2f",
+                help="Sale return quantity in the selected period",
+            ),
+            "Physical Manual": st.column_config.NumberColumn(
+                "Physical Manual Added Stock",
+                min_value=0.0, step=1.0, format="%.2f",
+                help="Add physical/manual stock; used in Closing and Answer",
             ),
             "Rate": st.column_config.NumberColumn("Rate", format="%.4f"),
         },
@@ -481,19 +503,23 @@ def _tab_month_preview():
     manual_map = {}
     display_rows = []
     gross = 0.0
-    sum_sold = sum_stock = sum_man = sum_ans = 0.0
+    sum_sold = sum_stock = sum_ret = sum_man = sum_close = sum_ans = 0.0
     for _, row in edited.iterrows():
         pid = int(row["product_id"])
         sold = float(row["Sold Qty"] or 0)
         stock = float(row["Stock in hand"] or 0)
-        man = float(row["Manual Qty"] or 0)
+        ret = float(row["Sale return"] or 0)
+        man = float(row["Physical Manual"] or 0)
         rate = float(row["Rate"] or 0)
+        closing = round(sold - stock - ret + man, 4)
         answer = round(sold + stock + man, 4)
         amount = round(answer * rate, 2)
         manual_map[pid] = man
         sum_sold += sold
         sum_stock += stock
+        sum_ret += ret
         sum_man += man
+        sum_close += closing
         sum_ans += answer
         gross += amount
         display_rows.append({
@@ -501,14 +527,16 @@ def _tab_month_preview():
             "Product": row["Product"],
             "Sold Qty": sold,
             "Stock in hand": stock,
-            "Manual Qty": man,
+            "Sale return": ret,
+            "Physical Manual": man,
+            "Closing Stock": closing,
             "Answer": answer,
             "Rate": rate,
             "Amount": amount,
         })
     st.session_state[mk] = manual_map
 
-    k1, k2, k3, k4, k5 = st.columns(5, gap="small")
+    k1, k2, k3, k4, k5, k6 = st.columns(6, gap="small")
     k1.markdown(
         f"<div class='txn-kpi-card'><p class='txn-kpi'>Items</p>"
         f"<p class='txn-kpi-val'>{len(display_rows):,}</p></div>",
@@ -520,29 +548,39 @@ def _tab_month_preview():
         unsafe_allow_html=True,
     )
     k3.markdown(
-        f"<div class='txn-kpi-card'><p class='txn-kpi'>Stock in hand</p>"
+        f"<div class='txn-kpi-card'><p class='txn-kpi'>Opening</p>"
         f"<p class='txn-kpi-val'>{sum_stock:,.2f}</p></div>",
         unsafe_allow_html=True,
     )
     k4.markdown(
+        f"<div class='txn-kpi-card'><p class='txn-kpi'>Closing Stock</p>"
+        f"<p class='txn-kpi-val'>{sum_close:,.2f}</p></div>",
+        unsafe_allow_html=True,
+    )
+    k5.markdown(
         f"<div class='txn-kpi-card'><p class='txn-kpi'>Answer Qty</p>"
         f"<p class='txn-kpi-val'>{sum_ans:,.2f}</p></div>",
         unsafe_allow_html=True,
     )
-    k5.markdown(
+    k6.markdown(
         f"<div class='txn-kpi-card'><p class='txn-kpi'>Gross Amount</p>"
         f"<p class='txn-kpi-val'>Rs. {gross:,.2f}</p></div>",
         unsafe_allow_html=True,
     )
 
-    st.markdown("**Computed amounts** — Answer = Sold + Stock + Manual · Amount = Answer × Rate")
+    st.markdown(
+        "**Computed amounts** — Closing = Sold - Opening - Sale return + Physical Manual · "
+        "Answer = Sold + Opening + Physical Manual · Amount = Answer x Rate"
+    )
     out_df = pd.DataFrame(display_rows)
     footer = {
         "Code": "",
         "Product": "GROSS TOTAL",
         "Sold Qty": round(sum_sold, 2),
         "Stock in hand": round(sum_stock, 2),
-        "Manual Qty": round(sum_man, 2),
+        "Sale return": round(sum_ret, 2),
+        "Physical Manual": round(sum_man, 2),
+        "Closing Stock": round(sum_close, 2),
         "Answer": round(sum_ans, 2),
         "Rate": "",
         "Amount": round(gross, 2),
@@ -571,7 +609,9 @@ def _tab_month_preview():
         summary={
             "Items": len(display_rows),
             "Sold Qty": round(sum_sold, 2),
-            "Stock in hand": round(sum_stock, 2),
+            "Opening": round(sum_stock, 2),
+            "Sale return": round(sum_ret, 2),
+            "Closing Stock": round(sum_close, 2),
             "Answer Qty": round(sum_ans, 2),
             "Gross Amount": round(gross, 2),
         },

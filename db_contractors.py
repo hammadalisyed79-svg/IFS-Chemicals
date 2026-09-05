@@ -314,8 +314,10 @@ def sold_qty_for_products(product_ids: list[int], from_date: str, to_date: str) 
     return {int(r["product_id"]): float(r["sold_qty"] or 0) for r in rows}
 
 
-def stock_on_hand_for_products(product_ids: list[int]) -> dict[int, float]:
-    """Current stock in hand (all warehouses) by product."""
+def sale_return_qty_for_products(
+    product_ids: list[int], from_date: str, to_date: str,
+) -> dict[int, float]:
+    """Sale return qty by product in date range (excludes pending/rejected)."""
     from database import get_connection
 
     ids = [int(p) for p in (product_ids or []) if p]
@@ -323,14 +325,74 @@ def stock_on_hand_for_products(product_ids: list[int]) -> dict[int, float]:
         return {}
     placeholders = ",".join("?" * len(ids))
     q = f"""
-        SELECT product_id, COALESCE(SUM(quantity), 0) AS stock_qty
-        FROM warehouse_stock
-        WHERE product_id IN ({placeholders})
-        GROUP BY product_id
+        SELECT sri.product_id, COALESCE(SUM(sri.quantity), 0) AS return_qty
+        FROM sales_return_items sri
+        JOIN sales_returns sr ON sri.return_id = sr.id
+        WHERE sri.product_id IN ({placeholders})
+          AND sr.return_date >= ? AND sr.return_date <= ?
+          AND LOWER(COALESCE(sr.approval_status, '')) NOT IN
+              ('pending', 'rejected', 'cancelled')
+        GROUP BY sri.product_id
     """
     with get_connection() as conn:
-        rows = conn.execute(q, ids).fetchall()
-    return {int(r["product_id"]): float(r["stock_qty"] or 0) for r in rows}
+        rows = conn.execute(q, [*ids, from_date, to_date]).fetchall()
+    return {int(r["product_id"]): float(r["return_qty"] or 0) for r in rows}
+
+
+def stock_on_hand_for_products(
+    product_ids: list[int], *, as_of_date: str | None = None,
+) -> dict[int, float]:
+    """Stock in hand by product (all warehouses).
+
+    When as_of_date is set, returns opening qty at the start of that date:
+    current warehouse_stock minus net inventory movements on/after as_of_date.
+    """
+    from database import get_connection
+
+    ids = [int(p) for p in (product_ids or []) if p]
+    if not ids:
+        return {}
+    placeholders = ",".join("?" * len(ids))
+    with get_connection() as conn:
+        rows = conn.execute(
+            f"""
+            SELECT product_id, COALESCE(SUM(quantity), 0) AS stock_qty
+            FROM warehouse_stock
+            WHERE product_id IN ({placeholders})
+            GROUP BY product_id
+            """,
+            ids,
+        ).fetchall()
+        current = {int(r["product_id"]): float(r["stock_qty"] or 0) for r in rows}
+        if not as_of_date or not _table_exists(conn, "inventory_movements"):
+            return current
+        mv_rows = conn.execute(
+            f"""
+            SELECT product_id,
+                   COALESCE(SUM(
+                       CASE
+                         WHEN LOWER(COALESCE(movement_type, '')) = 'in'
+                           THEN quantity
+                         WHEN LOWER(COALESCE(movement_type, '')) = 'out'
+                           THEN -quantity
+                         ELSE 0
+                       END
+                   ), 0) AS net_since
+            FROM inventory_movements
+            WHERE product_id IN ({placeholders})
+              AND movement_date >= ?
+            GROUP BY product_id
+            """,
+            [*ids, as_of_date],
+        ).fetchall()
+        net_since = {
+            int(r["product_id"]): float(r["net_since"] or 0) for r in mv_rows
+        }
+    all_pids = set(ids) | set(current) | set(net_since)
+    return {
+        pid: round(current.get(pid, 0.0) - net_since.get(pid, 0.0), 4)
+        for pid in all_pids
+    }
 
 
 def calculate_contractor_month(
@@ -342,12 +404,17 @@ def calculate_contractor_month(
 ) -> dict:
     """Payment worksheet lines for the period.
 
-    Billable (Answer) = Sold Qty + Stock in hand + Manual Qty
-    Amount = Answer × Rate
+    Sold Qty = approved sales in period
+    Stock in hand = opening qty as of From date
+    Sale return = returns in period
+    Physical Manual Added Stock = user-entered manual qty
+    Closing Stock = Sold - Opening - Sale return + Physical Manual
+    Billable (Answer) = Sold + Opening + Physical Manual
+    Amount = Answer x Rate
     Gross = sum of amounts
 
     For production_qty contractors, production qty is also returned (info);
-    billable still follows Sold + Stock + Manual so SKU payment is consistent.
+    billable still follows Sold + Opening + Manual so SKU payment is consistent.
     """
     c = get_contractor(contractor_id)
     if not c:
@@ -355,7 +422,8 @@ def calculate_contractor_month(
     products = c.get("products") or []
     pids = [int(p["product_id"]) for p in products]
     sold_map = sold_qty_for_products(pids, from_date, to_date)
-    stock_map = stock_on_hand_for_products(pids)
+    return_map = sale_return_qty_for_products(pids, from_date, to_date)
+    stock_map = stock_on_hand_for_products(pids, as_of_date=from_date)
     prod_map = {
         int(r["product_id"]): r
         for r in production_qty_for_products(pids, from_date, to_date)
@@ -370,12 +438,14 @@ def calculate_contractor_month(
     default_rate = float(c.get("default_rate") or 0)
     lines = []
     total = 0.0
-    total_sold = total_stock = total_manual = total_answer = 0.0
+    total_sold = total_stock = total_return = total_manual = total_closing = total_answer = 0.0
     for p in products:
         pid = int(p["product_id"])
         sold = round(float(sold_map.get(pid) or 0), 4)
         stock = round(float(stock_map.get(pid) or 0), 4)
+        ret = round(float(return_map.get(pid) or 0), 4)
         man = round(float(manual.get(pid) or 0), 4)
+        closing = round(sold - stock - ret + man, 4)
         answer = round(sold + stock + man, 4)
         rate = float(p["rate"] if p.get("rate") is not None else default_rate)
         amount = round(answer * rate, 2)
@@ -383,7 +453,9 @@ def calculate_contractor_month(
         total += amount
         total_sold += sold
         total_stock += stock
+        total_return += ret
         total_manual += man
+        total_closing += closing
         total_answer += answer
         lines.append({
             "product_id": pid,
@@ -391,7 +463,9 @@ def calculate_contractor_month(
             "product_name": p.get("product_name"),
             "sold_qty": sold,
             "stock_qty": stock,
+            "sale_return_qty": ret,
             "manual_qty": man,
+            "closing_stock": closing,
             "answer_qty": answer,
             "batch_count": int(qinfo.get("batch_count") or 0),
             "production_qty": float(qinfo.get("quantity") or 0),
@@ -405,13 +479,18 @@ def calculate_contractor_month(
         "to_date": to_date,
         "payment_type": c.get("payment_type"),
         "payment_type_label": PAYMENT_TYPES.get(c.get("payment_type"), c.get("payment_type")),
-        "formula": "Answer = Sold Qty + Stock in hand + Manual Qty; Amount = Answer × Rate",
+        "formula": (
+            "Closing = Sold - Opening - Sale return + Physical Manual; "
+            "Answer = Sold + Opening + Physical Manual; Amount = Answer x Rate"
+        ),
         "lines": lines,
         "total": round(total, 2),
         "totals": {
             "sold_qty": round(total_sold, 4),
             "stock_qty": round(total_stock, 4),
+            "sale_return_qty": round(total_return, 4),
             "manual_qty": round(total_manual, 4),
+            "closing_stock": round(total_closing, 4),
             "answer_qty": round(total_answer, 4),
             "gross_amount": round(total, 2),
             "item_count": len(lines),
