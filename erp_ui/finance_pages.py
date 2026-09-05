@@ -934,12 +934,6 @@ def _interactive_book(book="cash"):
 
     posted_entry_count = len(receipts) + len(payments) - provisional_n
     expected_closing = closing + pending_sales_total
-    adv_out = adv_outside_cb = physical_cash = 0.0
-    if book == "cash":
-        adv = db.cash_advance_outstanding_summary()
-        adv_out = float(adv.get("total_outstanding") or 0)
-        adv_outside_cb = float(adv.get("outside_cash_book") or 0)
-        physical_cash = closing - adv_outside_cb
 
     with st.container(key=f"{prefix}_metrics"):
         from erp_ui.page_shell import shell_status_badge
@@ -950,11 +944,6 @@ def _interactive_book(book="cash"):
             strip_bits.insert(
                 0,
                 f'{shell_status_badge("locked", kind="shell")}&nbsp;<strong>Day closed</strong>',
-            )
-        if book == "cash" and adv_out > 0.01:
-            strip_bits.append(
-                f'{shell_status_badge("shadow", kind="shell")}&nbsp;'
-                f'Advance out <strong>{fmt_money(adv_out)}</strong>'
             )
         if book == "cash" and pending_sales_total > 0:
             strip_bits.append(
@@ -982,62 +971,30 @@ def _interactive_book(book="cash"):
             unsafe_allow_html=True,
         )
         m5.markdown(_kpi("Entries", str(posted_entry_count)), unsafe_allow_html=True)
-        if book == "cash" and (pending_sales_total > 0 or adv_out > 0.01):
-            cols = st.columns(4 if pending_sales_total > 0 and adv_out > 0.01 else 2, gap="small")
-            ci = 0
-            if pending_sales_total > 0:
-                cols[ci].markdown(
-                    _kpi(
-                        "Pending cash sales",
-                        fmt_money(pending_sales_total),
-                        f"{provisional_n} draft/pending cash invoice(s) — not in Closing until approved.",
-                    ),
-                    unsafe_allow_html=True,
-                )
-                ci += 1
-                cols[ci].markdown(
-                    _kpi(
-                        "Expected closing",
-                        fmt_money(expected_closing),
-                        "Closing after pending cash sales are approved.",
-                    ),
-                    unsafe_allow_html=True,
-                )
-                ci += 1
-            if adv_out > 0.01:
-                cols[ci].markdown(
-                    _kpi(
-                        "Cash advance out",
-                        fmt_money(adv_out),
-                        "Open/partial advances still with riders or drivers.",
-                    ),
-                    unsafe_allow_html=True,
-                )
-                ci += 1
-                cols[ci].markdown(
-                    _kpi(
-                        "Physical cash in hand",
-                        fmt_money(physical_cash),
-                        "Cash in the till: Closing minus open advance outstanding.",
-                    ),
-                    unsafe_allow_html=True,
-                )
+        if book == "cash" and pending_sales_total > 0:
+            cols = st.columns(2, gap="small")
+            cols[0].markdown(
+                _kpi(
+                    "Pending cash sales",
+                    fmt_money(pending_sales_total),
+                    f"{provisional_n} draft/pending cash invoice(s) — not in Closing until approved.",
+                ),
+                unsafe_allow_html=True,
+            )
+            cols[1].markdown(
+                _kpi(
+                    "Expected closing",
+                    fmt_money(expected_closing),
+                    "Closing after pending cash sales are approved.",
+                ),
+                unsafe_allow_html=True,
+            )
     if book == "cash" and provisional_n:
         st.caption(
             f"{provisional_n} draft/pending cash sale(s) under Income ([drafted]/[pending]) — "
             f"**{fmt_money(pending_sales_total)}** not in **Closing** until approved in **Sale Approval**. "
             f"Expected closing if approved: **{fmt_money(expected_closing)}**."
         )
-    if book == "cash" and adv_out > 0.01:
-        cap = (
-            f"**{fmt_money(adv_out)}** cash advance outstanding with staff — "
-            f"physical cash in till: **{fmt_money(physical_cash)}** "
-            f"(Closing **{fmt_money(closing)}**"
-        )
-        if adv_outside_cb > 0.01:
-            cap += f" − **{fmt_money(adv_outside_cb)}** not in Cash Book"
-        cap += ")."
-        st.caption(cap)
 
     from erp_ui.helpers import section_header, sticky_page_tabs
     section_header("Daily entries & vouchers")
