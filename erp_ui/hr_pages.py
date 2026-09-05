@@ -174,20 +174,31 @@ def page_hr_employees():
         status="register" if peek == "Employee List" else None,
         status_kind="shell" if peek == "Employee List" else "invoice",
     )
-    f1, f2 = st.columns([2, 1.2])
+    f1, f2, f3 = st.columns([2, 1.2, 1])
     search = f1.text_input("Search", placeholder="Code, name, CNIC, mobile…")
-    active_for_depts = db.get_employees_hr(active_only=True) if hasattr(db, "get_employees_hr") else []
+    active_for_depts = db.get_employees_hr(active_only=False) if hasattr(db, "get_employees_hr") else []
     depts = sorted({
         (r.get("department_name") or r.get("department") or "Unassigned")
         for r in active_for_depts
+        if r.get("is_active")
     }, key=str.upper)
     dept_filter = f2.selectbox(
         "Department",
         ["All departments"] + depts,
         key="hr_emp_dept_filter",
     )
+    status_filter = f3.selectbox(
+        "Show",
+        ["Active only", "Inactive only", "All"],
+        key="hr_emp_active_filter",
+    )
     tab = sticky_page_tabs(["Employee List", "Add Employee", "Edit / View"], "hr_emp_tab")
-    rows = db.get_employees_hr(search=search or None, active_only=True)
+    if status_filter == "Active only":
+        rows = db.get_employees_hr(search=search or None, active_only=True)
+    else:
+        rows = db.get_employees_hr(search=search or None, active_only=False)
+        if status_filter == "Inactive only":
+            rows = [r for r in rows if not r.get("is_active")]
     if dept_filter != "All departments":
         rows = [
             r for r in rows
@@ -204,7 +215,8 @@ def page_hr_employees():
     if tab == "Employee List":
         if rows:
             active_n = sum(1 for r in rows if r.get("is_active"))
-            k1, k2, k3 = st.columns(3, gap="small")
+            inactive_n = len(rows) - active_n
+            k1, k2, k3, k4 = st.columns(4, gap="small")
             k1.markdown(
                 f"<div class='txn-kpi-card'><p class='txn-kpi'>In View</p>"
                 f"<p class='txn-kpi-val'>{len(rows):,}</p></div>",
@@ -216,6 +228,11 @@ def page_hr_employees():
                 unsafe_allow_html=True,
             )
             k3.markdown(
+                f"<div class='txn-kpi-card'><p class='txn-kpi'>Inactive</p>"
+                f"<p class='txn-kpi-val'>{inactive_n:,}</p></div>",
+                unsafe_allow_html=True,
+            )
+            k4.markdown(
                 f"<div class='txn-kpi-card'><p class='txn-kpi'>Department</p>"
                 f"<p class='txn-kpi-val' style='font-size:1.05rem'>{dept_filter}</p></div>",
                 unsafe_allow_html=True,
@@ -341,12 +358,15 @@ def page_hr_employees():
                 desig_idx = next((i for i, k in enumerate(desig_keys) if desigs.get(k) == emp.get("designation_id")), 0)
                 dept = st.selectbox("Department", dept_keys, index=min(dept_idx, len(dept_keys) - 1))
                 desig = st.selectbox("Designation", desig_keys, index=min(desig_idx, len(desig_keys) - 1))
-                status = st.selectbox("Status", ["active", "probation", "confirmed", "resigned", "terminated"],
+                status = st.selectbox("Employment status", ["active", "probation", "confirmed", "resigned", "terminated"],
                                       index=["active", "probation", "confirmed", "resigned", "terminated"].index(
                                           emp.get("employment_status") or "active"))
                 basic = money_input("Basic Salary", value=float(emp.get("basic_salary") or 0), min_value=0.0, key="hr_emp_edit_basic")
                 bank = st.text_input("Bank Account", value=emp.get("bank_account") or "")
-                active = st.checkbox("Active", value=bool(emp.get("is_active", 1)))
+                active = st.checkbox(
+                    "Active (uncheck to inactivate — employee stays in master, hidden from payroll by default)",
+                    value=bool(emp.get("is_active", 1)),
+                )
                 if st.form_submit_button("Update"):
                     db.update_employee_hr(eid, {
                         "code": code, "full_name": name, "father_name": father, "cnic": cnic,
@@ -357,7 +377,10 @@ def page_hr_employees():
                         "designation_name": desig.split(" - ", 1)[-1] if desig else None,
                         "is_active": int(active),
                     }, uid())
-                    ff.action_done("Updated.")
+                    ff.action_done(
+                        "Updated."
+                        + (" Employee is now **inactive**." if not active else " Employee is **active**.")
+                    )
         st.markdown("**Leave Balances**")
         bals = db.get_leave_balances(eid)
         if bals:
