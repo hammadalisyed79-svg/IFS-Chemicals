@@ -18,10 +18,14 @@ from db_contractors import (
     deactivate_contractor,
     delete_contractor,
     get_contractor,
+    get_contractor_month_run,
     get_contractor_product_ids,
     get_contractor_product_rates,
+    list_contractor_month_runs,
     list_contractors,
+    month_bounds,
     product_ids_by_code_prefix,
+    save_contractor_month_run,
     save_contractor_products,
     update_contractor,
 )
@@ -65,12 +69,12 @@ def page_contract_labour():
     peek = st.session_state.get("cl_page_tab") or "Contractors"
     hlp.std_page_header(
         "Contract Labour",
-        subtitle="Payment types · Product assignment · Monthly preview",
+        subtitle="Payment types · Product assignment · Monthly worksheet",
         status="register" if peek == "Contractors" else None,
         status_kind="shell",
     )
     tab = hlp.sticky_page_tabs(
-        ["Contractors", "Products", "Month Preview"],
+        ["Contractors", "Products", "Monthly Worksheet"],
         "cl_page_tab",
     )
 
@@ -391,6 +395,7 @@ def _tab_products():
 
 def _tab_month_preview():
     from html import escape
+    import calendar
 
     rows = list_contractors(active_only=True)
     if not rows:
@@ -400,49 +405,89 @@ def _tab_month_preview():
     pick = {
         f"{r['supplier_code']} — {r['supplier_name']}": int(r["id"]) for r in rows
     }
+    today = date.today()
     c1, c2, c3 = st.columns([2, 1, 1])
     sel = c1.selectbox("Contractor", list(pick.keys()), key="cl_prev_pick")
-    today = date.today()
-    month_start = today.replace(day=1)
-    fd = c2.date_input("From", value=month_start, key="cl_prev_fd")
-    td = c3.date_input("To", value=today, key="cl_prev_td")
-    if fd > td:
-        st.error("From must be on or before To.")
-        return
-
+    year = c2.number_input(
+        "Year", min_value=2020, max_value=2035, value=today.year, step=1, key="cl_prev_year",
+    )
+    month = c3.selectbox(
+        "Month",
+        list(range(1, 13)),
+        index=today.month - 1,
+        format_func=lambda m: f"{m:02d} — {calendar.month_name[m]}",
+        key="cl_prev_month",
+    )
     cid = pick[sel]
+    fd, td = month_bounds(int(year), int(month))
+    ym = f"{int(year):04d}-{int(month):02d}"
+
     st.caption(
-        "**Sold Qty** = sales in period · **Stock in hand** = opening as of From · "
-        "**Sale return** = returns in period · **Physical Manual** = entered stock · "
-        "**Closing** = Sold - Opening - Sale return + Physical Manual · "
-        "**Answer** = Sold + Opening + Physical Manual · **Amount** = Answer x Rate."
+        "**Monthly worksheet only** (full calendar month). "
+        "**Closing (billable)** = Sold - Opening - Sale return + Physical Manual · "
+        "**Amount** = Closing x Rate. Save stores one record per contractor per month."
     )
 
-    mk = f"cl_manual_{cid}_{fd}_{td}"
-    if st.button("Load / refresh worksheet", type="primary", key="cl_prev_go"):
+    saved = get_contractor_month_run(cid, ym)
+    mk = f"cl_manual_{cid}_{ym}"
+    if mk not in st.session_state and saved:
+        st.session_state[mk] = {
+            int(ln["product_id"]): float(ln.get("manual_qty") or 0)
+            for ln in (saved.get("lines") or [])
+        }
+
+    b1, b2 = st.columns([1, 1])
+    if b1.button("Load / refresh month", type="primary", key="cl_prev_go"):
         try:
             prior = st.session_state.get(mk) or {}
+            if not prior and saved:
+                prior = {
+                    int(ln["product_id"]): float(ln.get("manual_qty") or 0)
+                    for ln in (saved.get("lines") or [])
+                }
             result = calculate_contractor_month(
-                cid, str(fd), str(td), manual_qty=prior,
+                cid, fd, td, manual_qty=prior,
             )
             st.session_state["cl_prev_result"] = result
-            st.session_state["cl_prev_meta"] = (cid, str(fd), str(td))
+            st.session_state["cl_prev_meta"] = (cid, ym)
         except Exception as e:
             st.error(str(e))
             return
+
+    if saved:
+        b2.info(
+            f"Saved record for **{ym}**: Gross Rs. {float(saved.get('gross_amount') or 0):,.2f}"
+            + (
+                f" · updated {saved.get('modified_at') or saved.get('created_at')}"
+                if saved.get("modified_at") or saved.get("created_at") else ""
+            )
+        )
+    else:
+        b2.caption("No saved record for this month yet.")
 
     result = st.session_state.get("cl_prev_result")
     meta = st.session_state.get("cl_prev_meta")
     if not result or not meta or meta[0] != cid:
         st.info(
-            "Choose period, then **Load / refresh worksheet**. "
-            "Sold / sale return are for the period; stock in hand is opening as of From; "
-            "enter **Physical Manual Added Stock** where needed."
+            "Choose **Year / Month**, then **Load / refresh month**. "
+            "Enter Physical Manual where needed, then **Save month record**."
         )
+        hist = list_contractor_month_runs(cid, limit=12)
+        if hist:
+            st.markdown("**Recent saved months**")
+            hlp.render_dataframe_html_table(pd.DataFrame([
+                {
+                    "Month": h.get("year_month"),
+                    "Closing Qty": round(float(h.get("closing_qty") or 0), 2),
+                    "Gross": round(float(h.get("gross_amount") or 0), 2),
+                    "Saved": h.get("modified_at") or h.get("created_at"),
+                }
+                for h in hist
+            ]))
         return
 
-    if meta[1] != str(fd) or meta[2] != str(td):
-        st.warning("Period changed — click **Load / refresh worksheet** to recalculate.")
+    if meta[1] != ym:
+        st.warning("Month changed — click **Load / refresh month** to recalculate.")
 
     c = result["contractor"]
     lines = result.get("lines") or []
@@ -454,13 +499,13 @@ def _tab_month_preview():
         f"### {escape(str(c.get('supplier_name') or ''))}  \n"
         f"<span style='color:#64748b;font-size:0.9rem'>"
         f"{escape(str(result.get('payment_type_label') or ''))} · "
-        f"{escape(result['from_date'])} → {escape(result['to_date'])}"
+        f"**{ym}** ({escape(fd)} → {escape(td)})"
         f"</span>",
         unsafe_allow_html=True,
     )
     st.markdown(
         "**Worksheet** — edit **Physical Manual Added Stock** only; "
-        "Closing, Answer and Amount update below."
+        "Closing and Amount update below."
     )
 
     prior_manual = st.session_state.get(mk) or {
@@ -497,47 +542,55 @@ def _tab_month_preview():
             "Product": st.column_config.TextColumn("Product", width="large"),
             "Sold Qty": st.column_config.NumberColumn(
                 "Sold Qty", format="%.2f",
-                help="Quantity sold in the selected period",
+                help="Quantity sold in this month",
             ),
             "Stock in hand": st.column_config.NumberColumn(
                 "Stock in hand", format="%.2f",
-                help="Opening quantity as of From (start) date",
+                help="Opening quantity as of month start",
             ),
             "Sale return": st.column_config.NumberColumn(
                 "Sale return", format="%.2f",
-                help="Sale return quantity in the selected period",
+                help="Sale return quantity in this month",
             ),
             "Physical Manual": st.column_config.NumberColumn(
                 "Physical Manual Added Stock",
                 min_value=0.0, step=1.0, format="%.2f",
-                help="Add physical/manual stock; used in Closing and Answer",
+                help="Add physical/manual stock; included in Closing (billable)",
             ),
             "Rate": st.column_config.NumberColumn("Rate", format="%.4f"),
         },
-        key=f"cl_ws_editor_{cid}_{fd}_{td}",
+        key=f"cl_ws_editor_{cid}_{ym}",
     )
+
+    def _f(v):
+        try:
+            x = float(v)
+            if x != x:  # NaN
+                return 0.0
+            return x
+        except (TypeError, ValueError):
+            return 0.0
 
     manual_map = {}
     display_rows = []
+    save_lines = []
     gross = 0.0
-    sum_sold = sum_stock = sum_ret = sum_man = sum_close = sum_ans = 0.0
+    sum_sold = sum_stock = sum_ret = sum_man = sum_close = 0.0
     for _, row in edited.iterrows():
         pid = int(row["product_id"])
-        sold = float(row["Sold Qty"] or 0)
-        stock = float(row["Stock in hand"] or 0)
-        ret = float(row["Sale return"] or 0)
-        man = float(row["Physical Manual"] or 0)
-        rate = float(row["Rate"] or 0)
+        sold = _f(row["Sold Qty"])
+        stock = _f(row["Stock in hand"])
+        ret = _f(row["Sale return"])
+        man = _f(row["Physical Manual"])
+        rate = _f(row["Rate"])
         closing = round(sold - stock - ret + man, 4)
-        answer = round(sold + stock + man, 4)
-        amount = round(answer * rate, 2)
+        amount = round(closing * rate, 2)
         manual_map[pid] = man
         sum_sold += sold
         sum_stock += stock
         sum_ret += ret
         sum_man += man
         sum_close += closing
-        sum_ans += answer
         gross += amount
         display_rows.append({
             "Code": row["Code"],
@@ -547,13 +600,24 @@ def _tab_month_preview():
             "Sale return": ret,
             "Physical Manual": man,
             "Closing Stock": closing,
-            "Answer": answer,
             "Rate": rate,
             "Amount": amount,
         })
+        save_lines.append({
+            "product_id": pid,
+            "product_code": row["Code"],
+            "product_name": row["Product"],
+            "sold_qty": sold,
+            "stock_qty": stock,
+            "sale_return_qty": ret,
+            "manual_qty": man,
+            "closing_stock": closing,
+            "rate": rate,
+            "amount": amount,
+        })
     st.session_state[mk] = manual_map
 
-    k1, k2, k3, k4, k5, k6 = st.columns(6, gap="small")
+    k1, k2, k3, k4, k5 = st.columns(5, gap="small")
     k1.markdown(
         f"<div class='txn-kpi-card'><p class='txn-kpi'>Items</p>"
         f"<p class='txn-kpi-val'>{len(display_rows):,}</p></div>",
@@ -570,24 +634,19 @@ def _tab_month_preview():
         unsafe_allow_html=True,
     )
     k4.markdown(
-        f"<div class='txn-kpi-card'><p class='txn-kpi'>Closing Stock</p>"
+        f"<div class='txn-kpi-card'><p class='txn-kpi'>Closing (billable)</p>"
         f"<p class='txn-kpi-val'>{sum_close:,.2f}</p></div>",
         unsafe_allow_html=True,
     )
     k5.markdown(
-        f"<div class='txn-kpi-card'><p class='txn-kpi'>Answer Qty</p>"
-        f"<p class='txn-kpi-val'>{sum_ans:,.2f}</p></div>",
-        unsafe_allow_html=True,
-    )
-    k6.markdown(
         f"<div class='txn-kpi-card'><p class='txn-kpi'>Gross Amount</p>"
         f"<p class='txn-kpi-val'>Rs. {gross:,.2f}</p></div>",
         unsafe_allow_html=True,
     )
 
     st.markdown(
-        "**Computed amounts** — Closing = Sold - Opening - Sale return + Physical Manual · "
-        "Answer = Sold + Opening + Physical Manual · Amount = Answer x Rate"
+        "**Computed amounts** — Closing (billable) = Sold - Opening - Sale return + Physical Manual · "
+        "Amount = Closing x Rate"
     )
     out_df = pd.DataFrame(display_rows)
     footer = {
@@ -598,7 +657,6 @@ def _tab_month_preview():
         "Sale return": round(sum_ret, 2),
         "Physical Manual": round(sum_man, 2),
         "Closing Stock": round(sum_close, 2),
-        "Answer": round(sum_ans, 2),
         "Rate": "",
         "Amount": round(gross, 2),
     }
@@ -609,30 +667,39 @@ def _tab_month_preview():
         f"<div style='text-align:right;margin-top:8px;padding:12px 16px;"
         f"background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px'>"
         f"<div style='font-size:0.75rem;text-transform:uppercase;letter-spacing:0.04em;color:#64748b'>"
-        f"Gross amount ({len(display_rows)} items)</div>"
+        f"Gross amount ({len(display_rows)} items) · {ym}</div>"
         f"<div style='font-size:1.45rem;font-weight:700;color:#0f172a'>Rs. {gross:,.2f}</div>"
         f"</div>",
         unsafe_allow_html=True,
     )
 
+    notes = st.text_input("Save notes (optional)", key=f"cl_month_notes_{cid}_{ym}")
+    if st.button("Save month record", type="primary", key=f"cl_month_save_{cid}_{ym}"):
+        try:
+            run_id = save_contractor_month_run(
+                cid, ym, save_lines, notes=notes, user_id=hlp.uid(),
+            )
+            ff.action_done(
+                f"Month **{ym}** saved (record #{run_id}). "
+                f"Gross Rs. {gross:,.2f} · Closing qty {sum_close:,.2f}."
+            )
+        except Exception as e:
+            st.error(f"Could not save: {e}")
+
     from erp_ui.report_print import report_toolbar
-    title = (
-        f"Contract Labour — {c.get('supplier_name')} "
-        f"({result['from_date']} to {result['to_date']})"
-    )
+    title = f"Contract Labour — {c.get('supplier_name')} — {ym}"
     report_toolbar(
         out_df, title, "contract_labour_month",
-        period=f"{result['from_date']} to {result['to_date']}",
+        period=f"{fd} to {td}",
         summary={
+            "Month": ym,
             "Items": len(display_rows),
             "Sold Qty": round(sum_sold, 2),
             "Opening": round(sum_stock, 2),
             "Sale return": round(sum_ret, 2),
             "Closing Stock": round(sum_close, 2),
-            "Answer Qty": round(sum_ans, 2),
             "Gross Amount": round(gross, 2),
         },
         key_prefix="cl_month",
         layout="landscape",
     )
-

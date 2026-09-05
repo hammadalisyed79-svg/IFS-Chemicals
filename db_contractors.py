@@ -44,10 +44,43 @@ def apply_contract_labour(conn, db_module=None):
             sort_order      INTEGER DEFAULT 0,
             UNIQUE(contractor_id, product_id)
         );
+        CREATE TABLE IF NOT EXISTS contract_labour_month_runs (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            contractor_id   INTEGER NOT NULL REFERENCES contract_labourers(id) ON DELETE CASCADE,
+            year_month      TEXT NOT NULL,
+            from_date       TEXT NOT NULL,
+            to_date         TEXT NOT NULL,
+            gross_amount    REAL DEFAULT 0,
+            closing_qty     REAL DEFAULT 0,
+            notes           TEXT,
+            created_by      INTEGER REFERENCES users(id),
+            created_at      TEXT DEFAULT CURRENT_TIMESTAMP,
+            modified_by     INTEGER REFERENCES users(id),
+            modified_at     TEXT,
+            UNIQUE(contractor_id, year_month)
+        );
+        CREATE TABLE IF NOT EXISTS contract_labour_month_lines (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            run_id          INTEGER NOT NULL
+                REFERENCES contract_labour_month_runs(id) ON DELETE CASCADE,
+            product_id      INTEGER NOT NULL REFERENCES products(id),
+            product_code    TEXT,
+            product_name    TEXT,
+            sold_qty        REAL DEFAULT 0,
+            stock_qty       REAL DEFAULT 0,
+            sale_return_qty REAL DEFAULT 0,
+            manual_qty      REAL DEFAULT 0,
+            closing_stock   REAL DEFAULT 0,
+            rate            REAL DEFAULT 0,
+            amount          REAL DEFAULT 0,
+            sort_order      INTEGER DEFAULT 0
+        );
         CREATE INDEX IF NOT EXISTS idx_cl_supplier ON contract_labourers(supplier_id);
         CREATE INDEX IF NOT EXISTS idx_cl_type ON contract_labourers(payment_type);
         CREATE INDEX IF NOT EXISTS idx_cl_products_c ON contract_labour_products(contractor_id);
         CREATE INDEX IF NOT EXISTS idx_cl_products_p ON contract_labour_products(product_id);
+        CREATE INDEX IF NOT EXISTS idx_cl_month_run ON contract_labour_month_runs(contractor_id, year_month);
+        CREATE INDEX IF NOT EXISTS idx_cl_month_lines ON contract_labour_month_lines(run_id);
         """
     )
 
@@ -469,19 +502,15 @@ def calculate_contractor_month(
     *,
     manual_qty: dict | None = None,
 ) -> dict:
-    """Payment worksheet lines for the period.
+    """Monthly payment worksheet lines.
 
-    Sold Qty = approved sales in period
-    Stock in hand = opening qty as of From date
-    Sale return = returns in period
+    Sold Qty = approved sales in month
+    Stock in hand = opening qty as of month start
+    Sale return = returns in month
     Physical Manual Added Stock = user-entered manual qty
-    Closing Stock = Sold - Opening - Sale return + Physical Manual
-    Billable (Answer) = Sold + Opening + Physical Manual
-    Amount = Answer x Rate
+    Closing Stock (billable) = Sold - Opening - Sale return + Physical Manual
+    Amount = Closing Stock x Rate
     Gross = sum of amounts
-
-    For production_qty contractors, production qty is also returned (info);
-    billable still follows Sold + Opening + Manual so SKU payment is consistent.
     """
     c = get_contractor(contractor_id)
     if not c:
@@ -505,7 +534,7 @@ def calculate_contractor_month(
     default_rate = float(c.get("default_rate") or 0)
     lines = []
     total = 0.0
-    total_sold = total_stock = total_return = total_manual = total_closing = total_answer = 0.0
+    total_sold = total_stock = total_return = total_manual = total_closing = 0.0
     for p in products:
         pid = int(p["product_id"])
         sold = round(float(sold_map.get(pid) or 0), 4)
@@ -513,9 +542,8 @@ def calculate_contractor_month(
         ret = round(float(return_map.get(pid) or 0), 4)
         man = round(float(manual.get(pid) or 0), 4)
         closing = round(sold - stock - ret + man, 4)
-        answer = round(sold + stock + man, 4)
         rate = float(p["rate"] if p.get("rate") is not None else default_rate)
-        amount = round(answer * rate, 2)
+        amount = round(closing * rate, 2)
         qinfo = prod_map.get(pid) or {}
         total += amount
         total_sold += sold
@@ -523,7 +551,6 @@ def calculate_contractor_month(
         total_return += ret
         total_manual += man
         total_closing += closing
-        total_answer += answer
         lines.append({
             "product_id": pid,
             "product_code": p.get("product_code"),
@@ -533,22 +560,23 @@ def calculate_contractor_month(
             "sale_return_qty": ret,
             "manual_qty": man,
             "closing_stock": closing,
-            "answer_qty": answer,
             "batch_count": int(qinfo.get("batch_count") or 0),
             "production_qty": float(qinfo.get("quantity") or 0),
-            "quantity": answer,  # billable
+            "quantity": closing,  # billable
             "rate": rate,
             "amount": amount,
         })
+    ym = str(from_date)[:7]
     return {
         "contractor": c,
+        "year_month": ym,
         "from_date": from_date,
         "to_date": to_date,
         "payment_type": c.get("payment_type"),
         "payment_type_label": PAYMENT_TYPES.get(c.get("payment_type"), c.get("payment_type")),
         "formula": (
-            "Closing = Sold - Opening - Sale return + Physical Manual; "
-            "Answer = Sold + Opening + Physical Manual; Amount = Answer x Rate"
+            "Closing (billable) = Sold - Opening - Sale return + Physical Manual; "
+            "Amount = Closing x Rate"
         ),
         "lines": lines,
         "total": round(total, 2),
@@ -558,8 +586,175 @@ def calculate_contractor_month(
             "sale_return_qty": round(total_return, 4),
             "manual_qty": round(total_manual, 4),
             "closing_stock": round(total_closing, 4),
-            "answer_qty": round(total_answer, 4),
             "gross_amount": round(total, 2),
             "item_count": len(lines),
         },
     }
+
+
+def month_bounds(year: int, month: int) -> tuple[str, str]:
+    """Return (from_date, to_date) for a calendar month."""
+    import calendar
+    from datetime import date as _date
+
+    y, m = int(year), int(month)
+    if m < 1 or m > 12:
+        raise ValueError("Month must be 1–12.")
+    last = calendar.monthrange(y, m)[1]
+    return (
+        _date(y, m, 1).isoformat(),
+        _date(y, m, last).isoformat(),
+    )
+
+
+def get_contractor_month_run(contractor_id: int, year_month: str):
+    """Load saved monthly worksheet header + lines, or None."""
+    from database import get_connection, row_to_dict, rows_to_list
+
+    ym = str(year_month)[:7]
+    with get_connection() as conn:
+        apply_contract_labour(conn)
+        h = conn.execute(
+            """SELECT * FROM contract_labour_month_runs
+               WHERE contractor_id=? AND year_month=?""",
+            (int(contractor_id), ym),
+        ).fetchone()
+        if not h:
+            return None
+        header = row_to_dict(h)
+        lines = rows_to_list(conn.execute(
+            """SELECT * FROM contract_labour_month_lines
+               WHERE run_id=? ORDER BY sort_order, id""",
+            (header["id"],),
+        ).fetchall())
+        header["lines"] = lines
+        return header
+
+
+def list_contractor_month_runs(contractor_id: int, limit: int = 24):
+    from database import get_connection, rows_to_list
+
+    with get_connection() as conn:
+        apply_contract_labour(conn)
+        return rows_to_list(conn.execute(
+            """SELECT id, year_month, from_date, to_date, gross_amount, closing_qty,
+                      modified_at, created_at
+               FROM contract_labour_month_runs
+               WHERE contractor_id=?
+               ORDER BY year_month DESC
+               LIMIT ?""",
+            (int(contractor_id), int(limit)),
+        ).fetchall())
+
+
+def save_contractor_month_run(
+    contractor_id: int,
+    year_month: str,
+    lines: list[dict],
+    *,
+    notes: str | None = None,
+    user_id=None,
+) -> int:
+    """Upsert monthly worksheet record (one per contractor per month)."""
+    from database import get_connection, _now
+
+    ym = str(year_month)[:7]
+    try:
+        y, m = int(ym[:4]), int(ym[5:7])
+    except (TypeError, ValueError):
+        raise ValueError("year_month must be YYYY-MM.")
+    from_date, to_date = month_bounds(y, m)
+    gross = 0.0
+    closing_sum = 0.0
+    clean = []
+    for i, ln in enumerate(lines or []):
+        try:
+            pid = int(ln.get("product_id") or 0)
+        except (TypeError, ValueError):
+            continue
+        if not pid:
+            continue
+        sold = round(float(ln.get("sold_qty") or 0), 4)
+        stock = round(float(ln.get("stock_qty") or 0), 4)
+        ret = round(float(ln.get("sale_return_qty") or 0), 4)
+        man = round(float(ln.get("manual_qty") or 0), 4)
+        closing = round(float(ln.get("closing_stock") if ln.get("closing_stock") is not None
+                              else (sold - stock - ret + man)), 4)
+        rate = round(float(ln.get("rate") or 0), 4)
+        amount = round(float(ln.get("amount") if ln.get("amount") is not None
+                             else (closing * rate)), 2)
+        gross += amount
+        closing_sum += closing
+        clean.append({
+            "product_id": pid,
+            "product_code": ln.get("product_code"),
+            "product_name": ln.get("product_name"),
+            "sold_qty": sold,
+            "stock_qty": stock,
+            "sale_return_qty": ret,
+            "manual_qty": man,
+            "closing_stock": closing,
+            "rate": rate,
+            "amount": amount,
+            "sort_order": i,
+        })
+
+    ts = _now()
+    with get_connection() as conn:
+        apply_contract_labour(conn)
+        if not conn.execute(
+            "SELECT id FROM contract_labourers WHERE id=?", (int(contractor_id),),
+        ).fetchone():
+            raise ValueError("Contractor not found.")
+        existing = conn.execute(
+            """SELECT id FROM contract_labour_month_runs
+               WHERE contractor_id=? AND year_month=?""",
+            (int(contractor_id), ym),
+        ).fetchone()
+        note_val = (notes or "").strip() or None
+        if existing:
+            run_id = int(existing["id"])
+            conn.execute(
+                """UPDATE contract_labour_month_runs
+                   SET from_date=?, to_date=?, gross_amount=?, closing_qty=?, notes=?,
+                       modified_by=?, modified_at=?
+                   WHERE id=?""",
+                (from_date, to_date, round(gross, 2), round(closing_sum, 4),
+                 note_val, user_id, ts, run_id),
+            )
+            conn.execute(
+                "DELETE FROM contract_labour_month_lines WHERE run_id=?", (run_id,),
+            )
+        else:
+            cur = conn.execute(
+                """INSERT INTO contract_labour_month_runs(
+                       contractor_id, year_month, from_date, to_date,
+                       gross_amount, closing_qty, notes, created_by, created_at
+                   ) VALUES (?,?,?,?,?,?,?,?,?)""",
+                (int(contractor_id), ym, from_date, to_date,
+                 round(gross, 2), round(closing_sum, 4), note_val, user_id, ts),
+            )
+            run_id = int(cur.lastrowid)
+        for ln in clean:
+            conn.execute(
+                """INSERT INTO contract_labour_month_lines(
+                       run_id, product_id, product_code, product_name,
+                       sold_qty, stock_qty, sale_return_qty, manual_qty,
+                       closing_stock, rate, amount, sort_order
+                   ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
+                (
+                    run_id, ln["product_id"], ln["product_code"], ln["product_name"],
+                    ln["sold_qty"], ln["stock_qty"], ln["sale_return_qty"], ln["manual_qty"],
+                    ln["closing_stock"], ln["rate"], ln["amount"], ln["sort_order"],
+                ),
+            )
+    try:
+        from db_audit import log_event
+        log_event(
+            "contract_labour_month_runs", run_id, "save", user_id=user_id,
+            module="Contract Labour",
+            summary=f"Month worksheet saved {ym} gross={round(gross, 2)}",
+        )
+    except Exception:
+        pass
+    return run_id
