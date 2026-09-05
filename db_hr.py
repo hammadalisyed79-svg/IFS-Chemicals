@@ -1979,6 +1979,15 @@ def update_payroll_lines_bulk(updates, user_id=None, sync_ot=None):
             row = dict(row)
             if row["payroll_status"] != "draft":
                 raise ValueError("Only draft payroll can be edited.")
+            if (row.get("paid_status") or "") == "paid":
+                raise ValueError(
+                    f"Line #{line_id} is already paid — undo that payment before editing."
+                )
+            if _payroll_line_accrual_exists(conn, int(line_id)):
+                raise ValueError(
+                    f"Line #{line_id} already has a posted voucher — "
+                    "undo the payment first, then edit."
+                )
             merged = dict(row)
             for k in editable:
                 if k in data:
@@ -2308,7 +2317,10 @@ def payroll_gl_posted(payroll_id):
 
 
 def rollback_payroll_gl(payroll_id, user_id, reason=""):
-    """Reverse payroll salary accrual voucher (posted → approved). If paid, reverses payment GL first."""
+    """Reverse payroll salary accrual voucher (posted → approved). If paid, reverses payment GL first.
+
+    Also clears per-employee Post & voucher accruals when the run is still draft.
+    """
     from database import get_connection
 
     reason = (reason or "").strip()
@@ -2322,8 +2334,34 @@ def rollback_payroll_gl(payroll_id, user_id, reason=""):
         pr = dict(pr)
         status = pr["status"]
 
+        all_line_ids = [
+            r[0] for r in conn.execute(
+                "SELECT id FROM payroll_lines WHERE payroll_id=?", (payroll_id,),
+            ).fetchall()
+        ]
+        paid_line_ids = [
+            r[0] for r in conn.execute(
+                "SELECT id FROM payroll_lines WHERE payroll_id=? AND paid_status='paid'",
+                (payroll_id,),
+            ).fetchall()
+        ]
+        has_line_accrual = any(_payroll_line_accrual_exists(conn, lid) for lid in all_line_ids)
+
         if status == "draft":
-            raise ValueError("Payroll is not posted to GL.")
+            if not paid_line_ids and not has_line_accrual:
+                raise ValueError("Payroll is not posted to GL.")
+            for lid in paid_line_ids:
+                _undo_payroll_line_payment(conn, lid)
+            for lid in all_line_ids:
+                _undo_payroll_line_accrual(conn, lid)
+            note = f"\nLine voucher rollback ({now()}): {reason}"
+            conn.execute(
+                """UPDATE payroll_runs SET notes=COALESCE(notes,'') || ?,
+                   modified_by=?, modified_at=? WHERE id=?""",
+                (note, user_id, now(), payroll_id),
+            )
+            return
+
         has_accrual = conn.execute(
             "SELECT 1 FROM general_ledger WHERE reference_type='payroll' AND reference_id=? LIMIT 1",
             (payroll_id,),
@@ -2332,17 +2370,13 @@ def rollback_payroll_gl(payroll_id, user_id, reason=""):
             "SELECT 1 FROM general_ledger WHERE reference_type='payroll_payment' AND reference_id=? LIMIT 1",
             (payroll_id,),
         ).fetchone()
-        if status == "approved" and not has_accrual and not has_payment:
+        if status == "approved" and not has_accrual and not has_payment and not paid_line_ids:
             raise ValueError("Payroll has no GL voucher to rollback.")
 
-        line_ids = [
-            r[0] for r in conn.execute(
-                "SELECT id FROM payroll_lines WHERE payroll_id=? AND paid_status='paid'",
-                (payroll_id,),
-            ).fetchall()
-        ]
-        for lid in line_ids:
+        for lid in paid_line_ids:
             _undo_payroll_line_payment(conn, lid)
+        for lid in all_line_ids:
+            _undo_payroll_line_accrual(conn, lid)
 
         removed_payment = 0
         if status == "paid" or has_payment:
@@ -2356,7 +2390,7 @@ def rollback_payroll_gl(payroll_id, user_id, reason=""):
 
         if status == "posted" or has_accrual:
             removed = _delete_gl_reference(conn, "payroll", payroll_id)
-            if removed == 0 and removed_payment == 0:
+            if removed == 0 and removed_payment == 0 and not paid_line_ids and not has_line_accrual:
                 raise ValueError("No payroll GL entries found to rollback.")
             note = f"\nGL rollback ({now()}): {reason}"
             conn.execute(
@@ -2402,6 +2436,13 @@ def rollback_generated_payroll(payroll_id, user_id, reason=""):
         ]
         for lid in line_ids:
             _undo_payroll_line_payment(conn, lid)
+        # Clear any leftover one-employee accruals (paid undo already clears theirs)
+        for lid in (
+            r[0] for r in conn.execute(
+                "SELECT id FROM payroll_lines WHERE payroll_id=?", (payroll_id,),
+            ).fetchall()
+        ):
+            _undo_payroll_line_accrual(conn, lid)
         if has_payment:
             _delete_gl_reference(conn, "payroll_payment", payroll_id)
         if has_accrual:
@@ -2437,14 +2478,30 @@ def post_payroll_gl(payroll_id, user_id):
         ).fetchone()
         if existing:
             return
-        lines = conn.execute("SELECT * FROM payroll_lines WHERE payroll_id=?", (payroll_id,)).fetchall()
-        gross = sum(dict(l)["gross_salary"] for l in lines)
-        net = sum(dict(l)["net_salary"] for l in lines)
-        adv_rec = sum(dict(l)["advance_recovery"] for l in lines)
-        eobi = sum(dict(l)["eobi"] for l in lines)
-        ss = sum(dict(l)["social_security"] for l in lines)
-        tax = sum(dict(l)["tax_deduction"] for l in lines)
-        loan_rec = sum(dict(l)["loan_recovery"] for l in lines)
+        # Skip lines already paid / accrued one-by-one at the counter
+        lines = conn.execute(
+            """SELECT pl.* FROM payroll_lines pl
+               WHERE pl.payroll_id=?
+                 AND COALESCE(pl.paid_status,'unpaid')!='paid'
+                 AND NOT EXISTS (
+                     SELECT 1 FROM general_ledger g
+                     WHERE g.reference_type='payroll_line_accrual' AND g.reference_id=pl.id
+                 )""",
+            (payroll_id,),
+        ).fetchall()
+        if not lines:
+            conn.execute(
+                "UPDATE payroll_runs SET status='posted',posted_by=?,posted_at=? WHERE id=?",
+                (user_id, now(), payroll_id),
+            )
+            return
+        gross = sum(float(dict(l)["gross_salary"] or 0) for l in lines)
+        net = sum(float(dict(l)["net_salary"] or 0) for l in lines)
+        adv_rec = sum(float(dict(l)["advance_recovery"] or 0) for l in lines)
+        eobi = sum(float(dict(l)["eobi"] or 0) for l in lines)
+        ss = sum(float(dict(l)["social_security"] or 0) for l in lines)
+        tax = sum(float(dict(l)["tax_deduction"] or 0) for l in lines)
+        loan_rec = sum(float(dict(l)["loan_recovery"] or 0) for l in lines)
         entry_date = pr["run_date"]
         ref_no = pr["document_no"]
 
@@ -2467,21 +2524,77 @@ def post_payroll_gl(payroll_id, user_id):
         )
 
 
+def _payroll_line_accrual_exists(conn, line_id) -> bool:
+    return bool(conn.execute(
+        "SELECT 1 FROM general_ledger WHERE reference_type='payroll_line_accrual' AND reference_id=? LIMIT 1",
+        (int(line_id),),
+    ).fetchone())
+
+
+def _post_payroll_line_accrual(conn, row, user_id):
+    """Post salary accrual GL for one employee (counter / Edit Lines Post & voucher)."""
+    from db_v3 import post_gl
+
+    line_id = int(row["id"])
+    if _payroll_line_accrual_exists(conn, line_id):
+        return False
+    # Whole-run accrual already covers this line
+    if conn.execute(
+        "SELECT 1 FROM general_ledger WHERE reference_type='payroll' AND reference_id=? LIMIT 1",
+        (int(row["payroll_id"]),),
+    ).fetchone():
+        return False
+
+    entry_date = str(row.get("run_date") or now()[:10])
+    ref_no = f"{row['payroll_no']}/{row['emp_code']}"
+    label = f"Salary accrual {row['payroll_no']} — {row['employee_name']} ({row['emp_code']})"
+    gross = round(float(row.get("gross_salary") or 0), 2)
+    net = round(float(row.get("net_salary") or 0), 2)
+    adv = round(float(row.get("advance_recovery") or 0), 2)
+    loan = round(float(row.get("loan_recovery") or 0), 2)
+    eobi = round(float(row.get("eobi") or 0), 2)
+    ss = round(float(row.get("social_security") or 0), 2)
+    tax = round(float(row.get("tax_deduction") or 0), 2)
+    other = round(float(row.get("other_deductions") or 0), 2)
+    # Balance: expense = credits (other folds into reducing net vs expense — post as payable adjust via net)
+    if gross > 0.009:
+        post_gl(conn, entry_date, HR_AC["salary_expense"], gross, 0, label, "payroll_line_accrual", line_id, ref_no, user_id)
+    if adv > 0.009:
+        post_gl(conn, entry_date, HR_AC["employee_advance"], 0, adv, f"{label} — advance", "payroll_line_accrual", line_id, ref_no, user_id)
+    if loan > 0.009:
+        post_gl(conn, entry_date, HR_AC["employee_advance"], 0, loan, f"{label} — loan", "payroll_line_accrual", line_id, ref_no, user_id)
+    if eobi > 0.009:
+        post_gl(conn, entry_date, HR_AC["eobi_payable"], 0, eobi, f"{label} — EOBI", "payroll_line_accrual", line_id, ref_no, user_id)
+    if ss > 0.009:
+        post_gl(conn, entry_date, HR_AC["ss_payable"], 0, ss, f"{label} — SS", "payroll_line_accrual", line_id, ref_no, user_id)
+    if tax > 0.009:
+        post_gl(conn, entry_date, HR_AC["tax_payable_payroll"], 0, tax, f"{label} — tax", "payroll_line_accrual", line_id, ref_no, user_id)
+    # Net payable = gross - all deductions (includes other)
+    payable = round(gross - adv - loan - eobi - ss - tax - other, 2)
+    if abs(payable - net) > 0.05:
+        payable = net
+    if payable > 0.009:
+        post_gl(conn, entry_date, HR_AC["salary_payable"], 0, payable, f"{label} — net", "payroll_line_accrual", line_id, ref_no, user_id)
+    elif payable < -0.009:
+        # Negative net: reduce expense / no cash pay later
+        post_gl(conn, entry_date, HR_AC["salary_payable"], -payable, 0, f"{label} — net adj", "payroll_line_accrual", line_id, ref_no, user_id)
+    return True
+
+
 def _refresh_payroll_paid_status(conn, payroll_id, user_id=None):
-    """Mark payroll run paid when every line is paid. Never overwrites closed."""
+    """Mark payroll run paid when every line is paid. Never overwrites closed.
+
+    Partial pays from draft stay on draft so Edit Lines remains open for others.
+    """
     st = conn.execute(
         "SELECT status FROM payroll_runs WHERE id=?", (payroll_id,),
     ).fetchone()
-    if st and (st[0] or "") == "closed":
+    cur = (st[0] or "").strip().lower() if st else ""
+    if cur == "closed":
         return
     total = conn.execute(
         "SELECT COUNT(*) FROM payroll_lines WHERE payroll_id=?", (payroll_id,)
     ).fetchone()[0]
-    paid = conn.execute(
-        "SELECT COUNT(*) FROM payroll_lines WHERE payroll_id=? AND paid_status='paid'",
-        (payroll_id,),
-    ).fetchone()[0]
-    # Lines with nil net need not be paid to consider the run complete
     unpaid_due = conn.execute(
         """SELECT COUNT(*) FROM payroll_lines
            WHERE payroll_id=? AND COALESCE(paid_status,'unpaid')!='paid'
@@ -2491,6 +2604,12 @@ def _refresh_payroll_paid_status(conn, payroll_id, user_id=None):
     if total and unpaid_due == 0:
         conn.execute(
             "UPDATE payroll_runs SET status='paid', paid_by=?, paid_at=? WHERE id=?",
+            (user_id, now(), payroll_id),
+        )
+    elif cur == "draft":
+        # Keep draft while some staff still unpaid — Edit Lines stays available
+        conn.execute(
+            "UPDATE payroll_runs SET modified_by=?, modified_at=? WHERE id=?",
             (user_id, now(), payroll_id),
         )
     else:
@@ -2528,8 +2647,8 @@ def close_payroll_month(payroll_id, user_id, notes=""):
         status = (pr.get("status") or "").strip().lower()
         if status == "closed":
             raise ValueError("Payroll month is already closed.")
-        if status not in ("posted", "paid"):
-            raise ValueError("Post payroll to GL and pay all staff before closing the month.")
+        if status not in ("draft", "posted", "paid"):
+            raise ValueError("Pay all staff (or Post remaining to GL) before closing the month.")
         unpaid = conn.execute(
             """SELECT COUNT(*) FROM payroll_lines
                WHERE payroll_id=? AND COALESCE(paid_status,'unpaid')!='paid'
@@ -2601,10 +2720,49 @@ def get_payroll_line_voucher_data(line_id):
         return row_to_dict(row) if row else None
 
 
-def _undo_payroll_line_payment(conn, line_id):
+def _undo_gl_by_reference(conn, ref_type, ref_id):
+    """Reverse CoA balances and delete GL rows for one reference."""
+    for gl_row in conn.execute(
+        "SELECT account_id, debit, credit FROM general_ledger WHERE reference_type=? AND reference_id=?",
+        (ref_type, ref_id),
+    ).fetchall():
+        aid, dr, cr = gl_row[0], float(gl_row[1] or 0), float(gl_row[2] or 0)
+        if dr:
+            conn.execute(
+                "UPDATE chart_of_accounts SET current_balance=current_balance-? WHERE id=?",
+                (dr, aid),
+            )
+        if cr:
+            conn.execute(
+                "UPDATE chart_of_accounts SET current_balance=current_balance+? WHERE id=?",
+                (cr, aid),
+            )
+    conn.execute(
+        "DELETE FROM general_ledger WHERE reference_type=? AND reference_id=?",
+        (ref_type, ref_id),
+    )
+
+
+def _undo_payroll_line_accrual(conn, line_id):
+    """Reverse per-employee salary accrual (only when no whole-run payroll GL)."""
+    row = conn.execute(
+        "SELECT payroll_id FROM payroll_lines WHERE id=?", (line_id,),
+    ).fetchone()
+    if not row:
+        return
+    whole = conn.execute(
+        "SELECT 1 FROM general_ledger WHERE reference_type='payroll' AND reference_id=? LIMIT 1",
+        (int(row[0]),),
+    ).fetchone()
+    if whole:
+        return  # month-level accrual remains
+    _undo_gl_by_reference(conn, "payroll_line_accrual", int(line_id))
+    _undo_gl_by_reference(conn, "payroll_line_adjust", int(line_id))
+
+
+def _undo_payroll_line_payment(conn, line_id, reverse_accrual=True):
     """Reverse one employee salary payment (GL + cash/bank book row)."""
     import database as db
-    from db_v3 import gl_account_code
 
     row = conn.execute(
         """SELECT pl.*, pr.document_no AS payroll_no
@@ -2616,19 +2774,9 @@ def _undo_payroll_line_payment(conn, line_id):
     if not row or dict(row).get("paid_status") != "paid":
         return
     row = dict(row)
-    amt = float(row.get("paid_amount") or row.get("net_salary") or 0)
     doc = row.get("payment_document_no") or ""
-    for gl_row in conn.execute(
-        "SELECT account_id, debit, credit FROM general_ledger WHERE reference_type='payroll_line_payment' AND reference_id=?",
-        (line_id,),
-    ).fetchall():
-        aid, dr, cr = gl_row[0], float(gl_row[1] or 0), float(gl_row[2] or 0)
-        if dr:
-            conn.execute("UPDATE chart_of_accounts SET current_balance=current_balance-? WHERE id=?", (dr, aid))
-        if cr:
-            conn.execute("UPDATE chart_of_accounts SET current_balance=current_balance+? WHERE id=?", (cr, aid))
-    conn.execute("DELETE FROM general_ledger WHERE reference_type='payroll_line_payment' AND reference_id=?", (line_id,))
-    if doc:
+    _undo_gl_by_reference(conn, "payroll_line_payment", line_id)
+    if doc and not str(doc).startswith("ADJ/"):
         cp = conn.execute(
             "SELECT payment_date FROM cash_payments WHERE document_no=?", (doc,),
         ).fetchone()
@@ -2642,12 +2790,18 @@ def _undo_payroll_line_payment(conn, line_id):
            payment_mode=NULL, payment_document_no=NULL, paid_by=NULL, paid_at=NULL WHERE id=?""",
         (line_id,),
     )
+    if reverse_accrual:
+        _undo_payroll_line_accrual(conn, line_id)
 
 
 def pay_payroll_line(line_id, user_id, payment_mode="cash", payment_date=None, bank_account_id=None):
-    """Pay one employee net salary — cash/bank book entry + GL per line."""
+    """Pay one employee — from draft (accrue + cash) or after month Post to GL.
+
+    Draft / approved: posts this employee's salary accrual then cash/bank voucher.
+    Posted / paid month: pays against the existing salary payable (no re-accrual).
+    """
     import database as db
-    from db_v3 import post_gl, post_gl_account_id, gl_account_code, AC
+    from db_v3 import post_gl, post_gl_account_id, AC
 
     mode = (payment_mode or "cash").lower()
     if mode not in ("cash", "bank"):
@@ -2656,6 +2810,7 @@ def pay_payroll_line(line_id, user_id, payment_mode="cash", payment_date=None, b
         raise ValueError("Select a bank account for bank payment.")
 
     with db.get_connection() as conn:
+        apply_hr(conn, db)
         row = conn.execute(
             """SELECT pl.*, pr.document_no AS payroll_no, pr.status AS payroll_status, pr.run_date,
                       e.full_name AS employee_name, e.code AS emp_code
@@ -2668,15 +2823,25 @@ def pay_payroll_line(line_id, user_id, payment_mode="cash", payment_date=None, b
         if not row:
             raise ValueError("Payroll line not found.")
         row = dict(row)
-        if row["payroll_status"] == "closed":
+        status = (row.get("payroll_status") or "").strip().lower()
+        if status == "closed":
             raise ValueError("Payroll month is closed — reopen before paying or changing payments.")
-        if row["payroll_status"] not in ("posted", "paid"):
-            raise ValueError("Payroll must be posted to GL before paying employees.")
+        if status not in ("draft", "approved", "posted", "paid"):
+            raise ValueError(f"Cannot pay from payroll status '{status}'.")
         if row.get("paid_status") == "paid":
             raise ValueError(f"Already paid ({row.get('payment_document_no') or '—'}).")
         amt = round(float(row.get("net_salary") or 0), 2)
         if amt <= 0:
             raise ValueError("Net salary is zero — nothing to pay.")
+
+        whole_posted = bool(conn.execute(
+            "SELECT 1 FROM general_ledger WHERE reference_type='payroll' AND reference_id=? LIMIT 1",
+            (int(row["payroll_id"]),),
+        ).fetchone())
+        if not whole_posted:
+            # One-employee Post & voucher from Edit Lines / Pay Desk (draft)
+            _post_payroll_line_accrual(conn, row, user_id)
+
         pay_date = str(payment_date or row.get("run_date") or now()[:10])
         label = f"Salary {row['payroll_no']} — {row['employee_name']} ({row['emp_code']})"
         ref = f"{row['payroll_no']}/{row['emp_code']}"
@@ -2717,6 +2882,11 @@ def pay_payroll_line(line_id, user_id, payment_mode="cash", payment_date=None, b
         }
 
 
+def post_and_pay_payroll_line(line_id, user_id, payment_mode="cash", payment_date=None, bank_account_id=None):
+    """Alias for counter / Edit Lines: accrue this employee (if needed) + cash voucher."""
+    return pay_payroll_line(line_id, user_id, payment_mode, payment_date, bank_account_id)
+
+
 def settle_payroll_line_adjustment(line_id, user_id, note="", payment_date=None):
     """Mark a payroll line paid without cash/bank voucher.
 
@@ -2741,8 +2911,8 @@ def settle_payroll_line_adjustment(line_id, user_id, note="", payment_date=None)
         row = dict(row)
         if row["payroll_status"] == "closed":
             raise ValueError("Payroll month is closed — reopen before settling lines.")
-        if row["payroll_status"] not in ("posted", "paid"):
-            raise ValueError("Payroll must be posted (or paid) before settling lines.")
+        if row["payroll_status"] not in ("draft", "approved", "posted", "paid"):
+            raise ValueError("Payroll must be draft, posted, or paid before settling lines.")
         if row.get("paid_status") == "paid":
             raise ValueError(f"Already paid ({row.get('payment_document_no') or '—'}).")
         amt = round(float(row.get("net_salary") or 0), 2)
@@ -2775,8 +2945,8 @@ def pay_payroll(payroll_id, user_id, payment_mode="cash", payment_date=None, ban
             raise ValueError("Payroll not found.")
         if (pr[0] or "") == "closed":
             raise ValueError("Payroll month is closed — reopen before paying.")
-        if pr[0] not in ("posted", "paid"):
-            raise ValueError("Payroll must be posted before payment")
+        if pr[0] not in ("draft", "approved", "posted", "paid"):
+            raise ValueError("Payroll must be draft, approved, or posted before payment")
         line_ids = [
             r[0] for r in conn.execute(
                 """SELECT id FROM payroll_lines

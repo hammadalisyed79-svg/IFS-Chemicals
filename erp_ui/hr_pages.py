@@ -33,6 +33,7 @@ def _payroll_edit_row(l: dict) -> dict:
     gross = float(l.get("gross_salary") or (basic + allw + ot + bonus))
     ded = float(l.get("total_deductions") or (tax + eobi + ss + adv + loan + other))
     net = float(l.get("net_salary") or (gross - ded))
+    paid = (l.get("paid_status") or "") == "paid"
     return {
         "line_id": int(l["id"]),
         "Employee": l.get("employee_name") or "—",
@@ -51,6 +52,9 @@ def _payroll_edit_row(l: dict) -> dict:
         "Other Ded.": other,
         "Total Ded.": ded,
         "Net": net,
+        "Paid": "PAID" if paid else "",
+        "_paid": paid,
+        "_voucher": l.get("payment_document_no") or "",
         "_tax": tax,
         "_eobi": eobi,
         "_ss": ss,
@@ -64,6 +68,8 @@ def _payroll_edit_column_config():
         "_tax": None,
         "_eobi": None,
         "_ss": None,
+        "_paid": None,
+        "_voucher": None,
         "Employee": st.column_config.TextColumn("Employee", disabled=True, width="medium"),
         "Code": st.column_config.TextColumn("Code", disabled=True, width="small"),
         "Present": st.column_config.NumberColumn("Present", min_value=0.0, step=0.5, format="%.1f", width="small"),
@@ -85,6 +91,7 @@ def _payroll_edit_column_config():
         "Other Ded.": st.column_config.NumberColumn("Other Ded.", min_value=0.0, step=50.0, format="%.2f"),
         "Total Ded.": st.column_config.NumberColumn("Total Ded.", disabled=True, format="%.2f"),
         "Net": st.column_config.NumberColumn("Net", disabled=True, format="%.2f"),
+        "Paid": st.column_config.TextColumn("Paid", disabled=True, width="small"),
     }
 
 
@@ -908,13 +915,18 @@ def _render_employee_cash_payments(pid, pr):
             + (f" on {str(pr.get('closed_at') or '')[:16]}" if pr.get("closed_at") else "")
             + ". Payments and edits are locked."
         )
-    elif status not in ("posted", "paid"):
+    elif status not in ("draft", "approved", "posted", "paid"):
         st.warning(
             f"Payroll is **{(status or '').upper()}**. "
-            "1) Approve → 2) **Post to GL** (whole month) → 3) then each employee at the counter: "
-            "adjust Advance/Loan if needed → **Pay & voucher** → cash + signature."
+            "Generate or approve a payroll first."
         )
         return
+    if status in ("draft", "approved"):
+        st.info(
+            "Payroll is still **draft** — you can **Pay & voucher** one employee at a time "
+            "(auto posts that employee’s salary + cash). Or use **Edit Lines → Post & voucher**. "
+            "No need to Post whole sheet first."
+        )
     if not can_pay and not closed:
         st.info("You need HR **post** or **add** permission to record salary payments.")
         return
@@ -970,7 +982,7 @@ def _render_employee_cash_payments(pid, pr):
 
     # --- Close month / reopen ---
     cl1, cl2 = st.columns([2, 2])
-    if not closed and unpaid_n == 0 and status in ("posted", "paid") and can_pay:
+    if not closed and unpaid_n == 0 and status in ("draft", "posted", "paid") and can_pay:
         if cl1.button(
             "Close month (final)",
             type="primary",
@@ -1477,8 +1489,9 @@ def page_payroll():
 
                 st.markdown("##### Workflow")
                 st.caption(
-                    "After **Post to GL**, scroll to **Pay Desk — counter**: "
-                    "each employee Adjust (optional) → Pay & voucher → next."
+                    "Prefer **Edit Lines → Post & voucher** per employee (no whole-sheet rollback). "
+                    "Or **Post to GL** for remaining unpaid, then Pay Desk. "
+                    "Each pay prints a cash voucher for signature."
                 )
                 c1, c2, c3 = st.columns(3)
                 if pr["status"] == "draft" and db.user_can_hr(st.session_state.user, "approve"):
@@ -1524,7 +1537,7 @@ def page_payroll():
                 st.divider()
                 _render_employee_cash_payments(pid, pr)
 
-                if pr["status"] in ("posted", "paid") and db.user_can_hr(st.session_state.user, "post"):
+                if pr["status"] in ("draft", "posted", "paid") and db.user_can_hr(st.session_state.user, "post"):
                     st.divider()
                     with st.expander("Rollback posted GL / payments", expanded=False):
                         rb_reason = st.text_input(
@@ -1610,11 +1623,11 @@ def page_payroll():
                     f"color:#64748b'>Period</div>"
                     f"<div style='font-size:1.15rem;font-weight:700;color:#0f172a'>"
                     f"{escape(period_lbl)}</div></div>"
-                    f"<div style='color:#64748b;font-size:0.9rem;max-width:42rem'>"
-                    f"Enter <b>OT Hrs</b> — Overtime = Basic ÷ {mdays} ÷ 6 × hours. "
-                    f"Edit <b>Loan</b> / <b>Advance</b> to a lower amount for partial recovery "
-                    f"(shortfall stays outstanding for next month). "
-                    f"Tax / EOBI / SS are hidden.</div>"
+                    f"<div style='color:#64748b;font-size:0.9rem;max-width:48rem'>"
+                    f"Edit amounts → <b>Save</b> → <b>Post &amp; voucher</b> on that employee "
+                    f"(cash voucher, no whole-sheet Post/rollback). "
+                    f"OT = Basic ÷ {mdays} ÷ 6 × hours. "
+                    f"Lower Loan/Advance for partial recovery.</div>"
                     f"</div>",
                     unsafe_allow_html=True,
                 )
@@ -1761,6 +1774,58 @@ def page_payroll():
                     key=f"pr_edit_expand_{pid}",
                 )
 
+                can_post_row = (
+                    db.user_can_hr(st.session_state.user, "post")
+                    or db.user_can_hr(st.session_state.user, "add")
+                )
+                pay_date_edit = None
+                pmode_edit = "cash"
+                bank_id_edit = None
+                if can_post_row:
+                    st.markdown("##### Post one employee (cash voucher)")
+                    st.caption(
+                        "Save the grid first if you changed amounts. "
+                        "Then **Post & voucher** on that row — other staff stay on this draft."
+                    )
+                    pc1, pc2, pc3 = st.columns([1.2, 1.2, 2])
+                    pay_date_edit = pc1.date_input(
+                        "Payment date",
+                        value=date.fromisoformat(str(pr["run_date"])[:10])
+                        if pr.get("run_date") else date.today(),
+                        key=f"pr_edit_pay_date_{pid}",
+                    )
+                    pmode_edit = pc2.radio(
+                        "Mode", ["cash", "bank"], horizontal=True, key=f"pr_edit_pay_mode_{pid}",
+                    )
+                    if pmode_edit == "cash" and db.is_cash_day_closed(str(pay_date_edit)):
+                        st.warning(
+                            f"Cash book for **{pay_date_edit}** is closed — "
+                            "change date or reopen in **Finance → Cash Book**."
+                        )
+                    if pmode_edit == "bank":
+                        bank_accts = [
+                            a for a in db.get_accounts()
+                            if (a.get("account_type") or "").lower() in ("bank", "asset")
+                            and str(a.get("code") or "").startswith("11")
+                        ] or [a for a in db.get_accounts() if a.get("is_active")]
+                        bank_opts = {f"{a['code']} - {a['name']}": a["id"] for a in bank_accts}
+                        if bank_opts:
+                            bank_id_edit = bank_opts[
+                                pc3.selectbox(
+                                    "Bank account", list(bank_opts.keys()),
+                                    key=f"pr_edit_bank_{pid}",
+                                )
+                            ]
+                        else:
+                            st.warning("Add a bank account in Chart of Accounts first.")
+
+                print_edit_key = f"pr_edit_print_line_{pid}"
+                if st.session_state.get(print_edit_key):
+                    _print_salary_voucher(st.session_state[print_edit_key], f"pr_edit_v_{pid}")
+                    if st.button("Hide voucher preview", key=f"pr_edit_hide_v_{pid}"):
+                        st.session_state.pop(print_edit_key, None)
+                        st.rerun()
+
                 show_depts = depts if dept_filter == "All departments" else [dept_filter]
                 col_cfg = _payroll_edit_column_config()
                 edited_by_dept = {}
@@ -1836,6 +1901,65 @@ def page_payroll():
                                 del st.session_state[editor_key]
                             need_live_rerun = True
 
+                        # Per-row Post & voucher (saved DB amounts — save grid first if edited)
+                        if can_post_row and (pmode_edit == "cash" or bank_id_edit):
+                            line_meta = {
+                                int(l["id"]): l for l in (pr.get("lines") or [])
+                            }
+                            st.markdown("**Post & voucher** (this department)")
+                            for _, r in recalc.iterrows():
+                                lid = int(r["line_id"])
+                                meta = line_meta.get(lid) or {}
+                                is_paid = (
+                                    bool(r.get("_paid"))
+                                    or (meta.get("paid_status") or "") == "paid"
+                                )
+                                net_v = float(meta.get("net_salary") or r.get("Net") or 0)
+                                name = r.get("Employee") or meta.get("employee_name") or "—"
+                                code = r.get("Code") or meta.get("emp_code") or ""
+                                r1, r2, r3, r4 = st.columns([3.2, 1.2, 1.3, 1.1])
+                                if is_paid:
+                                    doc = meta.get("payment_document_no") or r.get("_voucher") or "—"
+                                    r1.markdown(
+                                        f"✅ **{name}** `{code}` · Net {fmt(net_v)} · `{doc}`"
+                                    )
+                                    if r2.button("Print", key=f"pr_edit_pv_{lid}"):
+                                        st.session_state[print_edit_key] = lid
+                                        st.rerun()
+                                    if r3.button("Undo", key=f"pr_edit_unpay_{lid}"):
+                                        try:
+                                            db.rollback_payroll_line_payment(
+                                                lid, uid(), "Undo from Edit Lines",
+                                            )
+                                            st.rerun()
+                                        except Exception as e:
+                                            st.error(str(e))
+                                elif net_v > 0.009:
+                                    r1.markdown(f"**{name}** `{code}` · Net **{fmt(net_v)}**")
+                                    btn_lbl = (
+                                        "Post & voucher"
+                                        if pmode_edit == "cash"
+                                        else "Post bank & voucher"
+                                    )
+                                    if r3.button(btn_lbl, type="primary", key=f"pr_edit_post_{lid}"):
+                                        try:
+                                            if pmode_edit == "bank" and not bank_id_edit:
+                                                raise ValueError("Select bank account.")
+                                            res = db.post_and_pay_payroll_line(
+                                                lid, uid(), pmode_edit,
+                                                str(pay_date_edit), bank_id_edit,
+                                            )
+                                            st.session_state[print_edit_key] = lid
+                                            ff.action_done(
+                                                f"**{res['document_no']}** — "
+                                                f"{res['employee']} paid. Print for signature. "
+                                                "Other employees stay on this draft."
+                                            )
+                                        except Exception as e:
+                                            st.error(str(e))
+                                else:
+                                    r1.caption(f"{name} `{code}` · Net nil — nothing to post")
+
                 if need_live_rerun:
                     st.rerun()
 
@@ -1866,6 +1990,8 @@ def page_payroll():
                     cur = edited.set_index("line_id")
                     updates = []
                     for lid in cur.index:
+                        if bool(orig.at[lid, "_paid"]) if "_paid" in orig.columns else False:
+                            continue
                         changed = False
                         for col in _PAYROLL_EDIT_CMP_COLS:
                             if abs(float(cur.at[lid, col] or 0) - float(orig.at[lid, col] or 0)) > 0.009:
@@ -1896,13 +2022,14 @@ def page_payroll():
                             n = db.update_payroll_lines_bulk(updates, uid())
                             ff.action_done(
                                 f"Updated **{n}** payroll line(s). "
-                                "Where OT Hrs > 0, Overtime was recalculated from the formula."
+                                "Where OT Hrs > 0, Overtime was recalculated from the formula. "
+                                "Use **Post & voucher** on a row to pay that employee only."
                             )
                         except Exception as e:
                             st.error(str(e))
                 c2.caption(
                     "Saves the departments currently shown — choose **All departments** if you edited more than one. "
-                    "When OT Hrs > 0, Overtime recalculates on save."
+                    "Paid rows are skipped. When OT Hrs > 0, Overtime recalculates on save."
                 )
                 with st.expander("Partial loan / advance recovery & GL (how it works)"):
                     st.markdown(
