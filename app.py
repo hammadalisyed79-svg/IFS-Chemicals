@@ -482,6 +482,7 @@ PAGES = {
     "Custom Groups": mgrp.page_master_groups,
     "Units of Measure": v3.page_units,
     "Warehouses": v3.page_warehouses,
+    "Departments": v3.page_departments,
     "Employees": hr.page_hr_employees,
     "Employee Master": hr.page_hr_employees,
     "Attendance": att.page_attendance_simple,

@@ -388,7 +388,7 @@ SCREEN_ICONS = {
 
 NAV_GROUPS = {
     "Overview": ["Dashboard", "Business Overview", "Approval Inbox", "Download App"],
-    "Masters": ["Customers", "Suppliers", "Products", "Account & Item Groups", "Warehouses", "Employees", "Price Lists"],
+    "Masters": ["Customers", "Suppliers", "Products", "Account & Item Groups", "Warehouses", "Departments", "Employees", "Price Lists"],
     "Sales": ["Sales Invoices", "Sale Approval", "Sales Returns", "Sales Orders", "Quotations", "Distributor Orders", "Distribution"],
     "Purchases": ["Purchase Invoices", "Purchase Approval", "Purchase Returns", "GRN", "Purchase Orders"],
     "Inventory": ["Stock", "Stock Adjustments", "Stock Revaluation", "Stock Report"],
@@ -422,6 +422,7 @@ SCREEN_PERMISSION = {
     "Product Categories": "Masters", "Account & Item Groups": "Masters", "Custom Groups": "Masters",
     "Units of Measure": "Masters",
     "Warehouses": "Masters",
+    "Departments": "Masters",
     "Employees": "HR", "Employee Master": "HR", "Attendance": "HR", "Leave Management": "HR",
     "Payroll": "HR", "Employee Advances": "HR", "Employee Loans": "HR", "Employee Ledger": "HR",
     "Expense Claims": "HR",
