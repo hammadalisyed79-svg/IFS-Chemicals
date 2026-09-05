@@ -305,6 +305,11 @@ BULK_PREFIX_HINTS = (
     ("DT1", "Lashkara / DT1*"),
     ("DT2", "Train detergent (DT2*)"),
     ("DT3", "Detergent AD (DT3*)"),
+    ("DT4", "DT4*"),
+    ("DT5", "Lashkara NO.19 (DT5*)"),
+    ("DT9", "Jagmag (DT9*)"),
+    ("DT0", "Brillo (DT0*)"),
+    ("DTT", "Tower detergent (DTT*)"),
     ("DP", "Detergent Powder (DP*)"),
     ("LQ", "Liquid (LQ*)"),
 )

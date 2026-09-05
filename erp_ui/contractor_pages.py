@@ -265,38 +265,83 @@ def _tab_products():
 
     # --- Bulk add by code prefix ---
     st.markdown("**Bulk add SKUs**")
-    b1, b2, b3 = st.columns([1.2, 1.5, 2])
-    prefix = b1.text_input(
+    prefix_key = f"cl_bulk_prefix_{cid}"
+    if prefix_key not in st.session_state:
+        st.session_state[prefix_key] = "DW"
+
+    b1, b2, b3, b4 = st.columns([1.4, 0.7, 1.2, 1.8])
+    b1.text_input(
         "Code prefix",
-        value="DW",
-        key=f"cl_bulk_prefix_{cid}",
-        help="e.g. DW for all Dish Wash products",
-    ).strip().upper()
+        key=prefix_key,
+        help="Type any prefix (DW, DT1, DT4, DTT, …) then click Find / Add. "
+             "Already-selected SKUs are skipped (no duplicates).",
+    )
+    find_clicked = b2.button("Find", key=f"cl_bulk_find_{cid}")
+    prefix = str(st.session_state.get(prefix_key) or "").strip().upper()
     matched = product_ids_by_code_prefix(prefix) if prefix else []
-    b2.metric("Matching SKUs", len(matched))
-    if b3.button(
-        f"Add all {prefix or '…'}* ({len(matched)})",
+    already = set(int(x) for x in (st.session_state.get(sk) or draft_ids or []))
+    new_matches = [r for r in matched if int(r["id"]) not in already]
+    b3.metric("Matches / new", f"{len(matched)} / {len(new_matches)}")
+    add_label = (
+        f"Add new {prefix or '…'}* ({len(new_matches)})"
+        if prefix else "Add new …* (0)"
+    )
+    if b4.button(
+        add_label,
         type="primary",
         key=f"cl_bulk_add_{cid}",
-        disabled=not matched,
+        disabled=not new_matches,
     ):
-        add_ids = [int(r["id"]) for r in matched]
-        draft_ids = _merge_ids(draft_ids, add_ids)
+        add_ids = [int(r["id"]) for r in new_matches]
+        skipped = len(matched) - len(add_ids)
+        draft_ids = _merge_ids(st.session_state.get(sk) or draft_ids, add_ids)
         st.session_state[sk] = draft_ids
         st.session_state.pop(f"cl_prod_ms_{cid}", None)
-        ff.action_done(f"Added **{len(add_ids)}** SKU(s) with prefix **{prefix}*** — set rates below.")
+        msg = f"Added **{len(add_ids)}** new SKU(s) with prefix **{prefix}***."
+        if skipped:
+            msg += f" Skipped **{skipped}** already in the list (no duplicates)."
+        ff.action_done(msg)
 
-    hint_cols = st.columns(len(BULK_PREFIX_HINTS))
-    for i, (pref, label) in enumerate(BULK_PREFIX_HINTS):
-        n = len(product_ids_by_code_prefix(pref))
-        if hint_cols[i].button(f"{label} · {n}", key=f"cl_hint_{cid}_{pref}", disabled=n == 0):
-            add_ids = [int(r["id"]) for r in product_ids_by_code_prefix(pref)]
-            draft_ids = _merge_ids(st.session_state.get(sk) or [], add_ids)
-            st.session_state[sk] = draft_ids
-            st.session_state.pop(f"cl_prod_ms_{cid}", None)
-            ff.action_done(f"Added **{len(add_ids)}** · {label}")
+    if find_clicked:
+        if not prefix:
+            st.warning("Enter a code prefix first.")
+        elif not matched:
+            st.warning(f"No active products found for prefix **{prefix}***.")
+        else:
+            st.info(
+                f"**{prefix}*** → {len(matched)} product(s), "
+                f"**{len(new_matches)}** not yet in your selection."
+            )
 
-    draft_ids = [int(x) for x in (st.session_state.get(sk) or [])]
+    # Shortcut chips (wrap in rows of 4)
+    hints = list(BULK_PREFIX_HINTS)
+    for row_start in range(0, len(hints), 4):
+        row = hints[row_start:row_start + 4]
+        hint_cols = st.columns(4)
+        for i, (pref, label) in enumerate(row):
+            n = len(product_ids_by_code_prefix(pref))
+            if hint_cols[i].button(
+                f"{label} · {n}",
+                key=f"cl_hint_{cid}_{pref}",
+                disabled=n == 0,
+            ):
+                st.session_state[prefix_key] = pref
+                matched_h = product_ids_by_code_prefix(pref)
+                already_h = set(int(x) for x in (st.session_state.get(sk) or draft_ids or []))
+                add_ids = [int(r["id"]) for r in matched_h if int(r["id"]) not in already_h]
+                skipped = len(matched_h) - len(add_ids)
+                draft_ids = _merge_ids(st.session_state.get(sk) or draft_ids, add_ids)
+                st.session_state[sk] = draft_ids
+                st.session_state.pop(f"cl_prod_ms_{cid}", None)
+                msg = f"Added **{len(add_ids)}** · {label}."
+                if skipped:
+                    msg += f" Skipped **{skipped}** duplicates."
+                if not add_ids and matched_h:
+                    msg = f"All **{len(matched_h)}** {label} SKUs are already in the list."
+                ff.action_done(msg)
+
+    draft_ids = _merge_ids([], [int(x) for x in (st.session_state.get(sk) or [])])
+    st.session_state[sk] = draft_ids
 
     items = db.get_items(active_only=True)
     id_to_label = {
@@ -317,7 +362,10 @@ def _tab_products():
     ):
         dirty = True
     if dirty:
-        st.warning("Unsaved changes — **Update selection** to save, or **Discard changes**.")
+        st.warning(
+            "Unsaved changes — **Update selection** to save, "
+            "**Reset selection** to restore saved, or **Clear selection** to empty picks."
+        )
 
     chosen = st.multiselect(
         "Products for this contractor (search / pick individually)",
