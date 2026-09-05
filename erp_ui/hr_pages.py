@@ -163,6 +163,11 @@ def _desig_opts():
     return {f"{r['code']} - {r['name']}": r["id"] for r in db.get_designations()}
 
 
+EMPLOYMENT_STATUSES = [
+    "active", "probation", "confirmed", "resigned", "terminated", "left", "inactive",
+]
+
+
 def page_hr_employees():
     from html import escape
 
@@ -309,7 +314,7 @@ def page_hr_employees():
             confirm = c4.date_input("Confirmation Date", value=None, key=wk("confirm"))
             status = st.selectbox(
                 "Employment Status",
-                ["active", "probation", "confirmed", "resigned", "terminated"],
+                EMPLOYMENT_STATUSES,
                 key=wk("status"),
             )
             basic = money_input("Basic Salary", value=0.0, min_value=0.0, key=wk("basic"))
@@ -358,9 +363,16 @@ def page_hr_employees():
                 desig_idx = next((i for i, k in enumerate(desig_keys) if desigs.get(k) == emp.get("designation_id")), 0)
                 dept = st.selectbox("Department", dept_keys, index=min(dept_idx, len(dept_keys) - 1))
                 desig = st.selectbox("Designation", desig_keys, index=min(desig_idx, len(desig_keys) - 1))
-                status = st.selectbox("Employment status", ["active", "probation", "confirmed", "resigned", "terminated"],
-                                      index=["active", "probation", "confirmed", "resigned", "terminated"].index(
-                                          emp.get("employment_status") or "active"))
+                cur_status = (emp.get("employment_status") or "active").strip().lower()
+                status_opts = list(EMPLOYMENT_STATUSES)
+                if cur_status and cur_status not in status_opts:
+                    status_opts.append(cur_status)
+                status_idx = status_opts.index(cur_status) if cur_status in status_opts else 0
+                status = st.selectbox(
+                    "Employment status",
+                    status_opts,
+                    index=status_idx,
+                )
                 basic = money_input("Basic Salary", value=float(emp.get("basic_salary") or 0), min_value=0.0, key="hr_emp_edit_basic")
                 bank = st.text_input("Bank Account", value=emp.get("bank_account") or "")
                 active = st.checkbox(
