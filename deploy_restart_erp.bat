@@ -17,7 +17,8 @@ if not exist "%PY%" (
   exit /b 1
 )
 
-echo [1] Stop old Streamlit (app.py) ...
+echo [1] Checkpoint SQLite WAL, then stop old Streamlit (app.py) ...
+"%PY%" -c "import database as db; cm=db.get_connection(); conn=cm.__enter__(); conn.execute('PRAGMA wal_checkpoint(TRUNCATE)'); cm.__exit__(None, None, None)"
 powershell -NoProfile -Command "Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -and $_.CommandLine -match 'streamlit run app\.py' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue; Write-Host ('killed ' + $_.ProcessId) }"
 timeout /t 3 /nobreak >nul
 

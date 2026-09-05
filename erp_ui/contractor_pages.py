@@ -15,6 +15,7 @@ from db_contractors import (
     add_contractor,
     calculate_contractor_month,
     clear_contractor_products,
+    deactivate_contractor,
     delete_contractor,
     get_contractor,
     get_contractor_product_ids,
@@ -176,7 +177,7 @@ def _tab_contractors():
         )
         notes = st.text_input("Notes", value=cur.get("notes") or "", key=f"cl_edit_notes_{cid}")
         active = st.checkbox("Active", value=bool(cur.get("is_active", 1)), key=f"cl_edit_active_{cid}")
-        b1, b2 = st.columns(2)
+        b1, b2, b3 = st.columns(3)
         if b1.button("Update", type="primary", key=f"cl_edit_save_{cid}"):
             try:
                 update_contractor(
@@ -192,12 +193,28 @@ def _tab_contractors():
                 ff.action_done("Contractor updated.")
             except Exception as e:
                 st.error(f"Could not update: {e}")
-        if b2.button("Delete", key=f"cl_edit_del_{cid}"):
+        if b2.button("Deactivate", key=f"cl_edit_off_{cid}"):
             try:
-                delete_contractor(cid)
+                deactivate_contractor(cid, hlp.uid())
                 st.session_state.pop(_draft_key(cid), None)
                 st.session_state.pop(_rates_key(cid), None)
-                ff.action_done("Contractor deleted.")
+                ff.action_done(
+                    "Contractor deactivated — products/rates kept. "
+                    "Re-check **Active** and Update to restore."
+                )
+            except Exception as e:
+                st.error(f"Could not deactivate: {e}")
+        confirm = st.checkbox(
+            "Confirm permanent delete (removes products/rates)",
+            key=f"cl_edit_del_ok_{cid}",
+        )
+        if b3.button("Delete permanently", key=f"cl_edit_del_{cid}", disabled=not confirm):
+            try:
+                delete_contractor(cid, user_id=hlp.uid())
+                st.session_state.pop(_draft_key(cid), None)
+                st.session_state.pop(_rates_key(cid), None)
+                st.session_state.pop(f"cl_edit_del_ok_{cid}", None)
+                ff.action_done("Contractor permanently deleted.")
             except Exception as e:
                 st.error(f"Could not delete: {e}")
 

@@ -124,7 +124,17 @@ def add_contractor(data: dict, user_id=None) -> int:
                 user_id, _now(),
             ),
         )
-        return int(cur.lastrowid)
+        new_id = int(cur.lastrowid)
+    try:
+        from db_audit import log_event
+        log_event(
+            "contract_labourers", new_id, "create", user_id=user_id,
+            module="Contract Labour",
+            summary=f"Contractor created supplier_id={supplier_id}",
+        )
+    except Exception:
+        pass
+    return new_id
 
 
 def update_contractor(contractor_id: int, data: dict, user_id=None):
@@ -151,16 +161,73 @@ def update_contractor(contractor_id: int, data: dict, user_id=None):
                 user_id, _now(), contractor_id,
             ),
         )
+    try:
+        from db_audit import log_event
+        log_event(
+            "contract_labourers", contractor_id, "update", user_id=user_id,
+            module="Contract Labour",
+            summary=f"Contractor updated active={int(data.get('is_active', 1))}",
+        )
+    except Exception:
+        pass
 
 
-def delete_contractor(contractor_id: int):
+def deactivate_contractor(contractor_id: int, user_id=None):
+    """Soft-delete: keep products/rates, hide from active lists."""
+    from database import get_connection, _now
+
+    with get_connection() as conn:
+        apply_contract_labour(conn)
+        row = conn.execute(
+            "SELECT id FROM contract_labourers WHERE id=?", (contractor_id,),
+        ).fetchone()
+        if not row:
+            raise ValueError("Contractor not found.")
+        conn.execute(
+            """UPDATE contract_labourers SET is_active=0, modified_by=?, modified_at=?
+               WHERE id=?""",
+            (user_id, _now(), contractor_id),
+        )
+    try:
+        from db_audit import log_event
+        log_event(
+            "contract_labourers", contractor_id, "deactivate", user_id=user_id,
+            module="Contract Labour",
+            summary="Contractor deactivated (soft delete)",
+        )
+    except Exception:
+        pass
+
+
+def delete_contractor(contractor_id: int, user_id=None):
+    """Permanently remove contractor and product assignments."""
     from database import get_connection
 
     with get_connection() as conn:
         apply_contract_labour(conn)
-        conn.execute("DELETE FROM contract_labour_products WHERE contractor_id=?", (contractor_id,))
-        conn.execute("DELETE FROM contract_labourers WHERE id=?", (contractor_id,))
-
+        row = conn.execute(
+            "SELECT id, supplier_id FROM contract_labourers WHERE id=?",
+            (contractor_id,),
+        ).fetchone()
+        if not row:
+            raise ValueError("Contractor not found.")
+        supplier_id = row["supplier_id"]
+        conn.execute(
+            "DELETE FROM contract_labour_products WHERE contractor_id=?",
+            (contractor_id,),
+        )
+        conn.execute(
+            "DELETE FROM contract_labourers WHERE id=?", (contractor_id,),
+        )
+    try:
+        from db_audit import log_event
+        log_event(
+            "contract_labourers", contractor_id, "delete", user_id=user_id,
+            module="Contract Labour",
+            summary=f"Contractor permanently deleted supplier_id={supplier_id}",
+        )
+    except Exception:
+        pass
 
 def get_contractor_product_ids(contractor_id: int) -> list[int]:
     c = get_contractor(contractor_id)

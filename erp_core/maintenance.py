@@ -41,16 +41,23 @@ def run_startup_maintenance(db_module=None) -> dict:
 
 
 def _auto_backup(db) -> bool:
+    """Consistent backup via SQLite backup API (includes WAL contents)."""
     backup_dir = Path(__file__).parent.parent / "backups"
     backup_dir.mkdir(exist_ok=True)
     stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     dest = backup_dir / f"auto_{stamp}.db"
-    src = db.DB_PATH
-    if src.exists():
-        import shutil
-        shutil.copy2(src, dest)
+    try:
+        from db_commercial import backup_database
+        backup_database(dest)
         return True
-    return False
+    except Exception:
+        # Fallback: file copy (may miss uncheckpointed WAL)
+        src = db.DB_PATH
+        if src.exists():
+            import shutil
+            shutil.copy2(src, dest)
+            return True
+        return False
 
 
 def _cleanup_old_logs(db, days: int = 90) -> int:

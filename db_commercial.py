@@ -2128,9 +2128,20 @@ def get_dashboard_stats_v2():
 
 # ---------- Backup / Restore ----------
 def backup_database(dest_path=None):
-    from database import DB_PATH
-    dest = Path(dest_path) if dest_path else DB_PATH.parent / f"ifs_erp_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.db"
-    shutil.copy2(DB_PATH, dest)
+    """Online SQLite backup (includes WAL) — safe while the ERP is running."""
+    import sqlite3
+    from database import DB_PATH, get_connection
+
+    dest = Path(dest_path) if dest_path else DB_PATH.parent / (
+        f"ifs_erp_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.db"
+    )
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    with get_connection() as src_conn:
+        dst = sqlite3.connect(str(dest))
+        try:
+            src_conn.backup(dst)
+        finally:
+            dst.close()
     return str(dest)
 
 
@@ -2139,6 +2150,21 @@ def restore_database(source_path):
     src = Path(source_path)
     if not src.exists():
         raise FileNotFoundError(f"Backup not found: {source_path}")
+    # Drop WAL/SHM so restore is not mixed with leftover journal files
+    for suffix in ("-wal", "-shm"):
+        side = Path(str(DB_PATH) + suffix)
+        if side.exists():
+            try:
+                side.unlink()
+            except OSError:
+                pass
     shutil.copy2(src, DB_PATH)
+    for suffix in ("-wal", "-shm"):
+        side = Path(str(DB_PATH) + suffix)
+        if side.exists():
+            try:
+                side.unlink()
+            except OSError:
+                pass
     reset_runtime_state()
     init_db(force=True)
