@@ -1396,8 +1396,25 @@ def page_payroll():
                     f"{escape(period_lbl)}</div></div>"
                     f"<div style='color:#64748b;font-size:0.9rem;max-width:42rem'>"
                     f"Enter <b>OT Hrs</b> — Overtime = Basic ÷ {mdays} ÷ 6 × hours. "
-                    f"Edit by department below. Tax / EOBI / SS are hidden (not used).</div>"
+                    f"Edit <b>Loan</b> / <b>Advance</b> to a lower amount for partial recovery "
+                    f"(shortfall stays outstanding for next month). "
+                    f"Tax / EOBI / SS are hidden.</div>"
                     f"</div>",
+                    unsafe_allow_html=True,
+                )
+                st.markdown(
+                    """
+                    <style>
+                    div[class*="st-key-pr_tab_editor_"] [data-testid="stDataFrame"]
+                      [role="row"]:nth-child(even) [role="gridcell"] {
+                      background-color: #e8eef5 !important;
+                    }
+                    div[class*="st-key-pr_tab_editor_"] [data-testid="stDataFrame"]
+                      [role="row"]:nth-child(odd) [role="gridcell"] {
+                      background-color: #ffffff !important;
+                    }
+                    </style>
+                    """,
                     unsafe_allow_html=True,
                 )
 
@@ -1587,6 +1604,33 @@ def page_payroll():
                     "Saves the departments currently shown — choose **All departments** if you edited more than one. "
                     "When OT Hrs > 0, Overtime recalculates on save."
                 )
+                with st.expander("Partial loan / advance recovery & GL (how it works)"):
+                    st.markdown(
+                        """
+**Example — Hafiz Zaman wants Loan Rs. 5,000 this month (not full installment)**
+
+1. Change the **Loan** cell to `5000` and click **Save all changes**.
+2. Backend updates the loan ledger immediately (draft):
+   - This month recovers **Rs. 5,000** only
+   - Outstanding increases by the shortfall (full installment − 5,000)
+   - Shortfall is added to the **next unpaid installment** → next month’s payroll picks it up
+3. **Advance** works the same way if you edit that column.
+
+**GL when you Post payroll** (not on draft save):
+
+| Entry | Account | Dr / Cr |
+|---|---|---|
+| Gross salary | 6200 Salary expense | Debit |
+| Advance recovery | 100180 Advance payments | Credit |
+| Loan recovery | 100180 Advance payments (same as advance) | Credit |
+| Net pay | 2150 Salary payable | Credit |
+| Tax / EOBI / SS | only if amounts &gt; 0 | Credit |
+
+- **No separate loan GL** — loans use **100180** like advances (issue + recovery).
+- Draft edits do **not** post GL; posting uses the **saved line amounts** (so 5,000 loan hits 100180, not the full installment).
+- **Pay salary** later: Debit 2150 / Credit Cash or Bank for net only (recoveries already cleared receivable).
+                        """
+                    )
 
                 with st.expander("Single-employee form (optional)"):
                     line_opts = {

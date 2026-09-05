@@ -260,6 +260,21 @@ div[class*="st-key-"][class*="_metrics"] [data-testid="stHorizontalBlock"] {
   font-size: 0.9rem !important;
 }
 
+/* Alternating row shade — payroll Edit Lines and other grids */
+div[class*="st-key-pr_tab_editor_"] [data-testid="stDataFrame"] [role="rowgroup"] [role="row"]:nth-child(even) [role="gridcell"],
+div[class*="st-key-pr_tab_editor_"] [data-testid="stDataFrame"] [role="row"]:nth-child(even) {
+  background-color: #eef2f7 !important;
+}
+div[class*="st-key-pr_tab_editor_"] [data-testid="stDataFrame"] [role="rowgroup"] [role="row"]:nth-child(odd) [role="gridcell"],
+div[class*="st-key-pr_tab_editor_"] [data-testid="stDataFrame"] [role="row"]:nth-child(odd) {
+  background-color: #ffffff !important;
+}
+/* Fallback for glide/canvas wrappers */
+div[class*="st-key-pr_tab_editor_"] [data-testid="stDataFrame"] {
+  --dv-odd-row-background-color: #ffffff;
+  --dv-even-row-background-color: #e8eef5;
+}
+
 /* Expanders */
 [data-testid="stExpander"] details summary {
   padding: 0.35rem 0.5rem !important;
