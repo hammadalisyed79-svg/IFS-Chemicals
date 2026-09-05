@@ -512,53 +512,61 @@ def calculate_contractor_month(
 ) -> dict:
     """Monthly payment worksheet lines.
 
-    Sold Qty = approved sales in month
-    Stock in hand = opening qty as of month start
-    Sale return = returns in month
-    Physical Manual Added Stock = user-entered manual qty
-    Closing Stock (billable) = Sold - Opening - Sale return + Physical Manual
-    Amount = Closing Stock x Rate
-    Gross = sum of amounts
+    payment_type = production_qty:
+      Billable = completed production qty in month
+      Amount = Production x Rate
+
+    payment_type = sku_carton (default):
+      Closing (billable) = Sold - Opening - Sale return + Physical Manual
+      Amount = Closing x Rate
     """
     c = get_contractor(contractor_id)
     if not c:
         raise ValueError("Contractor not found.")
     products = c.get("products") or []
     pids = [int(p["product_id"]) for p in products]
-    sold_map = sold_qty_for_products(pids, from_date, to_date)
-    return_map = sale_return_qty_for_products(pids, from_date, to_date)
-    stock_map = stock_on_hand_for_products(pids, as_of_date=from_date)
+    pay_type = (c.get("payment_type") or PAYMENT_SKU_CARTON).strip()
+    is_prod = pay_type == PAYMENT_PRODUCTION_QTY
+
     prod_map = {
         int(r["product_id"]): r
         for r in production_qty_for_products(pids, from_date, to_date)
     }
+    sold_map = {} if is_prod else sold_qty_for_products(pids, from_date, to_date)
+    return_map = {} if is_prod else sale_return_qty_for_products(pids, from_date, to_date)
+    stock_map = {} if is_prod else stock_on_hand_for_products(pids, as_of_date=from_date)
+
     manual = {}
-    for k, v in (manual_qty or {}).items():
-        try:
-            manual[int(k)] = float(v or 0)
-        except (TypeError, ValueError):
-            continue
+    if not is_prod:
+        for k, v in (manual_qty or {}).items():
+            try:
+                manual[int(k)] = float(v or 0)
+            except (TypeError, ValueError):
+                continue
 
     default_rate = float(c.get("default_rate") or 0)
     lines = []
     total = 0.0
-    total_sold = total_stock = total_return = total_manual = total_closing = 0.0
+    total_sold = total_stock = total_return = total_manual = 0.0
+    total_billable = total_prod = 0.0
     for p in products:
         pid = int(p["product_id"])
+        qinfo = prod_map.get(pid) or {}
+        prod_qty = round(float(qinfo.get("quantity") or 0), 4)
         sold = round(float(sold_map.get(pid) or 0), 4)
         stock = round(float(stock_map.get(pid) or 0), 4)
         ret = round(float(return_map.get(pid) or 0), 4)
         man = round(float(manual.get(pid) or 0), 4)
-        closing = round(sold - stock - ret + man, 4)
+        billable = prod_qty if is_prod else round(sold - stock - ret + man, 4)
         rate = float(p["rate"] if p.get("rate") is not None else default_rate)
-        amount = round(closing * rate, 2)
-        qinfo = prod_map.get(pid) or {}
+        amount = round(billable * rate, 2)
         total += amount
         total_sold += sold
         total_stock += stock
         total_return += ret
         total_manual += man
-        total_closing += closing
+        total_billable += billable
+        total_prod += prod_qty
         lines.append({
             "product_id": pid,
             "product_code": p.get("product_code"),
@@ -567,25 +575,30 @@ def calculate_contractor_month(
             "stock_qty": stock,
             "sale_return_qty": ret,
             "manual_qty": man,
-            "closing_stock": closing,
+            "closing_stock": 0.0 if is_prod else billable,
             "batch_count": int(qinfo.get("batch_count") or 0),
-            "production_qty": float(qinfo.get("quantity") or 0),
-            "quantity": closing,  # billable
+            "production_qty": prod_qty,
+            "quantity": billable,
             "rate": rate,
             "amount": amount,
         })
     ym = str(from_date)[:7]
+    if is_prod:
+        formula = "Billable = Production qty (month); Amount = Production x Rate"
+    else:
+        formula = (
+            "Closing (billable) = Sold - Opening - Sale return + Physical Manual; "
+            "Amount = Closing x Rate"
+        )
     return {
         "contractor": c,
         "year_month": ym,
         "from_date": from_date,
         "to_date": to_date,
-        "payment_type": c.get("payment_type"),
-        "payment_type_label": PAYMENT_TYPES.get(c.get("payment_type"), c.get("payment_type")),
-        "formula": (
-            "Closing (billable) = Sold - Opening - Sale return + Physical Manual; "
-            "Amount = Closing x Rate"
-        ),
+        "payment_type": pay_type,
+        "payment_type_label": PAYMENT_TYPES.get(pay_type, pay_type),
+        "is_production_qty": is_prod,
+        "formula": formula,
         "lines": lines,
         "total": round(total, 2),
         "totals": {
@@ -593,7 +606,9 @@ def calculate_contractor_month(
             "stock_qty": round(total_stock, 4),
             "sale_return_qty": round(total_return, 4),
             "manual_qty": round(total_manual, 4),
-            "closing_stock": round(total_closing, 4),
+            "production_qty": round(total_prod, 4),
+            "closing_stock": round(0.0 if is_prod else total_billable, 4),
+            "billable_qty": round(total_billable, 4),
             "gross_amount": round(total, 2),
             "item_count": len(lines),
         },
@@ -686,8 +701,16 @@ def save_contractor_month_run(
         stock = round(float(ln.get("stock_qty") or 0), 4)
         ret = round(float(ln.get("sale_return_qty") or 0), 4)
         man = round(float(ln.get("manual_qty") or 0), 4)
-        closing = round(float(ln.get("closing_stock") if ln.get("closing_stock") is not None
-                              else (sold - stock - ret + man)), 4)
+        if ln.get("quantity") is not None:
+            closing = round(float(ln.get("quantity") or 0), 4)
+        elif ln.get("production_qty") is not None and float(ln.get("production_qty") or 0) and not (
+            ln.get("closing_stock") is not None and float(ln.get("closing_stock") or 0)
+        ):
+            closing = round(float(ln.get("production_qty") or 0), 4)
+        elif ln.get("closing_stock") is not None:
+            closing = round(float(ln.get("closing_stock") or 0), 4)
+        else:
+            closing = round(sold - stock - ret + man, 4)
         rate = round(float(ln.get("rate") or 0), 4)
         amount = round(float(ln.get("amount") if ln.get("amount") is not None
                              else (closing * rate)), 2)
