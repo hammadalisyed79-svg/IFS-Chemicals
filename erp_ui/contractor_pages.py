@@ -259,7 +259,7 @@ def _tab_products():
             if is_prod_qty else
             "Payment = **SKU / carton qty × rate for each SKU**. "
         )
-        + "Use **bulk add** for families like **DW = Dish Wash**. "
+        + "Use **bulk add** for families like **DW**, **DT1**, **DT2**, **DT3**. "
         "Then set each SKU’s rate and click **Update selection**."
     )
 
@@ -359,7 +359,7 @@ def _tab_products():
     else:
         st.info("No products selected yet. Bulk-add **DW*** for Dish Wash, or search above.")
 
-    a1, a2, a3 = st.columns(3)
+    a1, a2, a3, a4 = st.columns(4)
     if a1.button("Update selection", type="primary", key="cl_prod_save"):
         try:
             n = save_contractor_products(cid, new_ids, rates=rate_map, user_id=hlp.uid())
@@ -368,20 +368,32 @@ def _tab_products():
             ff.action_done(f"Saved **{n}** SKU(s) with individual rates.")
         except Exception as e:
             st.error(str(e))
-    if a2.button("Discard changes", key="cl_prod_discard"):
+    if a2.button("Reset selection", key="cl_prod_reset", help="Restore last saved products and rates"):
+        for pid in list(saved_ids) + new_ids:
+            st.session_state.pop(f"cl_rate_{cid}_{pid}", None)
         st.session_state[sk] = list(saved_ids)
         st.session_state[rk] = get_contractor_product_rates(cid)
         st.session_state.pop(f"cl_prod_ms_{cid}", None)
-        for pid in list(saved_ids) + new_ids:
+        ff.action_done("Selection reset — restored last saved products and rates.")
+    if a3.button("Clear selection", key="cl_prod_clear_sel", help="Empty current picks (not saved until Update)"):
+        for pid in new_ids:
             st.session_state.pop(f"cl_rate_{cid}_{pid}", None)
-        ff.action_done("Draft discarded — restored last saved products and rates.")
-    if a3.button("Clear all products", key="cl_prod_clear"):
+        st.session_state[sk] = []
+        st.session_state[rk] = {}
+        st.session_state.pop(f"cl_prod_ms_{cid}", None)
+        ff.action_done(
+            "Selection cleared. Click **Update selection** to save empty, "
+            "or **Reset selection** to bring back the last saved list."
+        )
+    if a4.button("Clear all (saved)", key="cl_prod_clear", help="Permanently remove all saved products for this contractor"):
         try:
             clear_contractor_products(cid, user_id=hlp.uid())
+            for pid in list(saved_ids) + new_ids:
+                st.session_state.pop(f"cl_rate_{cid}_{pid}", None)
             st.session_state[sk] = []
             st.session_state[rk] = {}
             st.session_state.pop(f"cl_prod_ms_{cid}", None)
-            ff.action_done("All products removed for this contractor.")
+            ff.action_done("All saved products removed for this contractor.")
         except Exception as e:
             st.error(str(e))
 
