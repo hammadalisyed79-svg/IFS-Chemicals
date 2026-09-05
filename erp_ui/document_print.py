@@ -1775,6 +1775,107 @@ def payment_voucher_html(payment_id, vch_source=None):
     return ""
 
 
+def _money_cell(v) -> str:
+    try:
+        return f"{float(v or 0):,.2f}"
+    except (TypeError, ValueError):
+        return "0.00"
+
+
+def salary_payment_voucher_html(line_id):
+    """Half-page cash/bank salary voucher for employee signature."""
+    from db_hr import get_payroll_line_voucher_data
+
+    v = get_payroll_line_voucher_data(line_id)
+    if not v:
+        return ""
+    if (v.get("paid_status") or "") != "paid":
+        return ""
+
+    months = (
+        "", "January", "February", "March", "April", "May", "June",
+        "July", "August", "September", "October", "November", "December",
+    )
+    try:
+        m = int(v.get("payroll_month") or 0)
+        period = f"{months[m]} {int(v.get('payroll_year') or 0)}" if 1 <= m <= 12 else "—"
+    except (TypeError, ValueError):
+        period = "—"
+
+    mode = (v.get("payment_mode") or "cash").lower()
+    title = "Salary Cash Payment Voucher" if mode == "cash" else "Salary Bank Payment Voucher"
+    doc_no = v.get("payment_document_no") or "—"
+    pay_date = str(v.get("paid_date") or v.get("run_date") or "")[:10]
+    emp = v.get("employee_name") or "—"
+    code = v.get("emp_code") or "—"
+    dept = v.get("department_name") or "—"
+    payroll_no = v.get("payroll_no") or "—"
+
+    rows = [
+        ("Basic", v.get("basic_salary")),
+        ("Allowances", v.get("allowances")),
+        ("Overtime", v.get("overtime")),
+        ("Bonus", v.get("bonus")),
+        ("Gross", v.get("gross_salary")),
+        ("Advance recovery", v.get("advance_recovery")),
+        ("Loan recovery", v.get("loan_recovery")),
+        ("Other deductions", v.get("other_deductions")),
+        ("Total deductions", v.get("total_deductions")),
+        ("Net paid", v.get("paid_amount") or v.get("net_salary")),
+    ]
+    lines_html = "".join(
+        f"<tr><td>{escape(lbl)}</td><td class='num'>{_money_cell(amt)}</td></tr>"
+        for lbl, amt in rows
+    )
+    att = (
+        f"Present {float(v.get('days_present') or 0):.1f} · "
+        f"Absent {float(v.get('days_absent') or 0):.1f} · "
+        f"OT hrs {float(v.get('overtime_hrs') or 0):.1f}"
+    )
+    body = _doc_header(
+        title,
+        doc_no,
+        pay_date,
+        "Employee",
+        f"{emp} ({code})",
+        {
+            "Payroll": payroll_no,
+            "Period": period,
+            "Department": dept,
+            "Attendance": att,
+            "Mode": mode.upper(),
+        },
+        doc_time=v.get("paid_at") or v.get("paid_date"),
+    )
+    body += (
+        "<table class='lines' style='width:100%;margin-top:6px'>"
+        "<thead><tr><th>Particulars</th><th class='num'>Amount (Rs.)</th></tr></thead>"
+        f"<tbody>{lines_html}</tbody></table>"
+        f"<p style='margin-top:8px;font-size:0.9rem'>Received Rs. "
+        f"<strong>{_money_cell(v.get('paid_amount') or v.get('net_salary'))}</strong> "
+        f"as salary for <strong>{escape(period)}</strong>.</p>"
+    )
+    prep = resolve_preparer_name(v.get("paid_by") or v.get("created_by"))
+    sigs = cash_signatures_html(
+        prep,
+        extra_roles=(("Received by (Employee)", emp),),
+    )
+    css = PRINT_CSS_PORTRAIT_HALF.replace(
+        "</style>", f"{_VOUCHER_PRINT_CSS_EXTRA}</style>",
+    )
+    inner = (
+        f'<div class="half-page-sheet">{body}{sigs}</div>'
+        f'<div class="half-page-cut">— cut line — bottom half blank —</div>'
+        f'<div class="half-page-blank no-print">Bottom half of A4 left blank</div>'
+    )
+    return f"""<!DOCTYPE html><html><head><meta charset="utf-8">
+<title>{escape(title)} {escape(str(doc_no))}</title>
+{css}<script>function doPrint(){{window.print();}}</script></head>
+<body class="voucher-dual-body">{inner}
+<p class="no-print"><button class="print-btn" onclick="doPrint()">Print salary voucher</button></p>
+</body></html>"""
+
+
 def production_batch_html(prod_id):
     rows = [r for r in db.get_production_orders() if r["id"] == prod_id]
     if not rows:
@@ -1806,6 +1907,7 @@ PRINTERS = {
     "Journal Voucher": journal_voucher_html,
     "Receipt Voucher": receipt_voucher_html,
     "Payment Voucher": payment_voucher_html,
+    "Salary Payment Voucher": salary_payment_voucher_html,
     "Finance Voucher": finance_voucher_html,
     "Party Transfer": party_transfer_voucher_html,
     "Customer Receipt": lambda i, s=None: finance_voucher_html(s, i) if s else receipt_voucher_html(i),

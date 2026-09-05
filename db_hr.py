@@ -78,6 +78,13 @@ def apply_hr(conn, db_module):
             "INSERT INTO schema_meta(key,value) VALUES('hr_version','3') "
             "ON CONFLICT(key) DO UPDATE SET value='3'"
         )
+        ver = 3
+    if ver < 4:
+        _apply_hr_v4(conn)
+        conn.execute(
+            "INSERT INTO schema_meta(key,value) VALUES('hr_version','4') "
+            "ON CONFLICT(key) DO UPDATE SET value='4'"
+        )
 
 
 def _apply_hr_v2(conn):
@@ -97,6 +104,15 @@ def _apply_hr_v3(conn):
         ("paid_at", "TEXT"),
     ):
         _add_col(conn, "payroll_lines", col, ddl)
+
+
+def _apply_hr_v4(conn):
+    """Month closure lock on payroll runs."""
+    for col, ddl in (
+        ("closed_by", "INTEGER REFERENCES users(id)"),
+        ("closed_at", "TEXT"),
+    ):
+        _add_col(conn, "payroll_runs", col, ddl)
 
 
 def _col_exists(conn, table, col):
@@ -2044,7 +2060,12 @@ def post_payroll_gl(payroll_id, user_id):
 
 
 def _refresh_payroll_paid_status(conn, payroll_id, user_id=None):
-    """Mark payroll run paid when every line is paid."""
+    """Mark payroll run paid when every line is paid. Never overwrites closed."""
+    st = conn.execute(
+        "SELECT status FROM payroll_runs WHERE id=?", (payroll_id,),
+    ).fetchone()
+    if st and (st[0] or "") == "closed":
+        return
     total = conn.execute(
         "SELECT COUNT(*) FROM payroll_lines WHERE payroll_id=?", (payroll_id,)
     ).fetchone()[0]
@@ -2052,7 +2073,14 @@ def _refresh_payroll_paid_status(conn, payroll_id, user_id=None):
         "SELECT COUNT(*) FROM payroll_lines WHERE payroll_id=? AND paid_status='paid'",
         (payroll_id,),
     ).fetchone()[0]
-    if total and paid >= total:
+    # Lines with nil net need not be paid to consider the run complete
+    unpaid_due = conn.execute(
+        """SELECT COUNT(*) FROM payroll_lines
+           WHERE payroll_id=? AND COALESCE(paid_status,'unpaid')!='paid'
+             AND COALESCE(net_salary,0)>0.009""",
+        (payroll_id,),
+    ).fetchone()[0]
+    if total and unpaid_due == 0:
         conn.execute(
             "UPDATE payroll_runs SET status='paid', paid_by=?, paid_at=? WHERE id=?",
             (user_id, now(), payroll_id),
@@ -2063,6 +2091,106 @@ def _refresh_payroll_paid_status(conn, payroll_id, user_id=None):
                modified_by=?, modified_at=? WHERE id=?""",
             (user_id, now(), payroll_id),
         )
+
+
+def payroll_unpaid_due_count(payroll_id) -> int:
+    """Employees still owing a cash/bank net payment."""
+    from database import get_connection
+    with get_connection() as conn:
+        return int(conn.execute(
+            """SELECT COUNT(*) FROM payroll_lines
+               WHERE payroll_id=? AND COALESCE(paid_status,'unpaid')!='paid'
+                 AND COALESCE(net_salary,0)>0.009""",
+            (int(payroll_id),),
+        ).fetchone()[0] or 0)
+
+
+def close_payroll_month(payroll_id, user_id, notes=""):
+    """Final month lock — all due salaries must be paid first."""
+    from database import get_connection
+
+    with get_connection() as conn:
+        apply_hr(conn, __import__("database"))
+        pr = conn.execute(
+            "SELECT * FROM payroll_runs WHERE id=?", (int(payroll_id),),
+        ).fetchone()
+        if not pr:
+            raise ValueError("Payroll not found.")
+        pr = dict(pr)
+        status = (pr.get("status") or "").strip().lower()
+        if status == "closed":
+            raise ValueError("Payroll month is already closed.")
+        if status not in ("posted", "paid"):
+            raise ValueError("Post payroll to GL and pay all staff before closing the month.")
+        unpaid = conn.execute(
+            """SELECT COUNT(*) FROM payroll_lines
+               WHERE payroll_id=? AND COALESCE(paid_status,'unpaid')!='paid'
+                 AND COALESCE(net_salary,0)>0.009""",
+            (payroll_id,),
+        ).fetchone()[0]
+        if unpaid:
+            raise ValueError(
+                f"{unpaid} employee(s) still unpaid. Pay each salary (or settle nil-net) before Close month."
+            )
+        note = (notes or "").strip()
+        extra = f"\nClosed: {now()}" + (f" — {note}" if note else "")
+        conn.execute(
+            """UPDATE payroll_runs SET status='closed', closed_by=?, closed_at=?,
+               paid_by=COALESCE(paid_by,?), paid_at=COALESCE(paid_at,?),
+               notes=TRIM(COALESCE(notes,'') || ?),
+               modified_by=?, modified_at=?
+               WHERE id=?""",
+            (user_id, now(), user_id, now(), extra, user_id, now(), payroll_id),
+        )
+        return int(payroll_id)
+
+
+def reopen_payroll_month(payroll_id, user_id, reason=""):
+    """Unlock a closed payroll month (admin correction). Returns to paid."""
+    from database import get_connection
+
+    reason = (reason or "").strip()
+    if not reason:
+        raise ValueError("Reason is required to reopen a closed payroll month.")
+    with get_connection() as conn:
+        apply_hr(conn, __import__("database"))
+        pr = conn.execute(
+            "SELECT status FROM payroll_runs WHERE id=?", (int(payroll_id),),
+        ).fetchone()
+        if not pr:
+            raise ValueError("Payroll not found.")
+        if (pr[0] or "") != "closed":
+            raise ValueError("Only a closed payroll month can be reopened.")
+        conn.execute(
+            """UPDATE payroll_runs SET status='paid', closed_by=NULL, closed_at=NULL,
+               notes=TRIM(COALESCE(notes,'') || ?),
+               modified_by=?, modified_at=?
+               WHERE id=?""",
+            (f"\nReopened: {now()} — {reason}", user_id, now(), payroll_id),
+        )
+        return int(payroll_id)
+
+
+def get_payroll_line_voucher_data(line_id):
+    """Details for printable salary payment voucher."""
+    from database import get_connection, row_to_dict
+
+    with get_connection() as conn:
+        apply_hr(conn, __import__("database"))
+        row = conn.execute(
+            """SELECT pl.*,
+                      pr.document_no AS payroll_no, pr.payroll_month, pr.payroll_year,
+                      pr.run_date, pr.status AS payroll_status,
+                      e.full_name AS employee_name, e.code AS emp_code,
+                      d.name AS department_name
+               FROM payroll_lines pl
+               JOIN payroll_runs pr ON pl.payroll_id=pr.id
+               JOIN employees e ON pl.employee_id=e.id
+               LEFT JOIN departments d ON e.department_id=d.id
+               WHERE pl.id=?""",
+            (int(line_id),),
+        ).fetchone()
+        return row_to_dict(row) if row else None
 
 
 def _undo_payroll_line_payment(conn, line_id):
@@ -2132,6 +2260,8 @@ def pay_payroll_line(line_id, user_id, payment_mode="cash", payment_date=None, b
         if not row:
             raise ValueError("Payroll line not found.")
         row = dict(row)
+        if row["payroll_status"] == "closed":
+            raise ValueError("Payroll month is closed — reopen before paying or changing payments.")
         if row["payroll_status"] not in ("posted", "paid"):
             raise ValueError("Payroll must be posted to GL before paying employees.")
         if row.get("paid_status") == "paid":
@@ -2168,7 +2298,15 @@ def pay_payroll_line(line_id, user_id, payment_mode="cash", payment_date=None, b
             (amt, pay_date, mode, doc_no, user_id, now(), line_id),
         )
         _refresh_payroll_paid_status(conn, row["payroll_id"], user_id)
-        return {"document_no": doc_no, "amount": amt, "payment_mode": mode, "employee": row["employee_name"]}
+        return {
+            "document_no": doc_no,
+            "amount": amt,
+            "payment_mode": mode,
+            "employee": row["employee_name"],
+            "line_id": int(line_id),
+            "payroll_id": int(row["payroll_id"]),
+            "entry_id": int(entry_id) if entry_id else None,
+        }
 
 
 def settle_payroll_line_adjustment(line_id, user_id, note="", payment_date=None):
@@ -2193,6 +2331,8 @@ def settle_payroll_line_adjustment(line_id, user_id, note="", payment_date=None)
         if not row:
             raise ValueError("Payroll line not found.")
         row = dict(row)
+        if row["payroll_status"] == "closed":
+            raise ValueError("Payroll month is closed — reopen before settling lines.")
         if row["payroll_status"] not in ("posted", "paid"):
             raise ValueError("Payroll must be posted (or paid) before settling lines.")
         if row.get("paid_status") == "paid":
@@ -2223,11 +2363,17 @@ def pay_payroll(payroll_id, user_id, payment_mode="cash", payment_date=None, ban
     from database import get_connection
     with get_connection() as conn:
         pr = conn.execute("SELECT status FROM payroll_runs WHERE id=?", (payroll_id,)).fetchone()
-        if not pr or pr[0] not in ("posted", "paid"):
+        if not pr:
+            raise ValueError("Payroll not found.")
+        if (pr[0] or "") == "closed":
+            raise ValueError("Payroll month is closed — reopen before paying.")
+        if pr[0] not in ("posted", "paid"):
             raise ValueError("Payroll must be posted before payment")
         line_ids = [
             r[0] for r in conn.execute(
-                "SELECT id FROM payroll_lines WHERE payroll_id=? AND COALESCE(paid_status,'unpaid')!='paid'",
+                """SELECT id FROM payroll_lines
+                   WHERE payroll_id=? AND COALESCE(paid_status,'unpaid')!='paid'
+                     AND COALESCE(net_salary,0)>0.009""",
                 (payroll_id,),
             ).fetchall()
         ]
@@ -2248,10 +2394,16 @@ def rollback_payroll_line_payment(line_id, user_id, reason=""):
     from database import get_connection
     with get_connection() as conn:
         row = conn.execute(
-            "SELECT payroll_id FROM payroll_lines WHERE id=?", (line_id,)
+            """SELECT pl.payroll_id, pr.status
+               FROM payroll_lines pl
+               JOIN payroll_runs pr ON pr.id=pl.payroll_id
+               WHERE pl.id=?""",
+            (line_id,),
         ).fetchone()
         if not row:
             raise ValueError("Payroll line not found.")
+        if (row[1] or "") == "closed":
+            raise ValueError("Payroll month is closed — reopen before undoing a payment.")
         payroll_id = row[0]
         _undo_payroll_line_payment(conn, line_id)
         _refresh_payroll_paid_status(conn, payroll_id, user_id)
