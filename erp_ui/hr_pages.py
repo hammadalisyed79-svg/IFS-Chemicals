@@ -88,6 +88,58 @@ _PAYROLL_EDIT_CMP_COLS = (
 )
 
 
+def _payroll_recalc_edit_df(df: pd.DataFrame, year: int | None = None, month: int | None = None) -> pd.DataFrame:
+    """Live Gross / Total Ded. / Net (and OT amount from hours when OT Hrs > 0)."""
+    if df is None or df.empty:
+        return df
+    out = df.copy()
+    for i in out.index:
+        basic = float(out.at[i, "Basic"] or 0)
+        ot_hrs = float(out.at[i, "OT Hrs"] or 0)
+        if year and month and ot_hrs > 0 and hasattr(db, "calc_overtime_amount"):
+            try:
+                out.at[i, "Overtime"] = float(
+                    db.calc_overtime_amount(basic, int(year), int(month), ot_hrs) or 0
+                )
+            except Exception:
+                pass
+        allw = float(out.at[i, "Allowances"] or 0)
+        ot = float(out.at[i, "Overtime"] or 0)
+        bonus = float(out.at[i, "Bonus"] or 0)
+        gross = round(basic + allw + ot + bonus, 2)
+        adv = float(out.at[i, "Advance"] or 0)
+        loan = float(out.at[i, "Loan"] or 0)
+        other = float(out.at[i, "Other Ded."] or 0)
+        tax = float(out.at[i, "_tax"] or 0) if "_tax" in out.columns else 0.0
+        eobi = float(out.at[i, "_eobi"] or 0) if "_eobi" in out.columns else 0.0
+        ss = float(out.at[i, "_ss"] or 0) if "_ss" in out.columns else 0.0
+        ded = round(tax + eobi + ss + adv + loan + other, 2)
+        out.at[i, "Gross"] = gross
+        out.at[i, "Total Ded."] = ded
+        out.at[i, "Net"] = round(gross - ded, 2)
+    return out
+
+
+def _payroll_edit_df_changed(a: pd.DataFrame, b: pd.DataFrame, cols) -> bool:
+    if a is None or b is None or len(a) != len(b):
+        return True
+    try:
+        left = a.set_index("line_id")
+        right = b.set_index("line_id")
+    except Exception:
+        return True
+    if set(left.index) != set(right.index):
+        return True
+    for lid in left.index:
+        for col in cols:
+            try:
+                if abs(float(left.at[lid, col] or 0) - float(right.at[lid, col] or 0)) > 0.009:
+                    return True
+            except Exception:
+                return True
+    return False
+
+
 def _payroll_lines_df(lines):
     """Payroll grid — earnings, recoveries, and net (operator-facing columns)."""
     rows = []
@@ -1512,50 +1564,98 @@ def page_payroll():
                 show_depts = depts if dept_filter == "All departments" else [dept_filter]
                 col_cfg = _payroll_edit_column_config()
                 edited_by_dept = {}
+                need_live_rerun = False
+
+                # Reset live grids when underlying payroll lines change (refresh / reload)
+                src_sig = tuple(
+                    (
+                        int(edit_df.at[i, "line_id"]),
+                        round(float(edit_df.at[i, "Basic"] or 0), 2),
+                        round(float(edit_df.at[i, "Advance"] or 0), 2),
+                        round(float(edit_df.at[i, "Loan"] or 0), 2),
+                        round(float(edit_df.at[i, "OT Hrs"] or 0), 2),
+                        round(float(edit_df.at[i, "Overtime"] or 0), 2),
+                        round(float(edit_df.at[i, "Present"] or 0), 1),
+                    )
+                    for i in edit_df.index
+                )
+                sig_key = f"pr_edit_src_sig_{pid}"
+                if st.session_state.get(sig_key) != src_sig:
+                    st.session_state[sig_key] = src_sig
+                    for k in list(st.session_state.keys()):
+                        if str(k).startswith(f"pr_edit_live_{pid}_") or str(k).startswith(
+                            f"pr_tab_editor_{pid}_"
+                        ):
+                            del st.session_state[k]
 
                 for di, dept in enumerate(show_depts):
                     dept_df = edit_df[edit_df["Department"] == dept].copy().reset_index(drop=True)
-                    n_emp = len(dept_df)
-                    d_gross = float(dept_df["Gross"].sum())
-                    d_net = float(dept_df["Net"].sum())
+                    safe_dept = "".join(c if c.isalnum() else "_" for c in str(dept))[:40]
+                    live_key = f"pr_edit_live_{pid}_{safe_dept}"
+                    editor_key = f"pr_tab_editor_{pid}_{safe_dept}"
+
+                    if live_key not in st.session_state:
+                        st.session_state[live_key] = dept_df.copy()
+                    else:
+                        # Keep live edits aligned to current line set
+                        live = st.session_state[live_key]
+                        if set(live["line_id"].astype(int)) != set(dept_df["line_id"].astype(int)):
+                            st.session_state[live_key] = dept_df.copy()
+
+                    working = _payroll_recalc_edit_df(
+                        st.session_state[live_key], year=py, month=pm,
+                    )
+                    n_emp = len(working)
+                    d_gross = float(working["Gross"].sum())
+                    d_net = float(working["Net"].sum())
                     header = (
                         f"{dept}  ·  {n_emp} staff  ·  Gross {fmt(d_gross)}  ·  Net {fmt(d_net)}"
                     )
-                    safe_dept = "".join(c if c.isalnum() else "_" for c in str(dept))[:40]
                     with st.expander(header, expanded=expand_all or di == 0):
-                        edited_by_dept[dept] = st.data_editor(
-                            dept_df,
+                        edited_raw = st.data_editor(
+                            working,
                             column_config=col_cfg,
                             hide_index=True,
                             use_container_width=True,
                             num_rows="fixed",
                             height=min(520, 72 + max(n_emp, 1) * 35),
-                            key=f"pr_tab_editor_{pid}_{safe_dept}",
+                            key=editor_key,
                         )
+                        recalc = _payroll_recalc_edit_df(edited_raw, year=py, month=pm)
+                        editable_changed = _payroll_edit_df_changed(
+                            working, edited_raw, _PAYROLL_EDIT_CMP_COLS,
+                        )
+                        derived_stale = _payroll_edit_df_changed(
+                            edited_raw, recalc, ("Gross", "Total Ded.", "Net", "Overtime"),
+                        )
+                        st.session_state[live_key] = recalc
+                        edited_by_dept[dept] = recalc
+                        if editable_changed and derived_stale:
+                            # Refresh disabled Gross / Total Ded. / Net in the grid
+                            if editor_key in st.session_state:
+                                del st.session_state[editor_key]
+                            need_live_rerun = True
+
+                if need_live_rerun:
+                    st.rerun()
 
                 if edited_by_dept:
                     edited = pd.concat(edited_by_dept.values(), ignore_index=True)
                 else:
-                    edited = edit_df.copy()
+                    edited = _payroll_recalc_edit_df(edit_df.copy(), year=py, month=pm)
 
-                prev_gross = float(
-                    (edited["Basic"] + edited["Allowances"] + edited["Overtime"] + edited["Bonus"]).sum()
-                )
-                prev_ded = float(
-                    (edited["Advance"] + edited["Loan"] + edited["Other Ded."]).sum()
-                    + float(edited["_tax"].sum())
-                    + float(edited["_eobi"].sum())
-                    + float(edited["_ss"].sum())
-                )
+                prev_gross = float(edited["Gross"].sum())
+                prev_ded = float(edited["Total Ded."].sum())
+                prev_net = float(edited["Net"].sum())
                 st.markdown(
                     f"<div style='text-align:right;margin:8px 0 4px;padding:10px 14px;"
                     f"background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px'>"
-                    f"<span style='color:#64748b;font-size:0.8rem'>Unsaved preview · "
+                    f"<span style='color:#64748b;font-size:0.8rem'>Live totals · "
                     f"{len(edited)} employees in view</span><br>"
                     f"<span style='font-size:1.05rem;font-weight:600;color:#0f172a'>"
                     f"Gross {escape(fmt(prev_gross))} &nbsp;·&nbsp; "
                     f"Deductions {escape(fmt(prev_ded))} &nbsp;·&nbsp; "
-                    f"Net {escape(fmt(prev_gross - prev_ded))}</span></div>",
+                    f"Net {escape(fmt(prev_net))}</span></div>",
                     unsafe_allow_html=True,
                 )
 
