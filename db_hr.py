@@ -810,9 +810,16 @@ def _period_bounds(month, year):
 def _attendance_days_for_period(conn, employee_id, period_start, period_end):
     """Present / absent / OT hours for payroll.
 
-    Present includes present/late/overtime, **public (gazetted) holidays**,
-    and **weekly offs** (e.g. Friday), unless that day is marked leave or absent.
+    Present includes present/late/overtime, plus public & weekly holidays,
+    unless marked leave/absent.
+
+    Sandwich rule (always applied): a public or weekly holiday that sits
+    between the employee's own leaves counts as leave (not present); between
+    own absents counts as absent. Consecutive holidays between the same
+    flank type are all converted.
     """
+    from datetime import timedelta
+
     rows = conn.execute(
         """SELECT att_date, LOWER(COALESCE(status,'')) AS status,
                   COALESCE(overtime_hrs,0) AS ot
@@ -827,43 +834,95 @@ def _attendance_days_for_period(conn, employee_id, period_start, period_end):
         d = str(r["att_date"] or "")[:10]
         if not d:
             continue
-        att_by_date[d] = r["status"] or ""
+        att_by_date[d] = (r["status"] or "").strip().lower()
         overtime_hrs += float(r["ot"] or 0)
 
-    present_statuses = {
-        "present", "late", "overtime", "public_holiday", "weekly_holiday",
-    }
-    days_present = 0.0
-    days_absent = 0.0
-    for status in att_by_date.values():
-        if status in present_statuses:
-            days_present += 1
-        elif status == "absent":
-            days_absent += 1
-
-    # Calendar holidays (gazetted + weekly off) with no leave/absent mark count as present.
     try:
         from db_holidays import holidays_in_range
         hol_map = holidays_in_range(period_start, period_end) or {}
     except Exception:
         hol_map = {}
-    for d, info in hol_map.items():
-        kind = (info or {}).get("kind")
-        status_code = (info or {}).get("status")
-        if kind not in ("gazetted", "weekly") and status_code not in (
-            "public_holiday", "weekly_holiday",
-        ):
-            continue
-        status = att_by_date.get(d)
-        if status in ("leave", "absent"):
-            continue
-        if status in present_statuses:
-            continue  # already counted
-        days_present += 1
+
+    holiday_statuses = {"public_holiday", "weekly_holiday"}
+    present_work = {"present", "late", "overtime"}
+    flank_statuses = {"leave", "absent", "present", "late", "overtime", "half_day"}
+
+    # Effective status per calendar day in the period
+    try:
+        start_dt = datetime.strptime(str(period_start)[:10], "%Y-%m-%d")
+        end_dt = datetime.strptime(str(period_end)[:10], "%Y-%m-%d")
+    except ValueError:
+        return {
+            "days_present": 0.0,
+            "days_absent": 0.0,
+            "overtime_hrs": round(overtime_hrs, 2),
+        }
+
+    effective = {}
+    cur = start_dt
+    while cur <= end_dt:
+        iso = cur.strftime("%Y-%m-%d")
+        marked = att_by_date.get(iso)
+        if marked:
+            effective[iso] = marked
+        elif iso in hol_map:
+            info = hol_map[iso] or {}
+            effective[iso] = (info.get("status") or "public_holiday").strip().lower()
+        # else: no record — not a holiday fill
+        cur += timedelta(days=1)
+
+    dates = sorted(effective.keys())
+
+    def _flank(idx: int, direction: int):
+        """Nearest non-holiday decisive status left (−1) or right (+1)."""
+        j = idx + direction
+        while 0 <= j < len(dates):
+            st = effective.get(dates[j]) or ""
+            if st in holiday_statuses:
+                j += direction
+                continue
+            if st in flank_statuses:
+                # present-like flanks
+                if st in ("present", "late", "overtime", "half_day"):
+                    return "present"
+                return st  # leave or absent
+            j += direction
+        return None
+
+    # Iterate until sandwich conversions settle (holiday chains)
+    for _ in range(len(dates) + 2):
+        changed = False
+        for i, d in enumerate(dates):
+            st = effective.get(d) or ""
+            if st not in holiday_statuses:
+                continue
+            left = _flank(i, -1)
+            right = _flank(i, 1)
+            if left == "leave" and right == "leave":
+                effective[d] = "leave"
+                changed = True
+            elif left == "absent" and right == "absent":
+                effective[d] = "absent"
+                changed = True
+        if not changed:
+            break
+
+    days_present = 0.0
+    days_absent = 0.0
+    days_leave = 0.0
+    for d, st in effective.items():
+        if st in present_work or st in holiday_statuses:
+            days_present += 1
+        elif st == "absent":
+            days_absent += 1
+        elif st == "leave":
+            days_leave += 1
+        # half_day: not counted as full present (unchanged policy)
 
     return {
         "days_present": round(days_present, 1),
         "days_absent": round(days_absent, 1),
+        "days_leave": round(days_leave, 1),
         "overtime_hrs": round(overtime_hrs, 2),
     }
 
@@ -1697,8 +1756,9 @@ def sync_payroll_overtime(payroll_id, mode="from_hours", user_id=None):
 def refresh_payroll_attendance_days(payroll_id, user_id=None):
     """Re-pull Present / Absent / OT hrs from attendance for a draft payroll.
 
-    Public holidays and weekly offs (e.g. Friday) count toward Present
-    unless marked leave/absent.
+    Public holidays and weekly offs count toward Present unless leave/absent,
+    or the sandwich rule applies (holiday between own leaves → leave;
+    between own absents → absent).
     """
     from database import get_connection
     with get_connection() as conn:
