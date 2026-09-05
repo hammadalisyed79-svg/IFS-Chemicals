@@ -1782,6 +1782,8 @@ def refresh_payroll_attendance_days(payroll_id, user_id=None):
     Public holidays and weekly offs count toward Present only when the
     employee has at least one work day; sandwich converts holidays between
     leave→leave or absent→absent. Blank attendance does not earn holiday Present.
+
+    Returns dict: updated, no_attendance, no_attendance_names (sample).
     """
     from database import get_connection
     with get_connection() as conn:
@@ -1803,9 +1805,21 @@ def refresh_payroll_attendance_days(payroll_id, user_id=None):
             (payroll_id,),
         ).fetchall()
         n = 0
+        no_att = []
         for row in lines:
             ln = dict(row)
-            att = _attendance_days_for_period(conn, int(ln["employee_id"]), period_start, period_end)
+            eid = int(ln["employee_id"])
+            att_n = conn.execute(
+                "SELECT COUNT(*) FROM attendance WHERE employee_id=? AND att_date>=? AND att_date<=?",
+                (eid, period_start, period_end),
+            ).fetchone()[0]
+            if not att_n:
+                emp = conn.execute(
+                    "SELECT code, full_name FROM employees WHERE id=?", (eid,)
+                ).fetchone()
+                if emp:
+                    no_att.append(f"{emp[0]} {emp[1]}")
+            att = _attendance_days_for_period(conn, eid, period_start, period_end)
             basic = float(ln.get("basic_salary") or 0)
             overtime = calc_overtime_amount(basic, year, month, att["overtime_hrs"])
             merged = {
@@ -1829,7 +1843,13 @@ def refresh_payroll_attendance_days(payroll_id, user_id=None):
             )
             n += 1
         _refresh_payroll_run_totals(conn, payroll_id)
-        return n
+        return {
+            "updated": n,
+            "no_attendance": len(no_att),
+            "no_attendance_names": no_att[:15],
+            "period_start": period_start,
+            "period_end": period_end,
+        }
 
 
 def approve_payroll(payroll_id, user_id):

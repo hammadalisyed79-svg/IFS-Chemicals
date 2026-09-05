@@ -481,8 +481,8 @@ def _employee_wise_tab():
     """One employee × date range calendar, with mark/edit for any day."""
     st.markdown(
         "**Employee-wise attendance** — pick an employee and period. "
-        "Working days default to **Present**; **Weekly / Gazetted holidays** default from the holiday calendar. "
-        "Change only exceptions, then save."
+        "Unsaved rows show suggested defaults (Present / holiday) for editing only. "
+        "**Payroll Present uses saved rows only** — click **Save period** to write them."
     )
     all_emps = _load_employees()
     if not all_emps:
@@ -620,13 +620,30 @@ def _employee_wise_tab():
         d += timedelta(days=1)
 
     df = pd.DataFrame(days)
-    marked_n = int((df["marked"] == "Yes").sum()) if not df.empty else 0
-    present_n = int((df["status"] == "present").sum()) if not df.empty else 0
-    absent_n = int((df["status"] == "absent").sum()) if not df.empty else 0
-    leave_n = int((df["status"] == "leave").sum()) if not df.empty else 0
-    weekly_n = int((df["status"] == "weekly_holiday").sum()) if not df.empty else 0
-    gaz_n = int((df["status"] == "public_holiday").sum()) if not df.empty else 0
-    total_ot = float(df["overtime_hrs"].sum()) if not df.empty else 0.0
+    marked_mask = (df["marked"] == "Yes") if not df.empty else pd.Series(dtype=bool)
+    marked_n = int(marked_mask.sum()) if not df.empty else 0
+    unmarked_n = len(df) - marked_n
+    # KPIs = saved DB rows only (unsaved editor defaults must not look like real attendance)
+    saved = df[marked_mask] if not df.empty else df
+    present_n = int((saved["status"] == "present").sum()) if not saved.empty else 0
+    absent_n = int((saved["status"] == "absent").sum()) if not saved.empty else 0
+    leave_n = int((saved["status"] == "leave").sum()) if not saved.empty else 0
+    weekly_n = int((saved["status"] == "weekly_holiday").sum()) if not saved.empty else 0
+    gaz_n = int((saved["status"] == "public_holiday").sum()) if not saved.empty else 0
+    total_ot = float(saved["overtime_hrs"].sum()) if not saved.empty else 0.0
+
+    if unmarked_n > 0:
+        st.warning(
+            f"**{unmarked_n}** of **{len(df)}** day(s) are not saved yet. "
+            f"KPIs below count **saved** attendance only (Present **{present_n}**). "
+            "Suggested Present/holiday in the grid is for editing — "
+            "**Save period** before payroll Refresh Present will pick them up."
+        )
+    elif marked_n == 0 and len(df) > 0:
+        st.warning(
+            "No attendance saved for this employee in the selected range. "
+            "Payroll Present will be **0** until you **Save period**."
+        )
 
     k1, k2, k3, k4, k5, k6, k7 = st.columns(7, gap="small")
     k1.markdown(
@@ -635,22 +652,22 @@ def _employee_wise_tab():
         unsafe_allow_html=True,
     )
     k2.markdown(
-        f"<div class='txn-kpi-card'><p class='txn-kpi'>Marked</p>"
+        f"<div class='txn-kpi-card'><p class='txn-kpi'>Saved</p>"
         f"<p class='txn-kpi-val'>{marked_n}/{len(df)}</p></div>",
         unsafe_allow_html=True,
     )
     k3.markdown(
-        f"<div class='txn-kpi-card'><p class='txn-kpi'>Present</p>"
+        f"<div class='txn-kpi-card'><p class='txn-kpi'>Present (saved)</p>"
         f"<p class='txn-kpi-val'>{present_n:,}</p></div>",
         unsafe_allow_html=True,
     )
     k4.markdown(
-        f"<div class='txn-kpi-card'><p class='txn-kpi'>Absent</p>"
+        f"<div class='txn-kpi-card'><p class='txn-kpi'>Absent (saved)</p>"
         f"<p class='txn-kpi-val'>{absent_n:,}</p></div>",
         unsafe_allow_html=True,
     )
     k5.markdown(
-        f"<div class='txn-kpi-card'><p class='txn-kpi'>Leave</p>"
+        f"<div class='txn-kpi-card'><p class='txn-kpi'>Leave (saved)</p>"
         f"<p class='txn-kpi-val'>{leave_n:,}</p></div>",
         unsafe_allow_html=True,
     )
@@ -660,7 +677,7 @@ def _employee_wise_tab():
         unsafe_allow_html=True,
     )
     k7.markdown(
-        f"<div class='txn-kpi-card'><p class='txn-kpi'>Total OT (hrs)</p>"
+        f"<div class='txn-kpi-card'><p class='txn-kpi'>OT saved (hrs)</p>"
         f"<p class='txn-kpi-val'>{total_ot:,.1f}</p></div>",
         unsafe_allow_html=True,
     )
@@ -668,7 +685,7 @@ def _employee_wise_tab():
     st.caption(
         f"**{emp.get('code')}** · {emp.get('full_name') or emp.get('name')} · "
         f"{_emp_dept(emp)} · {fd_s} → {td_s}. "
-        "Working days → Present; calendar holidays → Weekly/Gazetted Holiday."
+        "Grid defaults are not payroll data until **Save period**."
     )
 
     edited = st.data_editor(
@@ -719,7 +736,8 @@ def _employee_wise_tab():
             st.error(str(e))
     c2.caption(
         "Holiday columns come from **Administration → Holidays**. "
-        "Change status only for exceptions, then Save period."
+        "Change status only for exceptions, then **Save period** — "
+        "until saved, payroll Present stays 0 for unmarked days."
     )
 
     export_df = edited.copy()

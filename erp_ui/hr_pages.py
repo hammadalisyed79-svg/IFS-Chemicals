@@ -1576,16 +1576,28 @@ def page_payroll():
                     if b2.button(
                         "Refresh Present from attendance",
                         key=f"pr_refresh_att_{pid}",
-                        help="Re-pull Present / Absent / OT hrs. Holidays count as Present unless leave/absent, or sandwiched between leave/absent.",
+                        help="Re-pull Present / Absent / OT from saved attendance only. "
+                             "Holidays count as Present only if the employee has at least one work day.",
                         use_container_width=True,
                     ):
                         try:
-                            n = db.refresh_payroll_attendance_days(pid, user_id=uid())
-                            ff.action_done(
-                                f"Refreshed attendance for **{n}** line(s). "
-                                "Holidays included in Present unless leave/absent "
-                                "or sandwiched between leave/absent."
-                            )
+                            res = db.refresh_payroll_attendance_days(pid, user_id=uid())
+                            if isinstance(res, dict):
+                                n = res.get("updated", 0)
+                                miss = int(res.get("no_attendance") or 0)
+                                names = res.get("no_attendance_names") or []
+                                msg = f"Refreshed attendance for **{n}** line(s)."
+                                if miss:
+                                    sample = ", ".join(names[:8])
+                                    more = f" (+{miss - 8} more)" if miss > 8 else ""
+                                    msg += (
+                                        f" **{miss}** staff have **no saved attendance** "
+                                        f"in this period (Present=0): {sample}{more}. "
+                                        "Open **HR → Attendance → Employee Wise**, then **Save period**."
+                                    )
+                                ff.action_done(msg)
+                            else:
+                                ff.action_done(f"Refreshed attendance for **{res}** line(s).")
                         except Exception as e:
                             st.error(str(e))
                     if b3.button(
