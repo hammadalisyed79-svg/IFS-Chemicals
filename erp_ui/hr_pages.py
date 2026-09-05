@@ -1321,7 +1321,7 @@ def page_payroll():
                     f"{fmt(30000 / mdays / 6)} per hour."
                 )
                 if pr.get("status") == "draft":
-                    b1, b2, b3 = st.columns([1.2, 1.6, 2])
+                    b1, b2, b3, b4 = st.columns([1.2, 1.5, 1.6, 2])
                     if b1.button("Recalc OT from hours", key=f"pr_ot_from_hrs_{pid}",
                                  help="Overtime pay = Basic / month days / 6 × OT Hrs"):
                         try:
@@ -1329,14 +1329,30 @@ def page_payroll():
                             ff.action_done(f"Recalculated overtime for **{n}** line(s) from OT hours.")
                         except Exception as e:
                             st.error(str(e))
-                    if b2.button("Fill hours from OT amount", key=f"pr_ot_from_amt_{pid}",
+                    if b2.button(
+                        "Refresh Present from attendance",
+                        key=f"pr_refresh_att_{pid}",
+                        help="Re-pull Present / Absent / OT hrs. Public holidays count as Present unless leave/absent.",
+                    ):
+                        try:
+                            n = db.refresh_payroll_attendance_days(pid, user_id=uid())
+                            ff.action_done(
+                                f"Refreshed attendance for **{n}** line(s). "
+                                "Public holidays included in Present (unless leave/absent)."
+                            )
+                        except Exception as e:
+                            st.error(str(e))
+                    if b3.button("Fill hours from OT amount", key=f"pr_ot_from_amt_{pid}",
                                  help="For prior months already paid: reverse-calc OT hours from Overtime amount"):
                         try:
                             n = db.sync_payroll_overtime(pid, mode="from_amount", user_id=uid())
                             ff.action_done(f"Filled OT hours for **{n}** line(s) from overtime amounts.")
                         except Exception as e:
                             st.error(str(e))
-                    b3.caption("Use **Fill hours** on past paid figures; use **Recalc OT** for next month hours.")
+                    b4.caption(
+                        "Present includes gazetted holidays unless marked leave/absent. "
+                        "Use **Refresh Present** on this draft after attendance changes."
+                    )
                 edit_rows = []
                 for l in pr["lines"]:
                     basic = float(l.get("basic_salary") or 0)
