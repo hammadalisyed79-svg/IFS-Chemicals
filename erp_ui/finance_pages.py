@@ -603,9 +603,29 @@ def _cash_day_status_bar(sel_date, key_prefix="cashbk"):
         else:
             c2.caption("Reopen: administrator + password required")
     else:
-        c1.info("Cash day is **open** — you can post, edit, and delete cash vouchers for this date.")
+        pending = db.pending_cash_invoices_for_date(ds, limit=15)
+        if pending:
+            refs = ", ".join(
+                str(r.get("document_no") or r.get("id")) for r in pending[:8]
+            )
+            more = f" (+{len(pending) - 8} more)" if len(pending) > 8 else ""
+            c1.warning(
+                f"Cash day is **open**, but **{len(pending)} cash invoice(s)** are still "
+                f"pending approval for {ds}: {refs}{more}. "
+                f"Approve / reject / return them before closing the day."
+            )
+        else:
+            c1.info(
+                "Cash day is **open** — you can post, edit, and delete cash vouchers for this date."
+            )
         notes = c2.text_input("Close notes", key=f"{key_prefix}_close_notes", placeholder="Optional")
-        if c2.button("Close cash day", type="primary", key=f"{key_prefix}_close"):
+        close_disabled = bool(pending)
+        if c2.button(
+            "Close cash day",
+            type="primary",
+            key=f"{key_prefix}_close",
+            disabled=close_disabled,
+        ):
             try:
                 db.close_cash_day(ds, uid(), notes=notes)
                 ff.action_done(f"Cash day {ds} closed.")

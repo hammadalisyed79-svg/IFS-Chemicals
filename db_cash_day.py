@@ -88,6 +88,79 @@ def assert_cash_day_open_for_invoice(entry_date, *, kind="cash invoice"):
     )
 
 
+def pending_cash_invoices_for_date(entry_date, *, limit=50):
+    """Cash sale/purchase invoices awaiting approval on this invoice date.
+
+    Matches invoices that would post to Cash Book on approve
+    (cash paid mode, or SALE IN CASH / counter cash customer).
+    """
+    from database import get_connection, rows_to_list
+
+    d = _norm_date(entry_date)
+    if not d:
+        return []
+    lim = max(1, min(int(limit or 50), 200))
+    with get_connection() as conn:
+        sales = rows_to_list(conn.execute(
+            """
+            SELECT s.id, s.document_no, s.invoice_date, s.total, s.paid_amount,
+                   s.payment_mode, 'sale' AS kind,
+                   c.code AS party_code, c.name AS party_name
+            FROM sales_invoices s
+            LEFT JOIN customers c ON c.id = s.customer_id
+            WHERE s.invoice_date = ?
+              AND s.status = 'pending_approval'
+              AND (
+                    (LOWER(COALESCE(s.payment_mode, '')) = 'cash'
+                     AND COALESCE(s.paid_amount, 0) > 0.009)
+                 OR COALESCE(c.code, '') = '100013'
+                 OR UPPER(TRIM(COALESCE(c.name, ''))) IN
+                    ('SALE IN CASH', 'CASH SALE', 'CASH SALES')
+              )
+            ORDER BY s.document_no
+            LIMIT ?
+            """,
+            (d, lim),
+        ).fetchall())
+        purchases = rows_to_list(conn.execute(
+            """
+            SELECT p.id, p.document_no, p.invoice_date, p.total, p.paid_amount,
+                   p.payment_mode, 'purchase' AS kind,
+                   s.code AS party_code, s.name AS party_name
+            FROM purchase_invoices p
+            LEFT JOIN suppliers s ON s.id = p.supplier_id
+            WHERE p.invoice_date = ?
+              AND p.status = 'pending_approval'
+              AND LOWER(COALESCE(p.payment_mode, '')) = 'cash'
+              AND COALESCE(p.paid_amount, 0) > 0.009
+            ORDER BY p.document_no
+            LIMIT ?
+            """,
+            (d, lim),
+        ).fetchall())
+    return sales + purchases
+
+
+def assert_no_pending_cash_invoices(entry_date):
+    """Raise if any cash invoice is still pending approval for this date."""
+    pending = pending_cash_invoices_for_date(entry_date, limit=20)
+    if not pending:
+        return
+    d = _norm_date(entry_date)
+    refs = ", ".join(
+        f"{r.get('document_no') or r.get('id')} ({r.get('kind')})"
+        for r in pending[:10]
+    )
+    extra = ""
+    if len(pending) > 10:
+        extra = f" and {len(pending) - 10} more"
+    raise ValueError(
+        f"Cannot close cash day **{d}** — {len(pending)} cash invoice(s) still "
+        f"pending approval: {refs}{extra}. "
+        f"Approve, reject, or return them for edit first."
+    )
+
+
 def close_cash_day(close_date, user_id=None, notes=None):
     from database import get_connection, now
 
@@ -96,6 +169,7 @@ def close_cash_day(close_date, user_id=None, notes=None):
         raise ValueError("Close date is required.")
     if is_cash_day_closed(d):
         raise ValueError(f"Cash book for {d} is already closed.")
+    assert_no_pending_cash_invoices(d)
     ts = now()
     note_val = (notes or "").strip() or None
     with get_connection() as conn:
