@@ -564,6 +564,93 @@ def get_attendance(from_date=None, to_date=None, employee_id=None):
         return rows_to_list(conn.execute(q, p).fetchall())
 
 
+def report_attendance_monthly_coverage(year, month, department=None, active_only=True):
+    """Active employees vs saved attendance for a calendar month.
+
+    Returns list of dicts with saved_days, missing_days, coverage_pct, status bucket
+    (none / partial / complete), and present/absent/leave/holiday counts from saved rows.
+    For the current month, expected days stop at today (future days are not missing).
+    """
+    from database import get_connection, rows_to_list
+    from datetime import date as _date
+
+    year, month = int(year), int(month)
+    period_start, period_end = _period_bounds(month, year)
+    days_total = days_in_month(year, month)
+    today = _date.today()
+    if year == today.year and month == today.month:
+        expected_days = today.day
+        period_end_eff = today.isoformat()
+    else:
+        expected_days = days_total
+        period_end_eff = period_end
+
+    with get_connection() as conn:
+        q = """SELECT e.id AS employee_id, e.code, e.full_name,
+                      COALESCE(d.name, e.department, 'Unassigned') AS department_name,
+                      COALESCE(att.saved_days, 0) AS saved_days,
+                      COALESCE(att.present_days, 0) AS present_days,
+                      COALESCE(att.absent_days, 0) AS absent_days,
+                      COALESCE(att.leave_days, 0) AS leave_days,
+                      COALESCE(att.holiday_days, 0) AS holiday_days,
+                      COALESCE(att.other_days, 0) AS other_days,
+                      att.first_date, att.last_date
+               FROM employees e
+               LEFT JOIN departments d ON e.department_id=d.id
+               LEFT JOIN (
+                   SELECT employee_id,
+                          COUNT(*) AS saved_days,
+                          SUM(CASE WHEN LOWER(COALESCE(status,'')) IN ('present','late','overtime') THEN 1 ELSE 0 END) AS present_days,
+                          SUM(CASE WHEN LOWER(COALESCE(status,''))='absent' THEN 1 ELSE 0 END) AS absent_days,
+                          SUM(CASE WHEN LOWER(COALESCE(status,''))='leave' THEN 1 ELSE 0 END) AS leave_days,
+                          SUM(CASE WHEN LOWER(COALESCE(status,'')) IN ('weekly_holiday','public_holiday') THEN 1 ELSE 0 END) AS holiday_days,
+                          SUM(CASE WHEN LOWER(COALESCE(status,'')) NOT IN (
+                                'present','late','overtime','absent','leave','weekly_holiday','public_holiday'
+                              ) THEN 1 ELSE 0 END) AS other_days,
+                          MIN(att_date) AS first_date,
+                          MAX(att_date) AS last_date
+                   FROM attendance
+                   WHERE att_date>=? AND att_date<=?
+                   GROUP BY employee_id
+               ) att ON att.employee_id=e.id
+               WHERE 1=1"""
+        p = [period_start, period_end_eff]
+        if active_only:
+            q += " AND e.is_active=1 AND COALESCE(e.employment_status,'active')='active'"
+        if department and department != "All departments":
+            q += " AND COALESCE(d.name, e.department, 'Unassigned')=?"
+            p.append(department)
+        q += """ ORDER BY COALESCE(d.name, e.department, 'Unassigned'),
+                         e.full_name, e.code"""
+        rows = rows_to_list(conn.execute(q, p).fetchall())
+
+    out = []
+    for r in rows:
+        saved = int(r.get("saved_days") or 0)
+        missing = max(0, expected_days - saved)
+        if saved <= 0:
+            bucket = "none"
+        elif saved >= expected_days:
+            bucket = "complete"
+        else:
+            bucket = "partial"
+        pct = round(100.0 * saved / expected_days, 1) if expected_days else 0.0
+        out.append({
+            **r,
+            "year": year,
+            "month": month,
+            "period_start": period_start,
+            "period_end": period_end_eff,
+            "days_in_month": days_total,
+            "expected_days": expected_days,
+            "saved_days": saved,
+            "missing_days": missing,
+            "coverage_pct": pct,
+            "coverage_status": bucket,
+        })
+    return out
+
+
 def bulk_save_attendance(att_date, records, user_id=None):
     """Save attendance for many employees in one transaction."""
     from database import get_connection

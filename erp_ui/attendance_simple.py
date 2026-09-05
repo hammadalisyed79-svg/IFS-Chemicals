@@ -758,15 +758,127 @@ def _employee_wise_tab():
     )
 
 
+def _missing_attendance_tab():
+    """Monthly report: who has no / incomplete saved attendance."""
+    st.markdown(
+        "**Monthly coverage** — employees whose attendance is **not saved** (or only partly saved). "
+        "Payroll Present uses **saved** rows only. Fix via **Employee Wise → Save period** or **Daily Sheet**."
+    )
+    today = date.today()
+    all_emps = _load_employees()
+    dept_opts = _dept_options(all_emps, include_all=True)
+    c1, c2, c3, c4 = st.columns([1, 1, 1.4, 1.4])
+    year = int(c1.number_input("Year", 2020, 2100, today.year, key="att_miss_year"))
+    month = int(c2.number_input("Month", 1, 12, today.month, key="att_miss_month"))
+    dept = c3.selectbox("Department", dept_opts, key="att_miss_dept")
+    show = c4.selectbox(
+        "Show",
+        ["Not saved / incomplete", "Not saved only (0 days)", "Incomplete only", "All employees"],
+        key="att_miss_show",
+    )
+
+    if not hasattr(db, "report_attendance_monthly_coverage"):
+        st.error("Coverage report is not available in this build.")
+        return
+
+    rows = db.report_attendance_monthly_coverage(
+        year, month,
+        department=None if dept == "All departments" else dept,
+        active_only=True,
+    )
+    if not rows:
+        st.info("No active employees found.")
+        return
+
+    none_n = sum(1 for r in rows if r.get("coverage_status") == "none")
+    part_n = sum(1 for r in rows if r.get("coverage_status") == "partial")
+    ok_n = sum(1 for r in rows if r.get("coverage_status") == "complete")
+    expected = int(rows[0].get("expected_days") or 0)
+    period = f"{rows[0].get('period_start')} → {rows[0].get('period_end')}"
+
+    k1, k2, k3, k4, k5 = st.columns(5, gap="small")
+    k1.markdown(
+        f"<div class='txn-kpi-card'><p class='txn-kpi'>Active staff</p>"
+        f"<p class='txn-kpi-val'>{len(rows):,}</p></div>",
+        unsafe_allow_html=True,
+    )
+    k2.markdown(
+        f"<div class='txn-kpi-card'><p class='txn-kpi'>Not saved (0)</p>"
+        f"<p class='txn-kpi-val'>{none_n:,}</p></div>",
+        unsafe_allow_html=True,
+    )
+    k3.markdown(
+        f"<div class='txn-kpi-card'><p class='txn-kpi'>Incomplete</p>"
+        f"<p class='txn-kpi-val'>{part_n:,}</p></div>",
+        unsafe_allow_html=True,
+    )
+    k4.markdown(
+        f"<div class='txn-kpi-card'><p class='txn-kpi'>Complete</p>"
+        f"<p class='txn-kpi-val'>{ok_n:,}</p></div>",
+        unsafe_allow_html=True,
+    )
+    k5.markdown(
+        f"<div class='txn-kpi-card'><p class='txn-kpi'>Expected days</p>"
+        f"<p class='txn-kpi-val'>{expected:,}</p></div>",
+        unsafe_allow_html=True,
+    )
+    st.caption(f"Period counted: **{period}** · current month stops at today.")
+
+    if show == "Not saved only (0 days)":
+        view = [r for r in rows if r.get("coverage_status") == "none"]
+    elif show == "Incomplete only":
+        view = [r for r in rows if r.get("coverage_status") == "partial"]
+    elif show == "All employees":
+        view = rows
+    else:
+        view = [r for r in rows if r.get("coverage_status") in ("none", "partial")]
+
+    if not view:
+        st.success("All active employees in this filter have full saved attendance for the period.")
+        return
+
+    status_label = {"none": "Not saved", "partial": "Incomplete", "complete": "Complete"}
+    status_order = {"none": 0, "partial": 1, "complete": 2}
+    df = pd.DataFrame([{
+        "Department": r.get("department_name") or "",
+        "Code": r.get("code") or "",
+        "Employee": r.get("full_name") or "",
+        "Status": status_label.get(r.get("coverage_status"), r.get("coverage_status")),
+        "Saved days": int(r.get("saved_days") or 0),
+        "Missing days": int(r.get("missing_days") or 0),
+        "Expected": int(r.get("expected_days") or 0),
+        "Coverage %": float(r.get("coverage_pct") or 0),
+        "Present": int(r.get("present_days") or 0),
+        "Absent": int(r.get("absent_days") or 0),
+        "Leave": int(r.get("leave_days") or 0),
+        "Holidays": int(r.get("holiday_days") or 0),
+        "First saved": r.get("first_date") or "",
+        "Last saved": r.get("last_date") or "",
+        "_ord": status_order.get(r.get("coverage_status"), 9),
+    } for r in view])
+    df = df.sort_values(["_ord", "Department", "Employee"], kind="mergesort").drop(columns=["_ord"]).reset_index(drop=True)
+
+    render_dataframe_html_table(df)
+    export_buttons(
+        df,
+        f"attendance_missing_{year}{month:02d}",
+        f"Attendance Missing {year}-{month:02d}",
+    )
+    st.caption(
+        f"Showing **{len(df):,}** employee(s). "
+        "Open **Employee Wise**, select the person, set August (or month), then **Save period**."
+    )
+
+
 def page_attendance_simple():
     peek = st.session_state.get("att_simple_tab") or "Daily Sheet"
     std_page_header(
         "Attendance",
-        status="register" if peek in ("Register", "Employee Wise") else None,
-        status_kind="shell" if peek in ("Register", "Employee Wise") else "invoice",
+        status="register" if peek in ("Register", "Employee Wise", "Missing / Coverage") else None,
+        status_kind="shell" if peek in ("Register", "Employee Wise", "Missing / Coverage") else "invoice",
     )
     tab = sticky_page_tabs(
-        ["Daily Sheet", "Employee Wise", "Quick Entry", "Register", "Overtime Report"],
+        ["Daily Sheet", "Employee Wise", "Quick Entry", "Register", "Missing / Coverage", "Overtime Report"],
         "att_simple_tab",
     )
 
@@ -778,6 +890,8 @@ def page_attendance_simple():
         _quick_entry_tab()
     elif tab == "Register":
         _register_tab()
+    elif tab == "Missing / Coverage":
+        _missing_attendance_tab()
     elif tab == "Overtime Report":
         c1, c2, c3 = st.columns([1, 1, 2])
         fd, td = str(c1.date_input("From", key="otf")), str(c2.date_input("To", key="ott"))
