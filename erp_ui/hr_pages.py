@@ -1145,11 +1145,12 @@ def _render_employee_cash_payments(pid, pr):
                             )
                         except Exception as e:
                             st.error(str(e))
-                    with st.expander(
-                        f"Adjust before pay — {line.get('emp_code')} "
-                        f"(less Advance / Loan / Other)",
-                        expanded=False,
-                    ):
+                    show_adj = a4.checkbox(
+                        "Adjust",
+                        key=f"pr_adj_show_{lid}",
+                        help="Lower Advance / Loan / Other before paying",
+                    )
+                    if show_adj:
                         g = float(line.get("gross_salary") or 0)
                         tax = float(line.get("tax_deduction") or 0)
                         eobi = float(line.get("eobi") or 0)
