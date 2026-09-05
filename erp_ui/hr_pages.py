@@ -1716,7 +1716,7 @@ def page_payroll():
                 tot_adv = float(edit_df["Advance"].sum())
                 tot_loan = float(edit_df["Loan"].sum())
 
-                k1, k2, k3, k4, k5 = st.columns(5, gap="small")
+                k1, k2, k3, k4, k5, k6 = st.columns(6, gap="small")
                 k1.markdown(
                     f"<div class='txn-kpi-card'><p class='txn-kpi'>Employees</p>"
                     f"<p class='txn-kpi-val'>{len(edit_df):,}</p></div>",
@@ -1733,12 +1733,16 @@ def page_payroll():
                     unsafe_allow_html=True,
                 )
                 k4.markdown(
-                    f"<div class='txn-kpi-card'><p class='txn-kpi'>Advance + Loan</p>"
-                    f"<p class='txn-kpi-val' style='font-size:1.05rem'>"
-                    f"{escape(fmt(tot_adv + tot_loan))}</p></div>",
+                    f"<div class='txn-kpi-card'><p class='txn-kpi'>Advance</p>"
+                    f"<p class='txn-kpi-val' style='font-size:1.05rem'>{escape(fmt(tot_adv))}</p></div>",
                     unsafe_allow_html=True,
                 )
                 k5.markdown(
+                    f"<div class='txn-kpi-card'><p class='txn-kpi'>Loan</p>"
+                    f"<p class='txn-kpi-val' style='font-size:1.05rem'>{escape(fmt(tot_loan))}</p></div>",
+                    unsafe_allow_html=True,
+                )
+                k6.markdown(
                     f"<div class='txn-kpi-card'><p class='txn-kpi'>Net</p>"
                     f"<p class='txn-kpi-val' style='font-size:1.05rem'>{escape(fmt(tot_net))}</p></div>",
                     unsafe_allow_html=True,
