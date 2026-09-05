@@ -895,7 +895,7 @@ def _render_employee_cash_payments(pid, pr):
     can_pay = db.user_can_hr(st.session_state.user, "post") or db.user_can_hr(st.session_state.user, "add")
     closed = status == "closed"
 
-    st.markdown("### Pay Desk")
+    st.markdown("### Pay Desk — counter")
     if closed:
         st.success(
             f"Month **closed**"
@@ -905,7 +905,8 @@ def _render_employee_cash_payments(pid, pr):
     elif status not in ("posted", "paid"):
         st.warning(
             f"Payroll is **{(status or '').upper()}**. "
-            "Approve → **Post to GL** → then pay staff here one-by-one."
+            "1) Approve → 2) **Post to GL** (whole month) → 3) then each employee at the counter: "
+            "adjust Advance/Loan if needed → **Pay & voucher** → cash + signature."
         )
         return
     if not can_pay and not closed:
@@ -956,8 +957,9 @@ def _render_employee_cash_payments(pid, pr):
         unsafe_allow_html=True,
     )
     st.caption(
-        "Negotiate Present / leave / loan on **Edit Lines** (draft) before Post. "
-        "Here: pay each employee → print signature voucher. When all are paid → **Close month**."
+        "**Counter flow:** employee arrives → open their row → lower Advance/Loan if they request "
+        "less deduction → **Save adjust** (GL updates) → **Pay & voucher** (cash + print) → next person. "
+        "When unpaid = 0 → **Close month**."
     )
 
     # --- Close month / reopen ---
@@ -1137,6 +1139,67 @@ def _render_employee_cash_payments(pid, pr):
                             )
                         except Exception as e:
                             st.error(str(e))
+                    with st.expander(
+                        f"Adjust before pay — {line.get('emp_code')} "
+                        f"(less Advance / Loan / Other)",
+                        expanded=False,
+                    ):
+                        g = float(line.get("gross_salary") or 0)
+                        tax = float(line.get("tax_deduction") or 0)
+                        eobi = float(line.get("eobi") or 0)
+                        ss = float(line.get("social_security") or 0)
+                        x1, x2, x3, x4 = st.columns(4)
+                        new_adv = x1.number_input(
+                            "Advance",
+                            min_value=0.0,
+                            value=float(line.get("advance_recovery") or 0),
+                            step=100.0,
+                            key=f"pr_adj_adv_{lid}",
+                        )
+                        new_loan = x2.number_input(
+                            "Loan",
+                            min_value=0.0,
+                            value=float(line.get("loan_recovery") or 0),
+                            step=100.0,
+                            key=f"pr_adj_loan_{lid}",
+                        )
+                        new_other = x3.number_input(
+                            "Other ded.",
+                            min_value=0.0,
+                            value=float(line.get("other_deductions") or 0),
+                            step=100.0,
+                            key=f"pr_adj_oth_{lid}",
+                        )
+                        preview_net = round(
+                            g - tax - eobi - ss - float(new_adv) - float(new_loan) - float(new_other),
+                            2,
+                        )
+                        x4.metric("Net after adjust", fmt(preview_net))
+                        if st.button(
+                            "Save adjust (GL)",
+                            key=f"pr_adj_save_{lid}",
+                            type="secondary",
+                        ):
+                            try:
+                                res = db.adjust_unpaid_payroll_line(
+                                    lid,
+                                    {
+                                        "advance_recovery": new_adv,
+                                        "loan_recovery": new_loan,
+                                        "other_deductions": new_other,
+                                    },
+                                    uid(),
+                                )
+                                if res.get("changed"):
+                                    ff.action_done(
+                                        f"**{res['employee']}** adjusted — "
+                                        f"Net {fmt(res.get('old_net'))} → **{fmt(res['net_salary'])}**. "
+                                        f"Now click **Pay & voucher**."
+                                    )
+                                else:
+                                    st.info("No change in deductions.")
+                            except Exception as e:
+                                st.error(str(e))
                 else:
                     a2.caption("No net pay")
                     if a3.button("Mark settled (nil)", key=f"pr_nil_{lid}"):
@@ -1406,6 +1469,10 @@ def page_payroll():
                 )
 
                 st.markdown("##### Workflow")
+                st.caption(
+                    "After **Post to GL**, scroll to **Pay Desk — counter**: "
+                    "each employee Adjust (optional) → Pay & voucher → next."
+                )
                 c1, c2, c3 = st.columns(3)
                 if pr["status"] == "draft" and db.user_can_hr(st.session_state.user, "approve"):
                     if c1.button("Approve Payroll", type="primary", key=f"pr_approve_{pid}"):

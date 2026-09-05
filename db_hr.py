@@ -1723,6 +1723,208 @@ def update_payroll_line(line_id, data, user_id=None, sync_ot=None):
         return calc
 
 
+def adjust_unpaid_payroll_line(line_id, data, user_id=None):
+    """Counter adjust for one unpaid employee after payroll is posted to GL.
+
+    Allows Advance / Loan / Other deduction changes at the pay window.
+    Syncs advance/loan ledgers, recalculates net, posts a balancing GL
+    adjustment (salary payable ↔ employee advance / other), then the cashier
+    can Pay & voucher for the new net.
+    """
+    from database import get_connection
+    from db_v3 import post_gl
+
+    editable = ("advance_recovery", "loan_recovery", "other_deductions")
+    with get_connection() as conn:
+        apply_hr(conn, __import__("database"))
+        row = conn.execute(
+            """SELECT pl.*, pr.status AS payroll_status, pr.document_no AS payroll_no,
+                      pr.payroll_year, pr.payroll_month, pr.run_date,
+                      e.full_name AS employee_name, e.code AS emp_code
+               FROM payroll_lines pl
+               JOIN payroll_runs pr ON pl.payroll_id=pr.id
+               JOIN employees e ON pl.employee_id=e.id
+               WHERE pl.id=?""",
+            (line_id,),
+        ).fetchone()
+        if not row:
+            raise ValueError("Payroll line not found.")
+        row = dict(row)
+        status = (row.get("payroll_status") or "").strip().lower()
+        if status == "closed":
+            raise ValueError("Payroll month is closed — reopen before adjusting.")
+        if status not in ("posted", "paid"):
+            raise ValueError(
+                "Post payroll to GL first, then adjust unpaid staff at Pay Desk."
+            )
+        if (row.get("paid_status") or "") == "paid":
+            raise ValueError("Already paid — undo payment before adjusting this line.")
+
+        old_adv = round(float(row.get("advance_recovery") or 0), 2)
+        old_loan = round(float(row.get("loan_recovery") or 0), 2)
+        old_other = round(float(row.get("other_deductions") or 0), 2)
+        old_net = round(float(row.get("net_salary") or 0), 2)
+
+        merged = dict(row)
+        for k in editable:
+            if k in data and data[k] is not None:
+                merged[k] = float(data[k] or 0)
+        calc = _recalc_payroll_line_fields(
+            merged,
+            year=int(row["payroll_year"]),
+            month=int(row["payroll_month"]),
+            sync_ot=None,
+        )
+        due = _period_bounds(int(row["payroll_month"]), int(row["payroll_year"]))[1]
+        new_adv = round(float(calc.get("advance_recovery") or 0), 2)
+        new_loan = round(float(calc.get("loan_recovery") or 0), 2)
+        new_other = round(float(calc.get("other_deductions") or 0), 2)
+
+        if (
+            abs(new_adv - old_adv) > 0.009
+            or abs(new_loan - old_loan) > 0.009
+        ):
+            actual_adv, actual_loan = _resync_payroll_line_recoveries(
+                conn,
+                int(row["payroll_id"]),
+                int(row["employee_id"]),
+                advance_amount=new_adv,
+                loan_amount=new_loan,
+                due_date=due,
+            )
+            calc["advance_recovery"] = actual_adv
+            calc["loan_recovery"] = actual_loan
+            calc["total_deductions"] = round(
+                float(calc.get("tax_deduction") or 0)
+                + float(calc.get("eobi") or 0)
+                + float(calc.get("social_security") or 0)
+                + actual_adv + actual_loan
+                + float(calc.get("other_deductions") or 0),
+                2,
+            )
+            calc["net_salary"] = round(
+                float(calc.get("gross_salary") or 0) - calc["total_deductions"], 2,
+            )
+            new_adv = round(float(calc["advance_recovery"]), 2)
+            new_loan = round(float(calc["loan_recovery"]), 2)
+
+        new_net = round(float(calc.get("net_salary") or 0), 2)
+        new_other = round(float(calc.get("other_deductions") or 0), 2)
+        d_adv = round(new_adv - old_adv, 2)
+        d_loan = round(new_loan - old_loan, 2)
+        d_other = round(new_other - old_other, 2)
+        d_net = round(new_net - old_net, 2)
+
+        if abs(d_adv) < 0.01 and abs(d_loan) < 0.01 and abs(d_other) < 0.01:
+            return {
+                "changed": False,
+                "net_salary": new_net,
+                "advance_recovery": new_adv,
+                "loan_recovery": new_loan,
+                "other_deductions": new_other,
+                "employee": row["employee_name"],
+            }
+
+        # Expected: less deduction → higher net (d_net ≈ -(d_adv+d_loan+d_other))
+        expected_net = round(-(d_adv + d_loan + d_other), 2)
+        if abs(d_net - expected_net) > 0.05:
+            raise ValueError(
+                f"Net change {d_net} does not match deduction change {expected_net}."
+            )
+
+        conn.execute(
+            """UPDATE payroll_lines SET
+               advance_recovery=?, loan_recovery=?, other_deductions=?,
+               total_deductions=?, net_salary=?
+               WHERE id=?""",
+            (
+                new_adv, new_loan, new_other,
+                calc["total_deductions"], new_net, line_id,
+            ),
+        )
+        _refresh_payroll_run_totals(conn, row["payroll_id"])
+
+        # Balancing GL vs original month accrual (ref: payroll_line_adjust)
+        entry_date = str(row.get("run_date") or now()[:10])
+        ref_no = f"{row['payroll_no']}/{row['emp_code']}/ADJ"
+        label = (
+            f"Counter adjust {row['payroll_no']} — "
+            f"{row['employee_name']} ({row['emp_code']})"
+        )
+        # Less recovery (d_* < 0): reverse credit on 100180, increase payable
+        # More recovery (d_* > 0): extra credit on 100180, reduce payable
+        if abs(d_adv) >= 0.01:
+            if d_adv < 0:
+                post_gl(
+                    conn, entry_date, HR_AC["employee_advance"], -d_adv, 0,
+                    f"{label} — less advance", "payroll_line_adjust", line_id, ref_no, user_id,
+                )
+                post_gl(
+                    conn, entry_date, HR_AC["salary_payable"], 0, -d_adv,
+                    f"{label} — less advance", "payroll_line_adjust", line_id, ref_no, user_id,
+                )
+            else:
+                post_gl(
+                    conn, entry_date, HR_AC["salary_payable"], d_adv, 0,
+                    f"{label} — more advance", "payroll_line_adjust", line_id, ref_no, user_id,
+                )
+                post_gl(
+                    conn, entry_date, HR_AC["employee_advance"], 0, d_adv,
+                    f"{label} — more advance", "payroll_line_adjust", line_id, ref_no, user_id,
+                )
+        if abs(d_loan) >= 0.01:
+            if d_loan < 0:
+                post_gl(
+                    conn, entry_date, HR_AC["employee_advance"], -d_loan, 0,
+                    f"{label} — less loan", "payroll_line_adjust", line_id, ref_no, user_id,
+                )
+                post_gl(
+                    conn, entry_date, HR_AC["salary_payable"], 0, -d_loan,
+                    f"{label} — less loan", "payroll_line_adjust", line_id, ref_no, user_id,
+                )
+            else:
+                post_gl(
+                    conn, entry_date, HR_AC["salary_payable"], d_loan, 0,
+                    f"{label} — more loan", "payroll_line_adjust", line_id, ref_no, user_id,
+                )
+                post_gl(
+                    conn, entry_date, HR_AC["employee_advance"], 0, d_loan,
+                    f"{label} — more loan", "payroll_line_adjust", line_id, ref_no, user_id,
+                )
+        if abs(d_other) >= 0.01:
+            # Other was not a separate credit on month post; balance via payable ↔ expense
+            if d_other < 0:
+                post_gl(
+                    conn, entry_date, HR_AC["salary_expense"], -d_other, 0,
+                    f"{label} — less other ded.", "payroll_line_adjust", line_id, ref_no, user_id,
+                )
+                post_gl(
+                    conn, entry_date, HR_AC["salary_payable"], 0, -d_other,
+                    f"{label} — less other ded.", "payroll_line_adjust", line_id, ref_no, user_id,
+                )
+            else:
+                post_gl(
+                    conn, entry_date, HR_AC["salary_payable"], d_other, 0,
+                    f"{label} — more other ded.", "payroll_line_adjust", line_id, ref_no, user_id,
+                )
+                post_gl(
+                    conn, entry_date, HR_AC["salary_expense"], 0, d_other,
+                    f"{label} — more other ded.", "payroll_line_adjust", line_id, ref_no, user_id,
+                )
+
+        return {
+            "changed": True,
+            "net_salary": new_net,
+            "advance_recovery": new_adv,
+            "loan_recovery": new_loan,
+            "other_deductions": new_other,
+            "old_net": old_net,
+            "delta_net": d_net,
+            "employee": row["employee_name"],
+            "document_no": ref_no,
+        }
+
+
 def update_payroll_lines_bulk(updates, user_id=None, sync_ot=None):
     """Update many draft payroll lines in one transaction.
 
