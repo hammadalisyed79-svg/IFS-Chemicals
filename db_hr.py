@@ -1252,7 +1252,11 @@ def _rebuild_unpaid_loan_installments(conn, loan_id):
 
 
 def _recover_loans_capped(conn, employee_id, payroll_id, due_date, target_amount=None):
-    """Recover loan installments; if target_amount set, stop at that total (partial OK)."""
+    """Recover loan installments; if target_amount set, stop at that total (partial OK).
+
+    Auto mode (target_amount=None): at most **one** installment per loan for this
+    payroll — never the full outstanding balance in one run.
+    """
     total = 0.0
     cap = None if target_amount is None else round(float(target_amount), 2)
     loans = conn.execute(
@@ -1265,8 +1269,12 @@ def _recover_loans_capped(conn, employee_id, payroll_id, due_date, target_amount
         if cap is not None and total >= cap - 0.009:
             break
         l = dict(ln)
+        auto_one_installment = cap is None
+        took = 0
         while float(l["outstanding_amount"] or 0) > 0.01:
             if cap is not None and total >= cap - 0.009:
+                break
+            if auto_one_installment and took >= 1:
                 break
             inst = conn.execute(
                 """SELECT id, amount FROM loan_installments
@@ -1278,11 +1286,12 @@ def _recover_loans_capped(conn, employee_id, payroll_id, due_date, target_amount
                 inst_id, inst_amt = inst[0], float(inst[1] or 0)
             else:
                 inst_id, inst_amt = None, 0.0
-            full = (
-                inst_amt
-                or float(l["monthly_installment"] or 0)
-                or float(l["outstanding_amount"] or 0)
-            )
+            full = inst_amt or float(l["monthly_installment"] or 0)
+            if full <= 0.009:
+                # Do not fall back to full outstanding in auto mode
+                if cap is None:
+                    break
+                full = float(l["outstanding_amount"] or 0)
             amt = min(full, float(l["outstanding_amount"] or 0))
             if cap is not None:
                 amt = min(amt, round(cap - total, 2))
@@ -1306,13 +1315,6 @@ def _recover_loans_capped(conn, employee_id, payroll_id, due_date, target_amount
                     (amt, due_date, payroll_id, inst_id),
                 )
                 if leftover > 0.01:
-                    # Keep unpaid remainder due next (prepend as next installment_no)
-                    max_no = conn.execute(
-                        "SELECT COALESCE(MAX(installment_no),0) FROM loan_installments WHERE loan_id=?",
-                        (l["id"],),
-                    ).fetchone()[0]
-                    # Shift: insert remainder as new unpaid with installment_no = current+fraction via next int
-                    # Prefer adding onto the following unpaid installment if any
                     nxt = conn.execute(
                         """SELECT id, amount FROM loan_installments
                            WHERE loan_id=? AND COALESCE(recovered,0)=0
@@ -1325,6 +1327,10 @@ def _recover_loans_capped(conn, employee_id, payroll_id, due_date, target_amount
                             (round(float(nxt[1] or 0) + leftover, 2), nxt[0]),
                         )
                     else:
+                        max_no = conn.execute(
+                            "SELECT COALESCE(MAX(installment_no),0) FROM loan_installments WHERE loan_id=?",
+                            (l["id"],),
+                        ).fetchone()[0]
                         conn.execute(
                             """INSERT INTO loan_installments(
                                    loan_id, installment_no, due_date, amount
@@ -1344,6 +1350,9 @@ def _recover_loans_capped(conn, employee_id, payroll_id, due_date, target_amount
                     (l["id"], int(max_no) + 1, due_date, amt, due_date, payroll_id),
                 )
             total = round(total + amt, 2)
+            took += 1
+            if auto_one_installment:
+                break
     return total
 
 
@@ -1415,6 +1424,7 @@ def _rebuild_unpaid_advance_schedule(conn, advance_id):
 
 
 def _recover_advances_capped(conn, employee_id, payroll_id, due_date, target_amount=None):
+    """Recover advance schedule; auto mode = one installment per advance this payroll."""
     total = 0.0
     cap = None if target_amount is None else round(float(target_amount), 2)
     advances = conn.execute(
@@ -1427,8 +1437,12 @@ def _recover_advances_capped(conn, employee_id, payroll_id, due_date, target_amo
         if cap is not None and total >= cap - 0.009:
             break
         a = dict(adv)
+        auto_one = cap is None
+        took = 0
         while float(a["outstanding_amount"] or 0) > 0.01:
             if cap is not None and total >= cap - 0.009:
+                break
+            if auto_one and took >= 1:
                 break
             sched = conn.execute(
                 """SELECT id, amount FROM advance_recovery_schedule
@@ -1436,12 +1450,11 @@ def _recover_advances_capped(conn, employee_id, payroll_id, due_date, target_amo
                    ORDER BY installment_no LIMIT 1""",
                 (a["id"],),
             ).fetchone()
-            full = float(
-                (sched[1] if sched else 0)
-                or a["monthly_recovery"]
-                or a["outstanding_amount"]
-                or 0
-            )
+            full = float((sched[1] if sched else 0) or a["monthly_recovery"] or 0)
+            if full <= 0.009:
+                if cap is None:
+                    break
+                full = float(a["outstanding_amount"] or 0)
             amt = min(full, float(a["outstanding_amount"] or 0))
             if cap is not None:
                 amt = min(amt, round(cap - total, 2))
@@ -1500,6 +1513,9 @@ def _recover_advances_capped(conn, employee_id, payroll_id, due_date, target_amo
                     (a["id"], int(max_no) + 1, due_date, amt, due_date, payroll_id),
                 )
             total = round(total + amt, 2)
+            took += 1
+            if auto_one:
+                break
     return total
 
 
@@ -2139,6 +2155,80 @@ def refresh_payroll_attendance_days(payroll_id, user_id=None):
             "period_start": period_start,
             "period_end": period_end,
         }
+
+
+def refresh_payroll_loan_advance_recoveries(payroll_id, user_id=None):
+    """Draft only: undo this run's loan/advance recoveries and re-apply one installment each.
+
+    Fixes payrolls that incorrectly deducted the full outstanding balance.
+    """
+    from database import get_connection
+
+    with get_connection() as conn:
+        pr = conn.execute(
+            "SELECT id, status, payroll_year, payroll_month FROM payroll_runs WHERE id=?",
+            (payroll_id,),
+        ).fetchone()
+        if not pr:
+            raise ValueError("Payroll run not found.")
+        pr = dict(pr)
+        if pr["status"] != "draft":
+            raise ValueError("Only draft payroll can refresh loan/advance recoveries.")
+        year, month = int(pr["payroll_year"]), int(pr["payroll_month"])
+        period_end = _period_bounds(month, year)[1]
+
+        loan_ids = [
+            int(r[0]) for r in conn.execute(
+                "SELECT DISTINCT loan_id FROM loan_installments WHERE payroll_id=?",
+                (payroll_id,),
+            ).fetchall()
+        ]
+        adv_ids = [
+            int(r[0]) for r in conn.execute(
+                "SELECT DISTINCT advance_id FROM advance_recovery_schedule WHERE payroll_id=?",
+                (payroll_id,),
+            ).fetchall()
+        ]
+
+        _undo_payroll_recoveries(conn, payroll_id)
+        for lid in loan_ids:
+            _rebuild_unpaid_loan_installments(conn, lid)
+        for aid in adv_ids:
+            _rebuild_unpaid_advance_schedule(conn, aid)
+
+        lines = conn.execute(
+            """SELECT id, employee_id, basic_salary, allowances, overtime, bonus,
+                      tax_deduction, eobi, social_security, other_deductions,
+                      days_present, days_absent, overtime_hrs
+               FROM payroll_lines WHERE payroll_id=?""",
+            (payroll_id,),
+        ).fetchall()
+        n = 0
+        for row in lines:
+            ln = dict(row)
+            eid = int(ln["employee_id"])
+            adv = _recover_advances(conn, eid, payroll_id, period_end)
+            loan = _recover_loans(conn, eid, payroll_id, period_end)
+            merged = {
+                **ln,
+                "advance_recovery": adv,
+                "loan_recovery": loan,
+            }
+            calc = _recalc_payroll_line_fields(merged, year=year, month=month, sync_ot=None)
+            conn.execute(
+                """UPDATE payroll_lines SET
+                   advance_recovery=?, loan_recovery=?,
+                   total_deductions=?, net_salary=?, gross_salary=?
+                   WHERE id=?""",
+                (
+                    calc["advance_recovery"], calc["loan_recovery"],
+                    calc["total_deductions"], calc["net_salary"], calc["gross_salary"],
+                    ln["id"],
+                ),
+            )
+            n += 1
+        _refresh_payroll_run_totals(conn, payroll_id)
+        return n
 
 
 def approve_payroll(payroll_id, user_id):

@@ -74,8 +74,14 @@ def _payroll_edit_column_config():
         "Overtime": st.column_config.NumberColumn("Overtime", min_value=0.0, step=100.0, format="%.2f"),
         "Bonus": st.column_config.NumberColumn("Bonus", min_value=0.0, step=100.0, format="%.2f"),
         "Gross": st.column_config.NumberColumn("Gross", disabled=True, format="%.2f"),
-        "Advance": st.column_config.NumberColumn("Advance", min_value=0.0, step=100.0, format="%.2f"),
-        "Loan": st.column_config.NumberColumn("Loan", min_value=0.0, step=100.0, format="%.2f"),
+        "Advance": st.column_config.NumberColumn(
+            "Advance (this month)", min_value=0.0, step=100.0, format="%.2f",
+            help="This month's advance recovery — not full outstanding. Lower for partial.",
+        ),
+        "Loan": st.column_config.NumberColumn(
+            "Loan (this month)", min_value=0.0, step=100.0, format="%.2f",
+            help="This month's loan installment — not full outstanding. Lower for partial.",
+        ),
         "Other Ded.": st.column_config.NumberColumn("Other Ded.", min_value=0.0, step=50.0, format="%.2f"),
         "Total Ded.": st.column_config.NumberColumn("Total Ded.", disabled=True, format="%.2f"),
         "Net": st.column_config.NumberColumn("Net", disabled=True, format="%.2f"),
@@ -1678,7 +1684,26 @@ def page_payroll():
                             ff.action_done(f"Filled OT hours for **{n}** line(s) from overtime amounts.")
                         except Exception as e:
                             st.error(str(e))
-
+                    if st.button(
+                        "Reset Loan/Advance to monthly installments",
+                        key=f"pr_refresh_loan_adv_{pid}",
+                        help="Undo full-balance recoveries on this draft and re-apply one installment "
+                             "per loan/advance (from HR → Employee Loans / Advances).",
+                        type="primary",
+                    ):
+                        try:
+                            n = db.refresh_payroll_loan_advance_recoveries(pid, user_id=uid())
+                            ff.action_done(
+                                f"Reset loan/advance recoveries for **{n}** line(s) to "
+                                "**one installment this month**. Edit Loan/Advance lower if needed, then Save."
+                            )
+                        except Exception as e:
+                            st.error(str(e))
+                    st.caption(
+                        "**Loan / Advance columns = this month's deduction only** (installment), "
+                        "not the full outstanding. Full balance lives under **HR → Employee Loans**. "
+                        "At the counter you can still lower the amount before Pay & voucher."
+                    )
                 edit_rows = [_payroll_edit_row(l) for l in pr["lines"]]
                 edit_df = pd.DataFrame(edit_rows)
                 edit_df = edit_df.sort_values(
