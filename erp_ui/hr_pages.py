@@ -1417,14 +1417,14 @@ def page_payroll():
                     if b2.button(
                         "Refresh Present from attendance",
                         key=f"pr_refresh_att_{pid}",
-                        help="Re-pull Present / Absent / OT hrs. Public holidays count as Present unless leave/absent.",
+                        help="Re-pull Present / Absent / OT hrs. Public holidays and weekly offs (e.g. Friday) count as Present unless leave/absent.",
                         use_container_width=True,
                     ):
                         try:
                             n = db.refresh_payroll_attendance_days(pid, user_id=uid())
                             ff.action_done(
                                 f"Refreshed attendance for **{n}** line(s). "
-                                "Public holidays included in Present (unless leave/absent)."
+                                "Public holidays and weekly offs included in Present (unless leave/absent)."
                             )
                         except Exception as e:
                             st.error(str(e))

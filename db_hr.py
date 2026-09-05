@@ -810,9 +810,8 @@ def _period_bounds(month, year):
 def _attendance_days_for_period(conn, employee_id, period_start, period_end):
     """Present / absent / OT hours for payroll.
 
-    Present includes present/late/overtime and **public (gazetted) holidays**,
-    unless that day is marked leave or absent.
-    Weekly offs are not counted as present.
+    Present includes present/late/overtime, **public (gazetted) holidays**,
+    and **weekly offs** (e.g. Friday), unless that day is marked leave or absent.
     """
     rows = conn.execute(
         """SELECT att_date, LOWER(COALESCE(status,'')) AS status,
@@ -831,7 +830,9 @@ def _attendance_days_for_period(conn, employee_id, period_start, period_end):
         att_by_date[d] = r["status"] or ""
         overtime_hrs += float(r["ot"] or 0)
 
-    present_statuses = {"present", "late", "overtime", "public_holiday"}
+    present_statuses = {
+        "present", "late", "overtime", "public_holiday", "weekly_holiday",
+    }
     days_present = 0.0
     days_absent = 0.0
     for status in att_by_date.values():
@@ -840,15 +841,18 @@ def _attendance_days_for_period(conn, employee_id, period_start, period_end):
         elif status == "absent":
             days_absent += 1
 
-    # Gazetted holidays with no attendance (or only weekly_holiday mark) count as present
-    # unless the employee was marked leave / absent that day.
+    # Calendar holidays (gazetted + weekly off) with no leave/absent mark count as present.
     try:
         from db_holidays import holidays_in_range
         hol_map = holidays_in_range(period_start, period_end) or {}
     except Exception:
         hol_map = {}
     for d, info in hol_map.items():
-        if (info or {}).get("status") != "public_holiday" and (info or {}).get("kind") != "gazetted":
+        kind = (info or {}).get("kind")
+        status_code = (info or {}).get("status")
+        if kind not in ("gazetted", "weekly") and status_code not in (
+            "public_holiday", "weekly_holiday",
+        ):
             continue
         status = att_by_date.get(d)
         if status in ("leave", "absent"):
@@ -1289,7 +1293,8 @@ def sync_payroll_overtime(payroll_id, mode="from_hours", user_id=None):
 def refresh_payroll_attendance_days(payroll_id, user_id=None):
     """Re-pull Present / Absent / OT hrs from attendance for a draft payroll.
 
-    Public (gazetted) holidays count toward Present unless marked leave/absent.
+    Public holidays and weekly offs (e.g. Friday) count toward Present
+    unless marked leave/absent.
     """
     from database import get_connection
     with get_connection() as conn:
