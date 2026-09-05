@@ -9,6 +9,7 @@ import streamlit as st
 
 from application import data_gateway as db
 from db_contractors import (
+    BILLING_BASES,
     BULK_PREFIX_HINTS,
     PAYMENT_PRODUCTION_QTY,
     PAYMENT_TYPES,
@@ -16,9 +17,11 @@ from db_contractors import (
     calculate_contractor_month,
     clear_contractor_products,
     deactivate_contractor,
+    default_billing_basis,
     delete_contractor,
     get_contractor,
     get_contractor_month_run,
+    get_contractor_product_billing,
     get_contractor_product_ids,
     get_contractor_product_rates,
     list_contractor_month_runs,
@@ -41,14 +44,21 @@ def _rates_key(contractor_id: int) -> str:
     return f"cl_prod_rates_{int(contractor_id)}"
 
 
+def _basis_key(contractor_id: int) -> str:
+    return f"cl_prod_basis_{int(contractor_id)}"
+
+
 def _seed_draft(contractor_id: int):
     """Load remembered products + rates into session draft if not already editing."""
     sk = _draft_key(contractor_id)
     rk = _rates_key(contractor_id)
+    bk = _basis_key(contractor_id)
     if sk not in st.session_state:
         st.session_state[sk] = get_contractor_product_ids(contractor_id)
     if rk not in st.session_state:
         st.session_state[rk] = get_contractor_product_rates(contractor_id)
+    if bk not in st.session_state:
+        st.session_state[bk] = get_contractor_product_billing(contractor_id)
 
 
 def _merge_ids(existing: list[int], extra: list[int]) -> list[int]:
@@ -247,20 +257,22 @@ def _tab_products():
     _seed_draft(cid)
     sk = _draft_key(cid)
     rk = _rates_key(cid)
+    bk = _basis_key(cid)
     saved_ids = set(get_contractor_product_ids(cid))
     draft_ids = [int(x) for x in (st.session_state.get(sk) or [])]
     rate_draft = dict(st.session_state.get(rk) or {})
+    basis_draft = dict(st.session_state.get(bk) or {})
 
     is_prod_qty = (cur.get("payment_type") or "") == PAYMENT_PRODUCTION_QTY
     st.caption(
         f"**{cur.get('supplier_name')}** · {PAYMENT_TYPES.get(cur.get('payment_type'))}. "
         + (
-            "Payment = **production qty × rate for each SKU** (rates differ by product). "
+            "DT / finished goods = **production qty × rate**. "
             if is_prod_qty else
-            "Payment = **SKU / carton qty × rate for each SKU**. "
+            "Finished goods = **closing stock × rate**. "
         )
-        + "Use **bulk add** for families like **DW**, **DT1**, **DT2**, **DT3**. "
-        "Then set each SKU’s rate and click **Update selection**."
+        + "**SF* base powder** = **sold qty × rate** (set automatically; changeable per SKU). "
+        "Bulk-add **SF**, **DT3**, etc., set rates, then **Update selection**."
     )
 
     # --- Bulk add by code prefix ---
@@ -355,9 +367,16 @@ def _tab_products():
 
     dirty = set(draft_ids) != saved_ids
     saved_rates = get_contractor_product_rates(cid)
+    saved_basis = get_contractor_product_billing(cid)
     if any(
         abs(float(rate_draft.get(pid, saved_rates.get(pid, 0)) or 0)
             - float(saved_rates.get(pid, 0) or 0)) > 1e-9
+        for pid in draft_ids if pid in saved_ids
+    ):
+        dirty = True
+    if any(
+        str(basis_draft.get(pid, saved_basis.get(pid, "")) or "")
+        != str(saved_basis.get(pid, "") or "")
         for pid in draft_ids if pid in saved_ids
     ):
         dirty = True
@@ -372,7 +391,7 @@ def _tab_products():
         labels,
         default=default_labels,
         key=f"cl_prod_ms_{cid}",
-        help="Or use Bulk add above for whole families (DW*, DP*, …).",
+        help="Or use Bulk add above for whole families (DW*, SF*, …).",
     )
     new_ids = _merge_ids(
         [i for i in draft_ids if i in {label_to_id[lbl] for lbl in chosen if lbl in label_to_id}],
@@ -380,22 +399,42 @@ def _tab_products():
     )
     st.session_state[sk] = new_ids
 
+    pay_type = cur.get("payment_type")
+    basis_options = list(BILLING_BASES.keys())
     rate_map = {}
+    basis_map = {}
     if new_ids:
         st.markdown(
-            f"**Rate per SKU** ({len(new_ids)} selected) — "
-            + ("used with **production quantity**" if is_prod_qty else "used with SKU / carton qty")
+            f"**Rate & billing basis** ({len(new_ids)} selected) — "
+            "SF* defaults to **Sold qty × rate**; others follow contractor type."
         )
-        # Compact editable list
         for pid in new_ids:
             code = id_to_code.get(pid, "")
             name = id_to_label.get(pid, str(pid))
             prev = float(
                 rate_draft.get(pid, saved_rates.get(pid, 0)) or 0
             )
-            c_a, c_b = st.columns([3, 1])
-            c_a.markdown(f"`{code}` · {name.split(' — ', 1)[-1] if ' — ' in name else name}")
-            rate_map[pid] = c_b.number_input(
+            default_b = default_billing_basis(code, pay_type)
+            prev_b = (
+                basis_draft.get(pid)
+                or saved_basis.get(pid)
+                or default_b
+            )
+            if prev_b not in BILLING_BASES:
+                prev_b = default_b
+            c_a, c_b, c_c = st.columns([2.4, 1.4, 1])
+            c_a.markdown(
+                f"`{code}` · {name.split(' — ', 1)[-1] if ' — ' in name else name}"
+            )
+            basis_map[pid] = c_b.selectbox(
+                "Basis",
+                basis_options,
+                index=basis_options.index(prev_b),
+                format_func=lambda k: BILLING_BASES.get(k, k),
+                key=f"cl_basis_{cid}_{pid}",
+                label_visibility="collapsed",
+            )
+            rate_map[pid] = c_c.number_input(
                 "Rate",
                 min_value=0.0,
                 value=prev,
@@ -405,30 +444,41 @@ def _tab_products():
                 label_visibility="collapsed",
             )
         st.session_state[rk] = {int(k): float(v) for k, v in rate_map.items()}
+        st.session_state[bk] = {int(k): str(v) for k, v in basis_map.items()}
     else:
-        st.info("No products selected yet. Bulk-add **DW*** for Dish Wash, or search above.")
+        st.info(
+            "No products selected yet. Bulk-add **SF*** for base powder (sold × rate), "
+            "or **DT3*** for detergent (production × rate)."
+        )
 
     a1, a2, a3, a4 = st.columns(4)
     if a1.button("Update selection", type="primary", key="cl_prod_save"):
         try:
-            n = save_contractor_products(cid, new_ids, rates=rate_map, user_id=hlp.uid())
+            n = save_contractor_products(
+                cid, new_ids, rates=rate_map, billing_basis=basis_map, user_id=hlp.uid(),
+            )
             st.session_state[sk] = list(new_ids)
             st.session_state[rk] = dict(rate_map)
-            ff.action_done(f"Saved **{n}** SKU(s) with individual rates.")
+            st.session_state[bk] = dict(basis_map)
+            ff.action_done(f"Saved **{n}** SKU(s) with rates and billing basis.")
         except Exception as e:
             st.error(str(e))
     if a2.button("Reset selection", key="cl_prod_reset", help="Restore last saved products and rates"):
         for pid in list(saved_ids) + new_ids:
             st.session_state.pop(f"cl_rate_{cid}_{pid}", None)
+            st.session_state.pop(f"cl_basis_{cid}_{pid}", None)
         st.session_state[sk] = list(saved_ids)
         st.session_state[rk] = get_contractor_product_rates(cid)
+        st.session_state[bk] = get_contractor_product_billing(cid)
         st.session_state.pop(f"cl_prod_ms_{cid}", None)
-        ff.action_done("Selection reset — restored last saved products and rates.")
+        ff.action_done("Selection reset — restored last saved products, rates, and basis.")
     if a3.button("Clear selection", key="cl_prod_clear_sel", help="Empty current picks (not saved until Update)"):
         for pid in new_ids:
             st.session_state.pop(f"cl_rate_{cid}_{pid}", None)
+            st.session_state.pop(f"cl_basis_{cid}_{pid}", None)
         st.session_state[sk] = []
         st.session_state[rk] = {}
+        st.session_state[bk] = {}
         st.session_state.pop(f"cl_prod_ms_{cid}", None)
         ff.action_done(
             "Selection cleared. Click **Update selection** to save empty, "
@@ -439,8 +489,10 @@ def _tab_products():
             clear_contractor_products(cid, user_id=hlp.uid())
             for pid in list(saved_ids) + new_ids:
                 st.session_state.pop(f"cl_rate_{cid}_{pid}", None)
+                st.session_state.pop(f"cl_basis_{cid}_{pid}", None)
             st.session_state[sk] = []
             st.session_state[rk] = {}
+            st.session_state[bk] = {}
             st.session_state.pop(f"cl_prod_ms_{cid}", None)
             ff.action_done("All saved products removed for this contractor.")
         except Exception as e:
@@ -452,6 +504,11 @@ def _tab_products():
             {
                 "Code": p.get("product_code"),
                 "Product": p.get("product_name"),
+                "Basis": BILLING_BASES.get(
+                    (p.get("billing_basis") or "").strip().lower()
+                    or default_billing_basis(p.get("product_code"), pay_type),
+                    p.get("billing_basis") or "",
+                ),
                 "Rate / unit": float(p["rate"] if p.get("rate") is not None else 0),
             }
             for p in cur["products"]
@@ -492,14 +549,17 @@ def _tab_month_preview():
     if is_prod:
         st.caption(
             "**Production-quantity contractor** — monthly worksheet. "
-            "**Billable** = completed production qty for the month · "
-            "**Amount** = Production × Rate. Save stores one record per contractor per month."
+            "Finished goods: **Production × Rate**. "
+            "**SF* base powder: Sold qty × Rate**. "
+            "Save stores one record per contractor per month."
         )
     else:
         st.caption(
             "**SKU / carton contractor** — monthly worksheet. "
             "**Closing (billable)** = Sold − Opening − Sale return + Physical Manual · "
-            "**Amount** = Closing × Rate. Save stores one record per contractor per month."
+            "**Amount** = Closing × Rate "
+            "(SF* can use Sold × Rate if set on Products). "
+            "Save stores one record per contractor per month."
         )
 
     saved = get_contractor_month_run(cid, ym)
@@ -596,40 +656,57 @@ def _tab_month_preview():
     gross = 0.0
 
     if is_prod:
+        has_sold = bool(result.get("has_sold_basis"))
+        has_close = bool(result.get("has_closing_basis"))
         st.markdown(
-            "**Worksheet** — production qty comes from completed production orders; "
-            "Amount = Production × Rate (no stock / sale columns)."
+            "**Worksheet** — "
+            + (
+                "mixed basis: production for finished goods, "
+                "**sold qty × rate** for SF*; Amount = Billable × Rate."
+                if (has_sold or has_close) else
+                "production qty from completed orders; Amount = Production × Rate."
+            )
         )
         out_rows = []
-        sum_prod = sum_batches = 0.0
+        sum_prod = sum_batches = sum_sold = sum_bill = 0.0
         for ln in lines:
             pid = int(ln["product_id"])
             prod = _f(ln.get("production_qty"))
+            sold = _f(ln.get("sold_qty"))
+            billable = _f(ln.get("quantity"))
             rate = _f(ln.get("rate"))
-            amount = round(prod * rate, 2)
+            amount = round(billable * rate, 2)
             batches = int(ln.get("batch_count") or 0)
+            basis = ln.get("billing_basis_label") or ln.get("billing_basis") or ""
             sum_prod += prod
             sum_batches += batches
+            sum_sold += sold
+            sum_bill += billable
             gross += amount
-            out_rows.append({
+            row = {
                 "Code": ln.get("product_code"),
                 "Product": ln.get("product_name"),
+                "Basis": basis,
                 "Batches": batches,
                 "Production Qty": prod,
-                "Rate": rate,
-                "Amount": amount,
-            })
+            }
+            if has_sold or has_close:
+                row["Sold Qty"] = sold
+            row["Billable Qty"] = billable
+            row["Rate"] = rate
+            row["Amount"] = amount
+            out_rows.append(row)
             save_lines.append({
                 "product_id": pid,
                 "product_code": ln.get("product_code"),
                 "product_name": ln.get("product_name"),
-                "sold_qty": 0,
-                "stock_qty": 0,
-                "sale_return_qty": 0,
-                "manual_qty": 0,
-                "closing_stock": prod,
+                "sold_qty": sold,
+                "stock_qty": _f(ln.get("stock_qty")),
+                "sale_return_qty": _f(ln.get("sale_return_qty")),
+                "manual_qty": _f(ln.get("manual_qty")),
+                "closing_stock": billable,
                 "production_qty": prod,
-                "quantity": prod,
+                "quantity": billable,
                 "rate": rate,
                 "amount": amount,
             })
@@ -646,8 +723,8 @@ def _tab_month_preview():
             unsafe_allow_html=True,
         )
         k3.markdown(
-            f"<div class='txn-kpi-card'><p class='txn-kpi'>Production Qty</p>"
-            f"<p class='txn-kpi-val'>{sum_prod:,.2f}</p></div>",
+            f"<div class='txn-kpi-card'><p class='txn-kpi'>Billable Qty</p>"
+            f"<p class='txn-kpi-val'>{sum_bill:,.2f}</p></div>",
             unsafe_allow_html=True,
         )
         k4.markdown(
@@ -655,25 +732,29 @@ def _tab_month_preview():
             f"<p class='txn-kpi-val'>Rs. {gross:,.2f}</p></div>",
             unsafe_allow_html=True,
         )
-        st.markdown("**Computed amounts** — Amount = Production Qty × Rate")
+        st.markdown(f"**Computed amounts** — {result.get('formula') or 'Amount = Billable × Rate'}")
         out_df = pd.DataFrame(display_rows)
         footer = {
             "Code": "",
             "Product": "GROSS TOTAL",
+            "Basis": "",
             "Batches": int(sum_batches),
             "Production Qty": round(sum_prod, 2),
+            "Billable Qty": round(sum_bill, 2),
             "Rate": "",
             "Amount": round(gross, 2),
         }
+        if has_sold or has_close:
+            footer["Sold Qty"] = round(sum_sold, 2)
         show = pd.concat([out_df, pd.DataFrame([footer])], ignore_index=True)
         hlp.render_dataframe_html_table(show)
-        billable_label = "Production qty"
-        billable_sum = sum_prod
+        billable_label = "Billable qty"
+        billable_sum = sum_bill
         summary = {
             "Month": ym,
             "Items": len(display_rows),
             "Batches": int(sum_batches),
-            "Production Qty": round(sum_prod, 2),
+            "Billable Qty": round(sum_bill, 2),
             "Gross Amount": round(gross, 2),
         }
     else:
@@ -684,11 +765,16 @@ def _tab_month_preview():
         prior_manual = st.session_state.get(mk) or {
             int(ln["product_id"]): float(ln.get("manual_qty") or 0) for ln in lines
         }
+        basis_by_pid = {
+            int(ln["product_id"]): (ln.get("billing_basis") or "closing")
+            for ln in lines
+        }
         edit_df = pd.DataFrame([
             {
                 "product_id": int(ln["product_id"]),
                 "Code": ln.get("product_code"),
                 "Product": ln.get("product_name"),
+                "Basis": ln.get("billing_basis_label") or ln.get("billing_basis") or "",
                 "Sold Qty": float(ln.get("sold_qty") or 0),
                 "Stock in hand": float(ln.get("stock_qty") or 0),
                 "Sale return": float(ln.get("sale_return_qty") or 0),
@@ -705,13 +791,14 @@ def _tab_month_preview():
             use_container_width=True,
             num_rows="fixed",
             disabled=[
-                "product_id", "Code", "Product", "Sold Qty",
+                "product_id", "Code", "Product", "Basis", "Sold Qty",
                 "Stock in hand", "Sale return", "Rate",
             ],
             column_config={
                 "product_id": None,
                 "Code": st.column_config.TextColumn("Code", width="small"),
                 "Product": st.column_config.TextColumn("Product", width="large"),
+                "Basis": st.column_config.TextColumn("Basis", width="medium"),
                 "Sold Qty": st.column_config.NumberColumn("Sold Qty", format="%.2f"),
                 "Stock in hand": st.column_config.NumberColumn("Stock in hand", format="%.2f"),
                 "Sale return": st.column_config.NumberColumn("Sale return", format="%.2f"),
@@ -724,7 +811,7 @@ def _tab_month_preview():
             key=f"cl_ws_editor_{cid}_{ym}",
         )
         manual_map = {}
-        sum_sold = sum_stock = sum_ret = sum_man = sum_close = 0.0
+        sum_sold = sum_stock = sum_ret = sum_man = sum_bill = 0.0
         for _, row in edited.iterrows():
             pid = int(row["product_id"])
             sold = _f(row["Sold Qty"])
@@ -733,22 +820,33 @@ def _tab_month_preview():
             man = _f(row["Physical Manual"])
             rate = _f(row["Rate"])
             closing = round(sold - stock - ret + man, 4)
-            amount = round(closing * rate, 2)
+            basis = (basis_by_pid.get(pid) or "").strip().lower()
+            if basis == "sold":
+                billable = sold
+            elif basis == "production":
+                billable = next(
+                    (_f(ln.get("production_qty")) for ln in lines if int(ln["product_id"]) == pid),
+                    0.0,
+                )
+            else:
+                billable = closing
+            amount = round(billable * rate, 2)
             manual_map[pid] = man
             sum_sold += sold
             sum_stock += stock
             sum_ret += ret
             sum_man += man
-            sum_close += closing
+            sum_bill += billable
             gross += amount
             display_rows.append({
                 "Code": row["Code"],
                 "Product": row["Product"],
+                "Basis": row.get("Basis") or basis,
                 "Sold Qty": sold,
                 "Stock in hand": stock,
                 "Sale return": ret,
                 "Physical Manual": man,
-                "Closing Stock": closing,
+                "Billable Qty": billable,
                 "Rate": rate,
                 "Amount": amount,
             })
@@ -760,8 +858,8 @@ def _tab_month_preview():
                 "stock_qty": stock,
                 "sale_return_qty": ret,
                 "manual_qty": man,
-                "closing_stock": closing,
-                "quantity": closing,
+                "closing_stock": billable,
+                "quantity": billable,
                 "rate": rate,
                 "amount": amount,
             })
@@ -783,8 +881,8 @@ def _tab_month_preview():
             unsafe_allow_html=True,
         )
         k4.markdown(
-            f"<div class='txn-kpi-card'><p class='txn-kpi'>Closing (billable)</p>"
-            f"<p class='txn-kpi-val'>{sum_close:,.2f}</p></div>",
+            f"<div class='txn-kpi-card'><p class='txn-kpi'>Billable Qty</p>"
+            f"<p class='txn-kpi-val'>{sum_bill:,.2f}</p></div>",
             unsafe_allow_html=True,
         )
         k5.markdown(
@@ -793,32 +891,32 @@ def _tab_month_preview():
             unsafe_allow_html=True,
         )
         st.markdown(
-            "**Computed amounts** — Closing (billable) = Sold − Opening − Sale return + Physical Manual · "
-            "Amount = Closing × Rate"
+            f"**Computed amounts** — {result.get('formula') or 'Amount = Billable × Rate'}"
         )
         out_df = pd.DataFrame(display_rows)
         footer = {
             "Code": "",
             "Product": "GROSS TOTAL",
+            "Basis": "",
             "Sold Qty": round(sum_sold, 2),
             "Stock in hand": round(sum_stock, 2),
             "Sale return": round(sum_ret, 2),
             "Physical Manual": round(sum_man, 2),
-            "Closing Stock": round(sum_close, 2),
+            "Billable Qty": round(sum_bill, 2),
             "Rate": "",
             "Amount": round(gross, 2),
         }
         show = pd.concat([out_df, pd.DataFrame([footer])], ignore_index=True)
         hlp.render_dataframe_html_table(show)
-        billable_label = "Closing qty"
-        billable_sum = sum_close
+        billable_label = "Billable qty"
+        billable_sum = sum_bill
         summary = {
             "Month": ym,
             "Items": len(display_rows),
             "Sold Qty": round(sum_sold, 2),
             "Opening": round(sum_stock, 2),
             "Sale return": round(sum_ret, 2),
-            "Closing Stock": round(sum_close, 2),
+            "Billable Qty": round(sum_bill, 2),
             "Gross Amount": round(gross, 2),
         }
 

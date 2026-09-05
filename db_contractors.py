@@ -10,6 +10,62 @@ PAYMENT_TYPES = {
     PAYMENT_SKU_CARTON: "SKU / cartons x rate per SKU",
 }
 
+# Per-SKU billing on monthly worksheet
+BILLING_PRODUCTION = "production"
+BILLING_SOLD = "sold"
+BILLING_CLOSING = "closing"
+BILLING_BASES = {
+    BILLING_PRODUCTION: "Production qty × rate",
+    BILLING_SOLD: "Sold qty × rate",
+    BILLING_CLOSING: "Closing stock × rate",
+}
+
+
+def default_billing_basis(product_code: str | None, contractor_payment_type: str | None) -> str:
+    """SF* (semi-finished / base powder) bills on sold qty; else follow contractor type."""
+    code = (product_code or "").strip().upper()
+    if code.startswith("SF"):
+        return BILLING_SOLD
+    if (contractor_payment_type or "").strip() == PAYMENT_PRODUCTION_QTY:
+        return BILLING_PRODUCTION
+    return BILLING_CLOSING
+
+
+def _ensure_billing_basis_column(conn):
+    cols = {r[1] for r in conn.execute("PRAGMA table_info(contract_labour_products)")}
+    if "billing_basis" not in cols:
+        conn.execute(
+            "ALTER TABLE contract_labour_products ADD COLUMN billing_basis TEXT "
+            "DEFAULT 'closing'"
+        )
+        # SF* → sold; production contractors' non-SF → production
+        conn.execute(
+            """UPDATE contract_labour_products
+               SET billing_basis='sold'
+               WHERE product_id IN (
+                 SELECT id FROM products WHERE UPPER(TRIM(code)) LIKE 'SF%'
+               )"""
+        )
+        conn.execute(
+            """UPDATE contract_labour_products
+               SET billing_basis='production'
+               WHERE COALESCE(billing_basis,'') IN ('', 'closing')
+                 AND contractor_id IN (
+                   SELECT id FROM contract_labourers WHERE payment_type='production_qty'
+                 )
+                 AND product_id NOT IN (
+                   SELECT id FROM products WHERE UPPER(TRIM(code)) LIKE 'SF%'
+                 )"""
+        )
+        conn.execute(
+            """UPDATE contract_labour_products
+               SET billing_basis='closing'
+               WHERE COALESCE(billing_basis,'')=''
+                 AND contractor_id IN (
+                   SELECT id FROM contract_labourers WHERE payment_type='sku_carton'
+                 )"""
+        )
+
 
 def _table_exists(conn, name: str) -> bool:
     return bool(
@@ -83,6 +139,7 @@ def apply_contract_labour(conn, db_module=None):
         CREATE INDEX IF NOT EXISTS idx_cl_month_lines ON contract_labour_month_lines(run_id);
         """
     )
+    _ensure_billing_basis_column(conn)
 
 
 def list_contractors(active_only: bool = True, payment_type: str | None = None):
@@ -282,6 +339,96 @@ def get_contractor_product_rates(contractor_id: int) -> dict[int, float]:
     return out
 
 
+def get_contractor_product_billing(contractor_id: int) -> dict[int, str]:
+    """product_id → billing_basis for saved assignments."""
+    c = get_contractor(contractor_id)
+    if not c:
+        return {}
+    pay = c.get("payment_type")
+    out = {}
+    for p in c.get("products") or []:
+        pid = int(p["product_id"])
+        basis = (p.get("billing_basis") or "").strip().lower()
+        if basis not in BILLING_BASES:
+            basis = default_billing_basis(p.get("product_code"), pay)
+        out[pid] = basis
+    return out
+
+
+def save_contractor_products(
+    contractor_id: int,
+    product_ids: list[int],
+    *,
+    rates: dict | None = None,
+    billing_basis: dict | None = None,
+    user_id=None,
+) -> int:
+    """Replace product assignment for a contractor (remember selection)."""
+    from database import get_connection, _now
+
+    rates = rates or {}
+    billing_basis = billing_basis or {}
+    ids = []
+    seen = set()
+    for raw in product_ids or []:
+        try:
+            pid = int(raw)
+        except (TypeError, ValueError):
+            continue
+        if pid and pid not in seen:
+            seen.add(pid)
+            ids.append(pid)
+
+    with get_connection() as conn:
+        apply_contract_labour(conn)
+        cl = conn.execute(
+            "SELECT id, default_rate, payment_type FROM contract_labourers WHERE id=?",
+            (contractor_id,),
+        ).fetchone()
+        if not cl:
+            raise ValueError("Contractor not found.")
+        default_rate = float(cl["default_rate"] or 0)
+        pay_type = cl["payment_type"]
+        codes = {
+            int(r["id"]): str(r["code"] or "")
+            for r in conn.execute(
+                f"SELECT id, code FROM products WHERE id IN ({','.join('?' * len(ids))})",
+                ids,
+            ).fetchall()
+        } if ids else {}
+        for pid in ids:
+            if pid not in codes:
+                raise ValueError(f"Product id {pid} not found.")
+        conn.execute(
+            "DELETE FROM contract_labour_products WHERE contractor_id=?", (contractor_id,),
+        )
+        for i, pid in enumerate(ids):
+            rate = rates.get(pid)
+            if rate is None:
+                rate = rates.get(str(pid))
+            if rate is None or rate == "":
+                rate = default_rate
+            basis = (billing_basis.get(pid) or billing_basis.get(str(pid)) or "").strip().lower()
+            if basis not in BILLING_BASES:
+                basis = default_billing_basis(codes.get(pid), pay_type)
+            conn.execute(
+                """INSERT INTO contract_labour_products(
+                       contractor_id, product_id, rate, billing_basis, sort_order
+                   ) VALUES(?,?,?,?,?)""",
+                (contractor_id, pid, float(rate or 0), basis, i),
+            )
+        conn.execute(
+            "UPDATE contract_labourers SET modified_by=?, modified_at=? WHERE id=?",
+            (user_id, _now(), contractor_id),
+        )
+    return len(ids)
+
+
+def clear_contractor_products(contractor_id: int, user_id=None) -> int:
+    """Discard all product assignments for a contractor."""
+    return save_contractor_products(contractor_id, [], user_id=user_id)
+
+
 def product_ids_by_code_prefix(prefix: str, *, active_only: bool = True) -> list[dict]:
     """Active products whose code starts with prefix (case-insensitive), e.g. DW → Dish Wash."""
     from database import get_connection, rows_to_list
@@ -310,68 +457,10 @@ BULK_PREFIX_HINTS = (
     ("DT9", "Jagmag (DT9*)"),
     ("DT0", "Brillo (DT0*)"),
     ("DTT", "Tower detergent (DTT*)"),
+    ("SF", "Base powder / SF* (sold × rate)"),
     ("DP", "Detergent Powder (DP*)"),
     ("LQ", "Liquid (LQ*)"),
 )
-
-
-def save_contractor_products(
-    contractor_id: int,
-    product_ids: list[int],
-    *,
-    rates: dict | None = None,
-    user_id=None,
-) -> int:
-    """Replace product assignment for a contractor (remember selection)."""
-    from database import get_connection, _now
-
-    rates = rates or {}
-    ids = []
-    seen = set()
-    for raw in product_ids or []:
-        try:
-            pid = int(raw)
-        except (TypeError, ValueError):
-            continue
-        if pid and pid not in seen:
-            seen.add(pid)
-            ids.append(pid)
-
-    with get_connection() as conn:
-        apply_contract_labour(conn)
-        cl = conn.execute(
-            "SELECT id, default_rate FROM contract_labourers WHERE id=?", (contractor_id,),
-        ).fetchone()
-        if not cl:
-            raise ValueError("Contractor not found.")
-        default_rate = float(cl["default_rate"] or 0)
-        for pid in ids:
-            if not conn.execute("SELECT id FROM products WHERE id=?", (pid,)).fetchone():
-                raise ValueError(f"Product id {pid} not found.")
-        conn.execute(
-            "DELETE FROM contract_labour_products WHERE contractor_id=?", (contractor_id,),
-        )
-        for i, pid in enumerate(ids):
-            rate = rates.get(pid)
-            if rate is None:
-                rate = rates.get(str(pid))
-            if rate is None or rate == "":
-                rate = default_rate
-            conn.execute(
-                """INSERT INTO contract_labour_products(contractor_id, product_id, rate, sort_order)
-                   VALUES(?,?,?,?)""",
-                (contractor_id, pid, float(rate or 0), i),
-            )
-        conn.execute(
-            "UPDATE contract_labourers SET modified_by=?, modified_at=? WHERE id=?",
-            (user_id, _now(), contractor_id),
-        )
-    return len(ids)
-
-
-def clear_contractor_products(contractor_id: int, user_id=None) -> int:
-    """Discard all product assignments for a contractor."""
-    return save_contractor_products(contractor_id, [], user_id=user_id)
 
 
 def production_qty_for_products(product_ids: list[int], from_date: str, to_date: str) -> list[dict]:
@@ -510,15 +599,12 @@ def calculate_contractor_month(
     *,
     manual_qty: dict | None = None,
 ) -> dict:
-    """Monthly payment worksheet lines.
+    """Monthly payment worksheet lines (per-SKU billing_basis).
 
-    payment_type = production_qty:
-      Billable = completed production qty in month
-      Amount = Production x Rate
-
-    payment_type = sku_carton (default):
-      Closing (billable) = Sold - Opening - Sale return + Physical Manual
-      Amount = Closing x Rate
+    Bases:
+      production — completed production qty × rate
+      sold       — sale qty × rate (default for SF* base powder)
+      closing    — (Sold − Opening − Sale return + Physical Manual) × rate
     """
     c = get_contractor(contractor_id)
     if not c:
@@ -528,16 +614,36 @@ def calculate_contractor_month(
     pay_type = (c.get("payment_type") or PAYMENT_SKU_CARTON).strip()
     is_prod = pay_type == PAYMENT_PRODUCTION_QTY
 
-    prod_map = {
-        int(r["product_id"]): r
-        for r in production_qty_for_products(pids, from_date, to_date)
-    }
-    sold_map = {} if is_prod else sold_qty_for_products(pids, from_date, to_date)
-    return_map = {} if is_prod else sale_return_qty_for_products(pids, from_date, to_date)
-    stock_map = {} if is_prod else stock_on_hand_for_products(pids, as_of_date=from_date)
+    bases = {}
+    needs_prod = needs_sold = needs_closing = False
+    for p in products:
+        pid = int(p["product_id"])
+        basis = (p.get("billing_basis") or "").strip().lower()
+        if basis not in BILLING_BASES:
+            basis = default_billing_basis(p.get("product_code"), pay_type)
+        bases[pid] = basis
+        if basis == BILLING_PRODUCTION:
+            needs_prod = True
+        elif basis == BILLING_SOLD:
+            needs_sold = True
+        else:
+            needs_closing = True
+
+    prod_map = {}
+    if needs_prod or is_prod:
+        prod_map = {
+            int(r["product_id"]): r
+            for r in production_qty_for_products(pids, from_date, to_date)
+        }
+    sold_map = return_map = stock_map = {}
+    if needs_sold or needs_closing:
+        sold_map = sold_qty_for_products(pids, from_date, to_date)
+        return_map = sale_return_qty_for_products(pids, from_date, to_date)
+    if needs_closing:
+        stock_map = stock_on_hand_for_products(pids, as_of_date=from_date)
 
     manual = {}
-    if not is_prod:
+    if needs_closing:
         for k, v in (manual_qty or {}).items():
             try:
                 manual[int(k)] = float(v or 0)
@@ -548,16 +654,23 @@ def calculate_contractor_month(
     lines = []
     total = 0.0
     total_sold = total_stock = total_return = total_manual = 0.0
-    total_billable = total_prod = 0.0
+    total_billable = total_prod = total_closing = 0.0
     for p in products:
         pid = int(p["product_id"])
+        basis = bases[pid]
         qinfo = prod_map.get(pid) or {}
         prod_qty = round(float(qinfo.get("quantity") or 0), 4)
         sold = round(float(sold_map.get(pid) or 0), 4)
         stock = round(float(stock_map.get(pid) or 0), 4)
         ret = round(float(return_map.get(pid) or 0), 4)
         man = round(float(manual.get(pid) or 0), 4)
-        billable = prod_qty if is_prod else round(sold - stock - ret + man, 4)
+        closing = round(sold - stock - ret + man, 4)
+        if basis == BILLING_PRODUCTION:
+            billable = prod_qty
+        elif basis == BILLING_SOLD:
+            billable = sold
+        else:
+            billable = closing
         rate = float(p["rate"] if p.get("rate") is not None else default_rate)
         amount = round(billable * rate, 2)
         total += amount
@@ -567,15 +680,18 @@ def calculate_contractor_month(
         total_manual += man
         total_billable += billable
         total_prod += prod_qty
+        total_closing += closing if basis == BILLING_CLOSING else 0.0
         lines.append({
             "product_id": pid,
             "product_code": p.get("product_code"),
             "product_name": p.get("product_name"),
+            "billing_basis": basis,
+            "billing_basis_label": BILLING_BASES.get(basis, basis),
             "sold_qty": sold,
             "stock_qty": stock,
             "sale_return_qty": ret,
             "manual_qty": man,
-            "closing_stock": 0.0 if is_prod else billable,
+            "closing_stock": closing if basis == BILLING_CLOSING else 0.0,
             "batch_count": int(qinfo.get("batch_count") or 0),
             "production_qty": prod_qty,
             "quantity": billable,
@@ -583,12 +699,20 @@ def calculate_contractor_month(
             "amount": amount,
         })
     ym = str(from_date)[:7]
-    if is_prod:
-        formula = "Billable = Production qty (month); Amount = Production x Rate"
+    hybrid = len({b for b in bases.values()}) > 1
+    if hybrid:
+        formula = (
+            "Per SKU: production × rate, sold × rate (SF*), "
+            "or closing stock × rate"
+        )
+    elif needs_prod and not needs_sold and not needs_closing:
+        formula = "Billable = Production qty (month); Amount = Production × Rate"
+    elif needs_sold and not needs_prod and not needs_closing:
+        formula = "Billable = Sold qty (month); Amount = Sold × Rate"
     else:
         formula = (
-            "Closing (billable) = Sold - Opening - Sale return + Physical Manual; "
-            "Amount = Closing x Rate"
+            "Closing (billable) = Sold − Opening − Sale return + Physical Manual; "
+            "Amount = Closing × Rate"
         )
     return {
         "contractor": c,
@@ -598,6 +722,10 @@ def calculate_contractor_month(
         "payment_type": pay_type,
         "payment_type_label": PAYMENT_TYPES.get(pay_type, pay_type),
         "is_production_qty": is_prod,
+        "has_sold_basis": needs_sold,
+        "has_closing_basis": needs_closing,
+        "has_production_basis": needs_prod,
+        "hybrid_billing": hybrid,
         "formula": formula,
         "lines": lines,
         "total": round(total, 2),
@@ -607,7 +735,7 @@ def calculate_contractor_month(
             "sale_return_qty": round(total_return, 4),
             "manual_qty": round(total_manual, 4),
             "production_qty": round(total_prod, 4),
-            "closing_stock": round(0.0 if is_prod else total_billable, 4),
+            "closing_stock": round(total_closing, 4),
             "billable_qty": round(total_billable, 4),
             "gross_amount": round(total, 2),
             "item_count": len(lines),
