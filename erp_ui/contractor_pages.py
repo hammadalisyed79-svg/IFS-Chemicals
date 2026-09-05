@@ -181,8 +181,7 @@ def _tab_contractors():
         )
         notes = st.text_input("Notes", value=cur.get("notes") or "", key=f"cl_edit_notes_{cid}")
         active = st.checkbox("Active", value=bool(cur.get("is_active", 1)), key=f"cl_edit_active_{cid}")
-        b1, b2, b3 = st.columns(3)
-        if b1.button("Update", type="primary", key=f"cl_edit_save_{cid}"):
+        if st.button("Save changes", type="primary", key=f"cl_edit_save_{cid}"):
             try:
                 update_contractor(
                     cid,
@@ -194,33 +193,38 @@ def _tab_contractors():
                     },
                     hlp.uid(),
                 )
-                ff.action_done("Contractor updated.")
+                msg = "Contractor updated."
+                if not active:
+                    msg += " Marked **inactive** (products/rates kept)."
+                ff.action_done(msg)
             except Exception as e:
                 st.error(f"Could not update: {e}")
-        if b2.button("Deactivate", key=f"cl_edit_off_{cid}"):
-            try:
-                deactivate_contractor(cid, hlp.uid())
-                st.session_state.pop(_draft_key(cid), None)
-                st.session_state.pop(_rates_key(cid), None)
-                ff.action_done(
-                    "Contractor deactivated — products/rates kept. "
-                    "Re-check **Active** and Update to restore."
-                )
-            except Exception as e:
-                st.error(f"Could not deactivate: {e}")
-        confirm = st.checkbox(
-            "Confirm permanent delete (removes products/rates)",
-            key=f"cl_edit_del_ok_{cid}",
-        )
-        if b3.button("Delete permanently", key=f"cl_edit_del_{cid}", disabled=not confirm):
-            try:
-                delete_contractor(cid, user_id=hlp.uid())
-                st.session_state.pop(_draft_key(cid), None)
-                st.session_state.pop(_rates_key(cid), None)
-                st.session_state.pop(f"cl_edit_del_ok_{cid}", None)
-                ff.action_done("Contractor permanently deleted.")
-            except Exception as e:
-                st.error(f"Could not delete: {e}")
+
+        with st.expander("Danger zone — permanent delete"):
+            st.caption(
+                "Do **not** use this for normal edits. Permanent delete removes the contractor "
+                "and all product rates / month worksheets. Prefer unchecking **Active** above."
+            )
+            typed = st.text_input(
+                f"Type supplier code **{cur.get('supplier_code')}** to confirm delete",
+                key=f"cl_edit_del_type_{cid}",
+            )
+            can_del = (typed or "").strip().upper() == str(cur.get("supplier_code") or "").strip().upper()
+            if st.button(
+                "Delete permanently",
+                key=f"cl_edit_del_{cid}",
+                disabled=not can_del,
+                type="secondary",
+            ):
+                try:
+                    delete_contractor(cid, user_id=hlp.uid())
+                    st.session_state.pop(_draft_key(cid), None)
+                    st.session_state.pop(_rates_key(cid), None)
+                    st.session_state.pop(f"cl_edit_del_type_{cid}", None)
+                    ff.action_done("Contractor permanently deleted.")
+                except Exception as e:
+                    st.error(f"Could not delete: {e}")
+
 
 def _tab_products():
     rows = list_contractors(active_only=True)
