@@ -302,6 +302,9 @@ def product_ids_by_code_prefix(prefix: str, *, active_only: bool = True) -> list
 # Common finished-goods code families for bulk assign shortcuts
 BULK_PREFIX_HINTS = (
     ("DW", "Dish Wash (DW*)"),
+    ("DT1", "Lashkara / DT1*"),
+    ("DT2", "Train detergent (DT2*)"),
+    ("DT3", "Detergent AD (DT3*)"),
     ("DP", "Detergent Powder (DP*)"),
     ("LQ", "Liquid (LQ*)"),
 )

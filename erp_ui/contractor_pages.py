@@ -92,7 +92,7 @@ def _tab_contractors():
         "① Production quantity — completed production qty × **rate per SKU** "
         "(each product has its own rate). "
         "② SKU / cartons × **rate per SKU**. "
-        "Assign products and set rates on the **Products** tab (bulk add by code, e.g. DW = Dish Wash)."
+        "Assign products and set rates on the **Products** tab (bulk add by code, e.g. DW, DT1, DT2, DT3)."
     )
     rows = list_contractors(active_only=False)
     if rows:
