@@ -1473,10 +1473,30 @@ def _tab_month_preview():
 
     from erp_ui.report_print import report_toolbar
     title = f"Contract Labour — {c.get('supplier_name')} — {ym}"
+    print_df = out_df.copy()
+    if "Basis" in print_df.columns:
+        print_df = print_df.drop(columns=["Basis"])
+    # Hide zero-balance lines (nothing to bill)
+    if "Amount" in print_df.columns:
+        amt = pd.to_numeric(print_df["Amount"], errors="coerce").fillna(0.0)
+        print_df = print_df.loc[amt.abs() > 0.009].reset_index(drop=True)
+    elif "Billable Qty" in print_df.columns:
+        bq = pd.to_numeric(print_df["Billable Qty"], errors="coerce").fillna(0.0)
+        print_df = print_df.loc[bq.abs() > 0.009].reset_index(drop=True)
+    print_summary = dict(summary or {})
+    print_summary["Items"] = len(print_df)
+    if "Amount" in print_df.columns and not print_df.empty:
+        print_summary["Gross Amount"] = round(
+            float(pd.to_numeric(print_df["Amount"], errors="coerce").fillna(0).sum()), 2,
+        )
+    if "Billable Qty" in print_df.columns and not print_df.empty:
+        print_summary["Billable Qty"] = round(
+            float(pd.to_numeric(print_df["Billable Qty"], errors="coerce").fillna(0).sum()), 2,
+        )
     report_toolbar(
-        out_df, title, "contract_labour_month",
+        print_df, title, "contract_labour_month",
         period=f"{fd} to {td}",
-        summary=summary,
+        summary=print_summary,
         key_prefix="cl_month",
         layout="landscape",
     )

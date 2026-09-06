@@ -649,6 +649,26 @@ def build_report_html(
         src = raw[c] if c in raw.columns else df[c]
         numeric_cols[c] = _is_numeric_col(c, src)
     css = _build_print_css(layout, len(cols))
+    # Contract labour worksheets: one line per SKU (no wrapped product names)
+    if str(title or "").startswith("Contract Labour"):
+        css = css.replace(
+            "</style>",
+            """
+table.data td, table.data th {
+  white-space: nowrap !important;
+  word-wrap: normal !important;
+  overflow-wrap: normal !important;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.2 !important;
+  vertical-align: middle !important;
+  padding-top: 4px !important;
+  padding-bottom: 4px !important;
+}
+table.data td.wrap { white-space: nowrap !important; }
+</style>""",
+            1,
+        )
     pcts = _width_pct(cols)
     colgroup = "".join(f'<col style="width:{p:.1f}%">' for p in pcts)
 
@@ -1211,6 +1231,7 @@ def build_report_pdf(title, df, period="", filters=None, summary=None, layout="l
         line_h = 3.8
         hdr_h = 6.5
         is_ledger = bool(_ledger_report_kind(report_key or title) or re.search(r"ledger", str(title or ""), re.I))
+        is_contract_labour = str(title or "").strip().lower().startswith("contract labour")
 
         def _draw_header():
             pdf.set_font("Helvetica", "B", 8)
@@ -1227,7 +1248,14 @@ def build_report_pdf(title, df, period="", filters=None, summary=None, layout="l
             for c, w in zip(cols, col_ws):
                 src = prep[c] if c in prep.columns else df[c]
                 numeric = _is_numeric_col(c, src)
-                wrap = _is_wide_col(c) or (is_ledger and re.search(r"narration|description|particular", str(c), re.I))
+                wrap = (
+                    False
+                    if is_contract_labour
+                    else (
+                        _is_wide_col(c)
+                        or (is_ledger and re.search(r"narration|description|particular", str(c), re.I))
+                    )
+                )
                 txt = _fmt_cell(row[c], numeric)
                 cells.append((txt, w, numeric, wrap))
 
