@@ -206,6 +206,415 @@ def _payroll_clear_edit_live_state(pid: int) -> None:
     ff.clear_keys(f"pr_edit_src_sig_{pid}")
 
 
+
+def _render_single_employee_edit_pay(
+    *,
+    pid: int,
+    pr: dict,
+    py: int,
+    pm: int,
+    mdays: int,
+    can_post_row: bool,
+    pmode_edit: str,
+    pay_date_edit,
+    bank_id_edit,
+    print_edit_key: str,
+) -> None:
+    """Professional single-employee salary edit + pay desk (balances + form)."""
+    from html import escape
+
+    lines = list(pr.get("lines") or [])
+    if not lines:
+        st.info("No employees on this payroll.")
+        return
+
+    st.markdown(
+        """
+<style>
+.sep-pay-wrap {
+  border: 1px solid #e2e8f0; border-radius: 12px; background: #fff;
+  padding: 14px 16px 16px; margin: 4px 0 8px 0;
+}
+.sep-pay-head {
+  display: flex; justify-content: space-between; align-items: flex-start;
+  gap: 12px; margin-bottom: 10px; flex-wrap: wrap;
+}
+.sep-pay-title { font-size: 1.05rem; font-weight: 700; color: #0f172a; margin: 0; }
+.sep-pay-sub { font-size: 0.8rem; color: #64748b; margin: 2px 0 0 0; }
+.sep-badge {
+  display: inline-block; padding: 4px 10px; border-radius: 999px;
+  font-size: 0.72rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
+}
+.sep-badge-paid { background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; }
+.sep-badge-unpaid { background: #ecfdf5; color: #047857; border: 1px solid #a7f3d0; }
+.sep-kpi-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 0 0 12px 0; }
+@media (max-width: 900px) { .sep-kpi-row { grid-template-columns: repeat(2, 1fr); } }
+.sep-kpi {
+  border: 1px solid #e2e8f0; border-radius: 10px; background: #f8fafc;
+  padding: 10px 12px; min-height: 64px;
+}
+.sep-kpi-lbl {
+  font-size: 0.68rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .04em; color: #64748b; margin: 0 0 4px 0;
+}
+.sep-kpi-val { font-size: 1.05rem; font-weight: 700; color: #0f172a; margin: 0; }
+.sep-kpi-hint { font-size: 0.7rem; color: #94a3b8; margin: 2px 0 0 0; }
+.sep-section-lbl {
+  font-size: 0.72rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .05em; color: #64748b; margin: 10px 0 6px 0;
+}
+.sep-preview {
+  margin: 10px 0 8px 0; padding: 10px 12px; border-radius: 8px;
+  background: #f1f5f9; border: 1px solid #e2e8f0;
+  font-size: 0.9rem; color: #0f172a;
+}
+</style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    # --- Employee list (picker) ---
+    unpaid_n = sum(1 for l in lines if (l.get("paid_status") or "") != "paid")
+    paid_n = len(lines) - unpaid_n
+    line_opts = {}
+    for l in sorted(
+        lines,
+        key=lambda x: (
+            (x.get("department_name") or "").upper(),
+            (x.get("employee_name") or "").upper(),
+        ),
+    ):
+        paid = (l.get("paid_status") or "") == "paid"
+        status = "PAID" if paid else "UNPAID"
+        label = (
+            f"{l.get('employee_name', '—')} ({l.get('emp_code', '')}) — "
+            f"{(l.get('department_name') or 'Unassigned')} — {status} — "
+            f"Net {fmt(l.get('net_salary'))}"
+        )
+        line_opts[label] = l
+
+    st.markdown(
+        f"<div class='sep-pay-wrap'>"
+        f"<div class='sep-pay-head'>"
+        f"<div><p class='sep-pay-title'>Single employee pay desk</p>"
+        f"<p class='sep-pay-sub'>Select from the list · edit amounts · save or post one voucher. "
+        f"Unpaid <b>{unpaid_n}</b> · Paid <b>{paid_n}</b></p></div>"
+        f"</div>",
+        unsafe_allow_html=True,
+    )
+
+    sel_line = st.selectbox(
+        "Employee list",
+        list(line_opts.keys()),
+        key=f"pr_edit_line_{pid}",
+        help="Department grids above stay as the full sheet. This desk edits and pays one person.",
+    )
+    line = line_opts[sel_line]
+    line_paid = (line.get("paid_status") or "") == "paid"
+    eid = int(line.get("employee_id") or 0)
+    rate = (
+        db.overtime_hourly_rate(float(line.get("basic_salary") or 0), py, pm)
+        if py and pm else 0
+    )
+
+    ctx = {}
+    if eid:
+        try:
+            ctx = db.get_employee_advance_context(eid) or {}
+        except Exception:
+            ctx = {}
+    adv_out = float(ctx.get("advance_outstanding") or 0)
+    loan_out = float(ctx.get("loan_outstanding") or 0)
+    led_bal = float(ctx.get("ledger_balance") or 0)
+    net_now = float(line.get("net_salary") or 0)
+
+    badge = (
+        "<span class='sep-badge sep-badge-paid'>Already paid</span>"
+        if line_paid
+        else "<span class='sep-badge sep-badge-unpaid'>Ready to pay</span>"
+    )
+    st.markdown(
+        f"<div style='display:flex;justify-content:space-between;align-items:center;"
+        f"gap:8px;margin:4px 0 10px 0;flex-wrap:wrap'>"
+        f"<div style='font-size:1.02rem;font-weight:700;color:#0f172a'>"
+        f"{escape(str(line.get('employee_name') or '—'))} "
+        f"<span style='color:#64748b;font-weight:600;font-size:0.9rem'>"
+        f"`{escape(str(line.get('emp_code') or ''))}` · "
+        f"{escape(str(line.get('department_name') or 'Unassigned'))}</span></div>"
+        f"{badge}</div>",
+        unsafe_allow_html=True,
+    )
+
+    st.markdown(
+        f"<div class='sep-kpi-row'>"
+        f"<div class='sep-kpi'><p class='sep-kpi-lbl'>Total advance</p>"
+        f"<p class='sep-kpi-val'>{escape(fmt(adv_out))}</p>"
+        f"<p class='sep-kpi-hint'>Outstanding (all advances)</p></div>"
+        f"<div class='sep-kpi'><p class='sep-kpi-lbl'>Total loan</p>"
+        f"<p class='sep-kpi-val'>{escape(fmt(loan_out))}</p>"
+        f"<p class='sep-kpi-hint'>Outstanding (all loans)</p></div>"
+        f"<div class='sep-kpi'><p class='sep-kpi-lbl'>Ledger balance</p>"
+        f"<p class='sep-kpi-val'>{escape(fmt(led_bal))}</p>"
+        f"<p class='sep-kpi-hint'>+ employee owes · − company owes</p></div>"
+        f"<div class='sep-kpi'><p class='sep-kpi-lbl'>Net this month</p>"
+        f"<p class='sep-kpi-val'>{escape(fmt(net_now))}</p>"
+        f"<p class='sep-kpi-hint'>After this payroll recoveries</p></div>"
+        f"</div>",
+        unsafe_allow_html=True,
+    )
+    st.caption(
+        f"OT rate **{fmt(rate)}**/hr (Basic ÷ {mdays} ÷ 6). "
+        f"This month’s Advance recovery {fmt(line.get('advance_recovery'))} · "
+        f"Loan recovery {fmt(line.get('loan_recovery'))}."
+    )
+
+    if line_paid:
+        st.warning(
+            f"**Already paid** — voucher `{line.get('payment_document_no') or '—'}` "
+            f"on {str(line.get('paid_date') or '')[:10] or '—'}. "
+            "Amounts are locked."
+        )
+        sf1, sf2, _sf3 = st.columns([1.2, 1.2, 2])
+        if sf1.button("Print voucher", key=f"pr_single_print_{pid}", use_container_width=True):
+            st.session_state[print_edit_key] = int(line["id"])
+            st.rerun()
+        if _is_admin():
+            if sf2.button("Admin unlock", key=f"pr_single_unlock_{pid}", use_container_width=True):
+                try:
+                    db.rollback_payroll_line_payment(
+                        int(line["id"]), uid(), "Admin unlock from single-employee form",
+                    )
+                    _payroll_clear_edit_live_state(pid)
+                    st.rerun()
+                except Exception as e:
+                    st.error(str(e))
+        else:
+            sf2.caption("🔒 Locked — admin unlock only")
+        st.markdown("</div>", unsafe_allow_html=True)
+        return
+
+    with st.form(f"payroll_line_edit_{pid}"):
+        st.markdown("<p class='sep-section-lbl'>Earnings</p>", unsafe_allow_html=True)
+        e1, e2, e3, e4 = st.columns(4)
+        with e1:
+            basic = money_input(
+                "Basic Salary",
+                value=float(line.get("basic_salary") or 0),
+                min_value=0.0,
+                key=f"pr_ed_basic_{pid}",
+            )
+        with e2:
+            allowances = money_input(
+                "Allowances",
+                value=float(line.get("allowances") or 0),
+                min_value=0.0,
+                key=f"pr_ed_allw_{pid}",
+            )
+        with e3:
+            overtime = money_input(
+                "Overtime",
+                value=float(line.get("overtime") or 0),
+                min_value=0.0,
+                key=f"pr_ed_ot_{pid}",
+            )
+        with e4:
+            bonus = money_input(
+                "Bonus",
+                value=float(line.get("bonus") or 0),
+                min_value=0.0,
+                key=f"pr_ed_bonus_{pid}",
+            )
+
+        st.markdown(
+            "<p class='sep-section-lbl'>Deductions this month "
+            "(recoveries reduce outstanding)</p>",
+            unsafe_allow_html=True,
+        )
+        d1, d2, d3 = st.columns(3)
+        with d1:
+            adv = money_input(
+                "Advance recovery (this month)",
+                value=float(line.get("advance_recovery") or 0),
+                min_value=0.0,
+                key=f"pr_ed_adv_{pid}",
+                help=f"Total advance outstanding: {fmt(adv_out)}",
+            )
+        with d2:
+            loan = money_input(
+                "Loan recovery (this month)",
+                value=float(line.get("loan_recovery") or 0),
+                min_value=0.0,
+                key=f"pr_ed_loan_{pid}",
+                help=f"Total loan outstanding: {fmt(loan_out)}",
+            )
+        with d3:
+            other = money_input(
+                "Other deductions",
+                value=float(line.get("other_deductions") or 0),
+                min_value=0.0,
+                key=f"pr_ed_other_{pid}",
+            )
+
+        st.markdown("<p class='sep-section-lbl'>Attendance & overtime</p>", unsafe_allow_html=True)
+        a1, a2, a3, a4 = st.columns(4)
+        days_present = a1.number_input(
+            "Days Present",
+            min_value=0.0,
+            value=float(line.get("days_present") or 0),
+            step=0.5,
+            key=f"pr_ed_dp_{pid}",
+        )
+        days_absent = a2.number_input(
+            "Days Absent",
+            min_value=0.0,
+            value=float(line.get("days_absent") or 0),
+            step=0.5,
+            key=f"pr_ed_da_{pid}",
+        )
+        ot_hrs = a3.number_input(
+            "Overtime Hours",
+            min_value=0.0,
+            value=float(line.get("overtime_hrs") or 0),
+            step=0.5,
+            key=f"pr_ed_oth_{pid}",
+        )
+        derive_hrs = a4.checkbox(
+            "Derive hrs from OT amt",
+            value=False,
+            help="Keep Overtime amount and reverse-calculate hours",
+            key=f"pr_ed_derive_{pid}",
+        )
+
+        preview_gross = round(
+            float(basic or 0) + float(allowances or 0)
+            + float(overtime or 0) + float(bonus or 0),
+            2,
+        )
+        preview_ded = round(
+            float(line.get("tax_deduction") or 0)
+            + float(line.get("eobi") or 0)
+            + float(line.get("social_security") or 0)
+            + float(adv or 0) + float(loan or 0) + float(other or 0)
+            + float(line.get("absent_deduction") or 0),
+            2,
+        )
+        if abs(float(days_absent or 0) - float(line.get("days_absent") or 0)) > 0.009:
+            try:
+                abs_prev = db.calc_absent_deduction(
+                    float(basic or 0), py, pm, float(days_absent or 0),
+                )
+                preview_ded = round(
+                    preview_ded
+                    - float(line.get("absent_deduction") or 0)
+                    + float(abs_prev or 0),
+                    2,
+                )
+            except Exception:
+                pass
+        preview_net = round(preview_gross - preview_ded, 2)
+        st.markdown(
+            f"<div class='sep-preview'><b>Preview</b> · "
+            f"Gross {escape(fmt(preview_gross))} · "
+            f"Deductions {escape(fmt(preview_ded))} · "
+            f"Net <b>{escape(fmt(preview_net))}</b></div>",
+            unsafe_allow_html=True,
+        )
+
+        b_save, b_pay = st.columns(2)
+        do_save = b_save.form_submit_button("Save this employee", use_container_width=True)
+        can_pay_here = can_post_row and (pmode_edit == "cash" or bank_id_edit)
+        post_lbl = (
+            "Save & post cash voucher"
+            if pmode_edit == "cash"
+            else "Save & post bank voucher"
+        )
+        do_pay = False
+        if can_pay_here:
+            do_pay = b_pay.form_submit_button(
+                post_lbl, type="primary", use_container_width=True,
+            )
+        else:
+            b_pay.caption("Set payment date / mode above to post.")
+
+        if do_save or do_pay:
+            payload = {
+                "basic_salary": basic,
+                "allowances": allowances,
+                "overtime": overtime,
+                "bonus": bonus,
+                "tax_deduction": float(line.get("tax_deduction") or 0),
+                "eobi": float(line.get("eobi") or 0),
+                "social_security": float(line.get("social_security") or 0),
+                "advance_recovery": adv,
+                "loan_recovery": loan,
+                "other_deductions": other,
+                "days_present": days_present,
+                "days_absent": days_absent,
+                "overtime_hrs": ot_hrs,
+            }
+            try:
+                fresh = next(
+                    (
+                        x for x in (db.get_payroll_run(pid) or {}).get("lines") or []
+                        if int(x["id"]) == int(line["id"])
+                    ),
+                    None,
+                )
+                if fresh and (fresh.get("paid_status") or "") == "paid":
+                    raise ValueError(
+                        f"Already paid ({fresh.get('payment_document_no') or '—'})."
+                    )
+                db.update_payroll_line(
+                    line["id"],
+                    payload,
+                    uid(),
+                    sync_ot=("from_amount" if derive_hrs else None),
+                )
+                if do_pay:
+                    if pmode_edit == "bank" and not bank_id_edit:
+                        raise ValueError("Select bank account.")
+                    after = next(
+                        (
+                            x for x in (db.get_payroll_run(pid) or {}).get("lines") or []
+                            if int(x["id"]) == int(line["id"])
+                        ),
+                        None,
+                    )
+                    net_after = float((after or {}).get("net_salary") or 0)
+                    if net_after <= 0.009:
+                        raise ValueError(
+                            "Saved, but net is zero/negative — "
+                            "lower Advance/Loan recovery, then post again."
+                        )
+                    res = db.post_and_pay_payroll_line(
+                        int(line["id"]),
+                        uid(),
+                        pmode_edit,
+                        str(pay_date_edit),
+                        bank_id_edit,
+                    )
+                    st.session_state[print_edit_key] = int(line["id"])
+                    _payroll_clear_edit_live_state(pid)
+                    ff.action_done(
+                        f"**{res['document_no']}** — "
+                        f"{res['employee']} saved & paid. "
+                        "Voucher ready to print."
+                    )
+                else:
+                    _payroll_clear_edit_live_state(pid)
+                    ff.action_done(
+                        "Payroll line updated. "
+                        "Use **Save & post voucher** when ready to pay."
+                    )
+            except Exception as e:
+                err = str(e)
+                if "already paid" in err.lower():
+                    st.warning(err)
+                else:
+                    st.error(err)
+
+    st.markdown("</div>", unsafe_allow_html=True)
+
 def _payroll_edit_df_changed(a: pd.DataFrame, b: pd.DataFrame, cols) -> bool:
     if a is None or b is None or len(a) != len(b):
         return True
@@ -2451,278 +2860,19 @@ def page_payroll():
                         """
                     )
 
-                with st.expander(
-                    "Single employee — edit & pay",
-                    expanded=True,
-                ):
-                    st.caption(
-                        "Edit one employee’s salary, then **Save** or **Save & post voucher**. "
-                        "Already-paid employees are locked."
+                with st.expander("Single employee pay desk", expanded=True):
+                    _render_single_employee_edit_pay(
+                        pid=pid,
+                        pr=pr,
+                        py=py,
+                        pm=pm,
+                        mdays=mdays,
+                        can_post_row=can_post_row,
+                        pmode_edit=pmode_edit,
+                        pay_date_edit=pay_date_edit,
+                        bank_id_edit=bank_id_edit,
+                        print_edit_key=print_edit_key,
                     )
-                    line_opts = {
-                        f"{l.get('employee_name', '—')} ({l.get('emp_code', '')}) — "
-                        f"{(l.get('department_name') or 'Unassigned')} — "
-                        f"{'PAID' if (l.get('paid_status') or '') == 'paid' else 'UNPAID'} — "
-                        f"Net {fmt(l['net_salary'])}": l
-                        for l in pr["lines"]
-                    }
-                    sel_line = st.selectbox(
-                        "Employee",
-                        list(line_opts.keys()),
-                        key=f"pr_edit_line_{pid}",
-                    )
-                    line = line_opts[sel_line]
-                    line_paid = (line.get("paid_status") or "") == "paid"
-                    rate = db.overtime_hourly_rate(
-                        float(line.get("basic_salary") or 0), py, pm
-                    ) if py and pm else 0
-                    st.caption(
-                        f"OT rate: **{fmt(rate)}**/hr (Basic ÷ {mdays} ÷ 6)."
-                    )
-                    if line_paid:
-                        st.warning(
-                            f"**Already paid** — voucher "
-                            f"`{line.get('payment_document_no') or '—'}` "
-                            f"on {str(line.get('paid_date') or '')[:10] or '—'}. "
-                            "Amounts are locked. Print below, or ask an admin to unlock."
-                        )
-                        sf1, sf2, _sf3 = st.columns([1.2, 1.2, 2])
-                        if sf1.button(
-                            "Print voucher",
-                            key=f"pr_single_print_{pid}",
-                            use_container_width=True,
-                        ):
-                            st.session_state[print_edit_key] = int(line["id"])
-                            st.rerun()
-                        if _is_admin():
-                            if sf2.button(
-                                "Admin unlock",
-                                key=f"pr_single_unlock_{pid}",
-                                use_container_width=True,
-                            ):
-                                try:
-                                    db.rollback_payroll_line_payment(
-                                        int(line["id"]),
-                                        uid(),
-                                        "Admin unlock from single-employee form",
-                                    )
-                                    _payroll_clear_edit_live_state(pid)
-                                    st.rerun()
-                                except Exception as e:
-                                    st.error(str(e))
-                        else:
-                            sf2.caption("🔒 Locked — admin unlock only")
-                    else:
-                        with st.form(f"payroll_line_edit_{pid}"):
-                            e1, e2, e3, e4 = st.columns(4)
-                            with e1:
-                                basic = money_input(
-                                    "Basic Salary",
-                                    value=float(line.get("basic_salary") or 0),
-                                    min_value=0.0,
-                                    key=f"pr_ed_basic_{pid}",
-                                )
-                            with e2:
-                                allowances = money_input(
-                                    "Allowances (structure)",
-                                    value=float(line.get("allowances") or 0),
-                                    min_value=0.0,
-                                    key=f"pr_ed_allw_{pid}",
-                                )
-                            with e3:
-                                overtime = money_input(
-                                    "Overtime (auto if hours)",
-                                    value=float(line.get("overtime") or 0),
-                                    min_value=0.0,
-                                    key=f"pr_ed_ot_{pid}",
-                                )
-                            with e4:
-                                bonus = money_input(
-                                    "Bonus",
-                                    value=float(line.get("bonus") or 0),
-                                    min_value=0.0,
-                                    key=f"pr_ed_bonus_{pid}",
-                                )
-                            d1, d2, d3 = st.columns(3)
-                            with d1:
-                                adv = money_input(
-                                    "Advance Recovery",
-                                    value=float(line.get("advance_recovery") or 0),
-                                    min_value=0.0,
-                                    key=f"pr_ed_adv_{pid}",
-                                )
-                            with d2:
-                                loan = money_input(
-                                    "Loan Recovery",
-                                    value=float(line.get("loan_recovery") or 0),
-                                    min_value=0.0,
-                                    key=f"pr_ed_loan_{pid}",
-                                )
-                            with d3:
-                                other = money_input(
-                                    "Other Deductions",
-                                    value=float(line.get("other_deductions") or 0),
-                                    min_value=0.0,
-                                    key=f"pr_ed_other_{pid}",
-                                )
-                            a1, a2, a3, a4 = st.columns(4)
-                            days_present = a1.number_input(
-                                "Days Present",
-                                min_value=0.0,
-                                value=float(line.get("days_present") or 0),
-                                step=0.5,
-                                key=f"pr_ed_dp_{pid}",
-                            )
-                            days_absent = a2.number_input(
-                                "Days Absent",
-                                min_value=0.0,
-                                value=float(line.get("days_absent") or 0),
-                                step=0.5,
-                                key=f"pr_ed_da_{pid}",
-                            )
-                            ot_hrs = a3.number_input(
-                                "Overtime Hours",
-                                min_value=0.0,
-                                value=float(line.get("overtime_hrs") or 0),
-                                step=0.5,
-                                key=f"pr_ed_oth_{pid}",
-                            )
-                            derive_hrs = a4.checkbox(
-                                "Derive hrs from OT amt",
-                                value=False,
-                                help="For prior months: keep Overtime amount and reverse-calculate hours",
-                                key=f"pr_ed_derive_{pid}",
-                            )
-                            preview_gross = round(
-                                float(basic or 0) + float(allowances or 0)
-                                + float(overtime or 0) + float(bonus or 0),
-                                2,
-                            )
-                            preview_ded = round(
-                                float(line.get("tax_deduction") or 0)
-                                + float(line.get("eobi") or 0)
-                                + float(line.get("social_security") or 0)
-                                + float(adv or 0) + float(loan or 0) + float(other or 0)
-                                + float(line.get("absent_deduction") or 0),
-                                2,
-                            )
-                            if abs(float(days_absent or 0) - float(line.get("days_absent") or 0)) > 0.009:
-                                try:
-                                    abs_prev = db.calc_absent_deduction(
-                                        float(basic or 0), py, pm, float(days_absent or 0),
-                                    )
-                                    preview_ded = round(
-                                        preview_ded
-                                        - float(line.get("absent_deduction") or 0)
-                                        + float(abs_prev or 0),
-                                        2,
-                                    )
-                                except Exception:
-                                    pass
-                            preview_net = round(preview_gross - preview_ded, 2)
-                            st.markdown(
-                                f"**Preview** · Gross {fmt(preview_gross)} · "
-                                f"Deductions {fmt(preview_ded)} · "
-                                f"Net **{fmt(preview_net)}**"
-                            )
-                            b_save, b_pay = st.columns(2)
-                            do_save = b_save.form_submit_button(
-                                "Save this employee",
-                                use_container_width=True,
-                            )
-                            can_pay_here = can_post_row and (pmode_edit == "cash" or bank_id_edit)
-                            post_lbl = (
-                                "Save & post cash voucher"
-                                if pmode_edit == "cash"
-                                else "Save & post bank voucher"
-                            )
-                            do_pay = False
-                            if can_pay_here:
-                                do_pay = b_pay.form_submit_button(
-                                    post_lbl,
-                                    type="primary",
-                                    use_container_width=True,
-                                )
-                            else:
-                                b_pay.caption("Set payment date / mode above to post.")
-
-                            if do_save or do_pay:
-                                payload = {
-                                    "basic_salary": basic,
-                                    "allowances": allowances,
-                                    "overtime": overtime,
-                                    "bonus": bonus,
-                                    "tax_deduction": float(line.get("tax_deduction") or 0),
-                                    "eobi": float(line.get("eobi") or 0),
-                                    "social_security": float(line.get("social_security") or 0),
-                                    "advance_recovery": adv,
-                                    "loan_recovery": loan,
-                                    "other_deductions": other,
-                                    "days_present": days_present,
-                                    "days_absent": days_absent,
-                                    "overtime_hrs": ot_hrs,
-                                }
-                                try:
-                                    fresh = next(
-                                        (
-                                            x for x in (db.get_payroll_run(pid) or {}).get("lines") or []
-                                            if int(x["id"]) == int(line["id"])
-                                        ),
-                                        None,
-                                    )
-                                    if fresh and (fresh.get("paid_status") or "") == "paid":
-                                        raise ValueError(
-                                            f"Already paid "
-                                            f"({fresh.get('payment_document_no') or '—'})."
-                                        )
-                                    db.update_payroll_line(
-                                        line["id"],
-                                        payload,
-                                        uid(),
-                                        sync_ot=("from_amount" if derive_hrs else None),
-                                    )
-                                    if do_pay:
-                                        if pmode_edit == "bank" and not bank_id_edit:
-                                            raise ValueError("Select bank account.")
-                                        after = next(
-                                            (
-                                                x for x in (db.get_payroll_run(pid) or {}).get("lines") or []
-                                                if int(x["id"]) == int(line["id"])
-                                            ),
-                                            None,
-                                        )
-                                        net_after = float((after or {}).get("net_salary") or 0)
-                                        if net_after <= 0.009:
-                                            raise ValueError(
-                                                "Saved, but net is zero/negative — "
-                                                "lower Advance/Loan, then post again."
-                                            )
-                                        res = db.post_and_pay_payroll_line(
-                                            int(line["id"]),
-                                            uid(),
-                                            pmode_edit,
-                                            str(pay_date_edit),
-                                            bank_id_edit,
-                                        )
-                                        st.session_state[print_edit_key] = int(line["id"])
-                                        _payroll_clear_edit_live_state(pid)
-                                        ff.action_done(
-                                            f"**{res['document_no']}** — "
-                                            f"{res['employee']} saved & paid. "
-                                            "Voucher ready to print."
-                                        )
-                                    else:
-                                        _payroll_clear_edit_live_state(pid)
-                                        ff.action_done(
-                                            "Payroll line updated. "
-                                            "Use **Save & post voucher** when ready to pay."
-                                        )
-                                except Exception as e:
-                                    err = str(e)
-                                    if "already paid" in err.lower():
-                                        st.warning(err)
-                                    else:
-                                        st.error(err)
 
     elif tab == "Salary Slips":
         runs = db.get_payroll_runs() or []
