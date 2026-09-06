@@ -2280,38 +2280,194 @@ def page_payroll():
                 tot_net = float(edit_df["Net"].sum())
                 tot_adv = float(edit_df["Advance"].sum())
                 tot_loan = float(edit_df["Loan"].sum())
+                tot_absent = float(edit_df["Absent Ded."].sum()) if "Absent Ded." in edit_df.columns else 0.0
+                tot_ded = float(edit_df["Total Ded."].sum()) if "Total Ded." in edit_df.columns else 0.0
 
+                # Payment status from live DB lines (authoritative paid_status)
+                lines_all = list(pr.get("lines") or [])
+                paid_lines = [l for l in lines_all if (l.get("paid_status") or "") == "paid"]
+                unpaid_lines = [l for l in lines_all if (l.get("paid_status") or "") != "paid"]
+                unpaid_ready = [
+                    l for l in unpaid_lines if float(l.get("net_salary") or 0) > 0.009
+                ]
+                unpaid_nil = [
+                    l for l in unpaid_lines if float(l.get("net_salary") or 0) <= 0.009
+                ]
+                n_staff = len(lines_all)
+                n_paid = len(paid_lines)
+                n_ready = len(unpaid_ready)
+                n_nil = len(unpaid_nil)
+                paid_net = sum(float(l.get("net_salary") or 0) for l in paid_lines)
+                remain_net = sum(float(l.get("net_salary") or 0) for l in unpaid_ready)
+                pct_paid = round(100.0 * n_paid / n_staff, 1) if n_staff else 0.0
+                pct_cash = (
+                    round(100.0 * paid_net / (paid_net + remain_net), 1)
+                    if (paid_net + remain_net) > 0.009
+                    else (100.0 if n_paid and not n_ready else 0.0)
+                )
+
+                st.markdown(
+                    "<div style='font-size:0.72rem;font-weight:700;text-transform:uppercase;"
+                    "letter-spacing:0.05em;color:#64748b;margin:4px 0 6px 0'>"
+                    "Payroll payment overview</div>",
+                    unsafe_allow_html=True,
+                )
                 k1, k2, k3, k4, k5, k6 = st.columns(6, gap="small")
                 k1.markdown(
-                    f"<div class='txn-kpi-card'><p class='txn-kpi'>Employees</p>"
-                    f"<p class='txn-kpi-val'>{len(edit_df):,}</p></div>",
+                    f"<div class='txn-kpi-card'><p class='txn-kpi'>Staff</p>"
+                    f"<p class='txn-kpi-val'>{n_staff:,}</p>"
+                    f"<p style='margin:2px 0 0;font-size:0.7rem;color:#94a3b8'>"
+                    f"{len(depts)} departments</p></div>",
                     unsafe_allow_html=True,
                 )
                 k2.markdown(
-                    f"<div class='txn-kpi-card'><p class='txn-kpi'>Departments</p>"
-                    f"<p class='txn-kpi-val'>{len(depts):,}</p></div>",
+                    f"<div class='txn-kpi-card'><p class='txn-kpi'>Paid</p>"
+                    f"<p class='txn-kpi-val' style='color:#047857'>{n_paid:,}</p>"
+                    f"<p style='margin:2px 0 0;font-size:0.7rem;color:#94a3b8'>"
+                    f"{escape(fmt(paid_net))} paid</p></div>",
                     unsafe_allow_html=True,
                 )
                 k3.markdown(
+                    f"<div class='txn-kpi-card'><p class='txn-kpi'>Unpaid (ready)</p>"
+                    f"<p class='txn-kpi-val' style='color:#b91c1c'>{n_ready:,}</p>"
+                    f"<p style='margin:2px 0 0;font-size:0.7rem;color:#94a3b8'>"
+                    f"Cash still due</p></div>",
+                    unsafe_allow_html=True,
+                )
+                k4.markdown(
+                    f"<div class='txn-kpi-card'><p class='txn-kpi'>Remaining net</p>"
+                    f"<p class='txn-kpi-val' style='font-size:1.05rem;color:#b91c1c'>"
+                    f"{escape(fmt(remain_net))}</p>"
+                    f"<p style='margin:2px 0 0;font-size:0.7rem;color:#94a3b8'>"
+                    f"To pay this month</p></div>",
+                    unsafe_allow_html=True,
+                )
+                k5.markdown(
+                    f"<div class='txn-kpi-card'><p class='txn-kpi'>Nil / blocked</p>"
+                    f"<p class='txn-kpi-val'>{n_nil:,}</p>"
+                    f"<p style='margin:2px 0 0;font-size:0.7rem;color:#94a3b8'>"
+                    f"Net ≤ 0 — fix Advance/Loan</p></div>",
+                    unsafe_allow_html=True,
+                )
+                k6.markdown(
+                    f"<div class='txn-kpi-card'><p class='txn-kpi'>Progress</p>"
+                    f"<p class='txn-kpi-val'>{pct_paid:.0f}%</p>"
+                    f"<p style='margin:2px 0 0;font-size:0.7rem;color:#94a3b8'>"
+                    f"Staff paid · {pct_cash:.0f}% of cash</p></div>",
+                    unsafe_allow_html=True,
+                )
+
+                s1, s2, s3, s4, s5, s6 = st.columns(6, gap="small")
+                s1.markdown(
                     f"<div class='txn-kpi-card'><p class='txn-kpi'>Gross</p>"
                     f"<p class='txn-kpi-val' style='font-size:1.05rem'>{escape(fmt(tot_gross))}</p></div>",
                     unsafe_allow_html=True,
                 )
-                k4.markdown(
-                    f"<div class='txn-kpi-card'><p class='txn-kpi'>Advance</p>"
+                s2.markdown(
+                    f"<div class='txn-kpi-card'><p class='txn-kpi'>Total deductions</p>"
+                    f"<p class='txn-kpi-val' style='font-size:1.05rem'>{escape(fmt(tot_ded))}</p></div>",
+                    unsafe_allow_html=True,
+                )
+                s3.markdown(
+                    f"<div class='txn-kpi-card'><p class='txn-kpi'>Advance (month)</p>"
                     f"<p class='txn-kpi-val' style='font-size:1.05rem'>{escape(fmt(tot_adv))}</p></div>",
                     unsafe_allow_html=True,
                 )
-                k5.markdown(
-                    f"<div class='txn-kpi-card'><p class='txn-kpi'>Loan</p>"
+                s4.markdown(
+                    f"<div class='txn-kpi-card'><p class='txn-kpi'>Loan (month)</p>"
                     f"<p class='txn-kpi-val' style='font-size:1.05rem'>{escape(fmt(tot_loan))}</p></div>",
                     unsafe_allow_html=True,
                 )
-                k6.markdown(
-                    f"<div class='txn-kpi-card'><p class='txn-kpi'>Net</p>"
+                s5.markdown(
+                    f"<div class='txn-kpi-card'><p class='txn-kpi'>Absent / LWP</p>"
+                    f"<p class='txn-kpi-val' style='font-size:1.05rem'>{escape(fmt(tot_absent))}</p></div>",
+                    unsafe_allow_html=True,
+                )
+                s6.markdown(
+                    f"<div class='txn-kpi-card'><p class='txn-kpi'>Sheet net</p>"
                     f"<p class='txn-kpi-val' style='font-size:1.05rem'>{escape(fmt(tot_net))}</p></div>",
                     unsafe_allow_html=True,
                 )
+
+                # Department-wise pay status for decision making
+                dept_rows = []
+                for dept in depts:
+                    d_lines = [
+                        l for l in lines_all
+                        if ((l.get("department_name") or "").strip() or "Unassigned") == dept
+                    ]
+                    d_paid = [l for l in d_lines if (l.get("paid_status") or "") == "paid"]
+                    d_ready = [
+                        l for l in d_lines
+                        if (l.get("paid_status") or "") != "paid"
+                        and float(l.get("net_salary") or 0) > 0.009
+                    ]
+                    d_nil = [
+                        l for l in d_lines
+                        if (l.get("paid_status") or "") != "paid"
+                        and float(l.get("net_salary") or 0) <= 0.009
+                    ]
+                    d_gross = sum(float(l.get("gross_salary") or 0) for l in d_lines)
+                    d_net = sum(float(l.get("net_salary") or 0) for l in d_lines)
+                    d_paid_net = sum(float(l.get("net_salary") or 0) for l in d_paid)
+                    d_remain = sum(float(l.get("net_salary") or 0) for l in d_ready)
+                    if len(d_paid) == len(d_lines) and d_lines:
+                        status = "ALL PAID"
+                    elif not d_paid and d_ready:
+                        status = "NOT STARTED"
+                    elif d_ready:
+                        status = "IN PROGRESS"
+                    elif d_nil and not d_ready:
+                        status = "NIL ONLY"
+                    else:
+                        status = "—"
+                    dept_rows.append({
+                        "Department": dept,
+                        "Staff": len(d_lines),
+                        "Paid": len(d_paid),
+                        "Unpaid": len(d_ready),
+                        "Nil": len(d_nil),
+                        "Gross": d_gross,
+                        "Sheet net": d_net,
+                        "Paid net": d_paid_net,
+                        "Remaining": d_remain,
+                        "Status": status,
+                    })
+                if dept_rows:
+                    with st.expander(
+                        f"Department pay status — remaining cash {fmt(remain_net)} "
+                        f"· {n_ready} unpaid ready · {n_paid}/{n_staff} paid",
+                        expanded=True,
+                    ):
+                        st.caption(
+                            "**Remaining** = unpaid staff with net > 0 (cash still to issue). "
+                            "**Nil** = unpaid with net ≤ 0 (lower Advance/Loan or skip). "
+                            "Use each department desk below, or **Single employee pay**."
+                        )
+                        dept_df = pd.DataFrame(dept_rows)
+                        st.dataframe(
+                            dept_df,
+                            use_container_width=True,
+                            hide_index=True,
+                            column_config={
+                                "Gross": st.column_config.NumberColumn(format="%.2f"),
+                                "Sheet net": st.column_config.NumberColumn(format="%.2f"),
+                                "Paid net": st.column_config.NumberColumn(format="%.2f"),
+                                "Remaining": st.column_config.NumberColumn(format="%.2f"),
+                            },
+                        )
+                        if n_ready == 0 and n_nil == 0 and n_paid == n_staff and n_staff:
+                            st.success(
+                                f"All **{n_staff}** salaries paid "
+                                f"({fmt(paid_net)}). Sheet can be closed on **Process / Pay**."
+                            )
+                        elif n_ready:
+                            st.info(
+                                f"**{n_ready}** salary(ies) still due — "
+                                f"**{fmt(remain_net)}** cash/bank remaining. "
+                                f"{n_nil} nil/blocked · {n_paid} already paid."
+                            )
+
 
                 f1, f2 = st.columns([2, 1])
                 dept_filter = f1.selectbox(
