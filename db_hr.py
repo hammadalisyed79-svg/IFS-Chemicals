@@ -329,12 +329,7 @@ def ensure_cash_hr_role(conn, created_by=None):
                    VALUES(?,?,?,?,?,?,?,?)""",
                 (rid, module, *perms),
             )
-    # Cash/HR clerk login (shabab) — always keep on this role
-    conn.execute(
-        """UPDATE users SET role='cash_hr', role_id=?
-           WHERE lower(username)='shabab'""",
-        (rid,),
-    )
+    # Do not force any username onto CASH_HR — assign via Users admin screen.
     return rid
 
 
