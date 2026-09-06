@@ -3205,11 +3205,16 @@ def issue_advance(advance_id, user_id, payment_mode="cash", bank_account_id=None
         emp_lbl = f"{adv.get('employee_name') or ''} ({adv.get('emp_code') or ''})".strip()
         label = f"Salary advance {adv['document_no']} - {emp_lbl}"
         ref = adv["document_no"]
+        adv_acct = conn.execute(
+            "SELECT id FROM chart_of_accounts WHERE code=?", (HR_AC["employee_advance"],)
+        ).fetchone()
+        adv_acct_id = int(adv_acct[0]) if adv_acct else None
 
         if mode == "cash":
             entry_id, doc_no = db._add_cash_payment(
                 conn, post_date, label, ref, amt, user_id,
-                party_type="employee", party_id=adv["employee_id"],
+                account_id=adv_acct_id,
+                party_type="account", party_id=adv_acct_id,
             )
             asset_id = conn.execute(
                 "SELECT id FROM chart_of_accounts WHERE code=?", (AC["cash"],)
@@ -3218,7 +3223,7 @@ def issue_advance(advance_id, user_id, payment_mode="cash", bank_account_id=None
         else:
             entry_id, doc_no = db._add_bank_payment(
                 conn, post_date, label, ref, amt, bank_account_id, user_id,
-                party_type="employee", party_id=adv["employee_id"],
+                party_type="account", party_id=adv_acct_id,
             )
             asset_id = bank_account_id
 
@@ -3304,9 +3309,14 @@ def backfill_advance_cash_voucher(advance_id, user_id=None):
         post_date = str(adv["request_date"])[:10]
         emp_lbl = f"{adv.get('employee_name') or ''} ({adv.get('emp_code') or ''})".strip()
         label = f"Salary advance {adv['document_no']} - {emp_lbl}"
+        adv_acct = conn.execute(
+            "SELECT id FROM chart_of_accounts WHERE code=?", (HR_AC["employee_advance"],)
+        ).fetchone()
+        adv_acct_id = int(adv_acct[0]) if adv_acct else None
         entry_id, doc_no = db._add_cash_payment(
             conn, post_date, label, adv["document_no"], amt, user_id,
-            party_type="employee", party_id=adv["employee_id"],
+            account_id=adv_acct_id,
+            party_type="account", party_id=adv_acct_id,
         )
         conn.execute(
             "UPDATE employee_advances SET payment_mode=?, payment_document_no=? WHERE id=?",

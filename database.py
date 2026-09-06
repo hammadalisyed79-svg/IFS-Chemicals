@@ -3030,8 +3030,17 @@ def _cash_book_rows(conn, from_date=None, to_date=None):
         bal = bal + r["amount"] if r["entry_type"] == "credit" else bal - r["amount"]
         r["balance_after"] = bal
         title = _cash_bank_account_title(conn, r.get("party_type"), r.get("party_id"))
+        # Contra GL on account_id (e.g. salary advance → 100180) when party is employee
         if not title and r.get("account_id"):
             title = _cash_bank_account_title(conn, "account", r.get("account_id"))
+        elif (
+            title
+            and str(r.get("party_type") or "").lower() == "employee"
+            and r.get("account_id")
+        ):
+            contra = _cash_bank_account_title(conn, "account", r.get("account_id"))
+            if contra:
+                title = contra
         r["account_title"] = title
     return rows
 
@@ -3049,6 +3058,10 @@ def _cash_bank_account_title(conn, party_type, party_id) -> str:
         row = conn.execute("SELECT code, name FROM customers WHERE id=?", (pid,)).fetchone()
     elif pt == "supplier":
         row = conn.execute("SELECT code, name FROM suppliers WHERE id=?", (pid,)).fetchone()
+    elif pt == "employee":
+        row = conn.execute(
+            "SELECT code, full_name AS name FROM employees WHERE id=?", (pid,),
+        ).fetchone()
     elif pt in ("account", "expense"):
         row = conn.execute("SELECT code, name FROM chart_of_accounts WHERE id=?", (pid,)).fetchone()
     else:
