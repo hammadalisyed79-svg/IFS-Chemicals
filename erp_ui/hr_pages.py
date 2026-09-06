@@ -276,22 +276,25 @@ def _render_single_employee_edit_pay(
     # --- Employee list (picker) ---
     unpaid_n = sum(1 for l in lines if (l.get("paid_status") or "") != "paid")
     paid_n = len(lines) - unpaid_n
-    line_opts = {}
-    for l in sorted(
+    sorted_lines = sorted(
         lines,
         key=lambda x: (
             (x.get("department_name") or "").upper(),
             (x.get("employee_name") or "").upper(),
         ),
-    ):
+    )
+    line_by_id = {int(l["id"]): l for l in sorted_lines}
+    id_order = list(line_by_id.keys())
+
+    def _emp_label(lid: int) -> str:
+        l = line_by_id.get(int(lid)) or {}
         paid = (l.get("paid_status") or "") == "paid"
         status = "PAID" if paid else "UNPAID"
-        label = (
+        return (
             f"{l.get('employee_name', '—')} ({l.get('emp_code', '')}) — "
             f"{(l.get('department_name') or 'Unassigned')} — {status} — "
             f"Net {fmt(l.get('net_salary'))}"
         )
-        line_opts[label] = l
 
     st.markdown(
         f"<div class='sep-pay-wrap'>"
@@ -303,13 +306,19 @@ def _render_single_employee_edit_pay(
         unsafe_allow_html=True,
     )
 
-    sel_line = st.selectbox(
+    pick_key = f"pr_edit_line_id_{pid}"
+    # Keep selection stable across save (options are line ids, not labels with changing Net)
+    if pick_key not in st.session_state or st.session_state.get(pick_key) not in line_by_id:
+        st.session_state[pick_key] = id_order[0]
+
+    sel_id = st.selectbox(
         "Employee list",
-        list(line_opts.keys()),
-        key=f"pr_edit_line_{pid}",
+        id_order,
+        format_func=_emp_label,
+        key=pick_key,
         help="Department grids above stay as the full sheet. This desk edits and pays one person.",
     )
-    line = line_opts[sel_line]
+    line = line_by_id[int(sel_id)]
     line_paid = (line.get("paid_status") or "") == "paid"
     eid = int(line.get("employee_id") or 0)
     rate = (
@@ -570,6 +579,25 @@ def _render_single_employee_edit_pay(
                     uid(),
                     sync_ot=("from_amount" if derive_hrs else None),
                 )
+                # Stay on Edit Lines + same employee; remount fields from saved DB values
+                retain = {
+                    pick_key: int(line["id"]),
+                    "hr_pay_tab": "Edit Lines",
+                    "pr_edit_run": st.session_state.get("pr_edit_run"),
+                }
+                form_prefixes = (
+                    f"pr_ed_basic_{pid}",
+                    f"pr_ed_allw_{pid}",
+                    f"pr_ed_ot_{pid}",
+                    f"pr_ed_bonus_{pid}",
+                    f"pr_ed_adv_{pid}",
+                    f"pr_ed_loan_{pid}",
+                    f"pr_ed_other_{pid}",
+                    f"pr_ed_dp_{pid}",
+                    f"pr_ed_da_{pid}",
+                    f"pr_ed_oth_{pid}",
+                    f"pr_ed_derive_{pid}",
+                )
                 if do_pay:
                     if pmode_edit == "bank" and not bank_id_edit:
                         raise ValueError("Select bank account.")
@@ -598,13 +626,17 @@ def _render_single_employee_edit_pay(
                     ff.action_done(
                         f"**{res['document_no']}** — "
                         f"{res['employee']} saved & paid. "
-                        "Voucher ready to print."
+                        "Still on this pay desk — voucher ready below.",
+                        prefixes=form_prefixes,
+                        retain=retain,
                     )
                 else:
                     _payroll_clear_edit_live_state(pid)
                     ff.action_done(
-                        "Payroll line updated. "
-                        "Use **Save & post voucher** when ready to pay."
+                        "Payroll line updated — still on this employee. "
+                        "Adjust more or use **Save & post voucher** when ready.",
+                        prefixes=form_prefixes,
+                        retain=retain,
                     )
             except Exception as e:
                 err = str(e)
