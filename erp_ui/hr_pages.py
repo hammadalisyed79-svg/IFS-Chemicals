@@ -306,7 +306,7 @@ def _render_single_employee_edit_pay(
         unsafe_allow_html=True,
     )
 
-    pick_key = f"pr_edit_line_id_{pid}"
+    pick_key = f"pr_sep_line_id_{pid}"
     # Keep selection stable across save (options are line ids, not labels with changing Net)
     if pick_key not in st.session_state or st.session_state.get(pick_key) not in line_by_id:
         st.session_state[pick_key] = id_order[0]
@@ -316,7 +316,7 @@ def _render_single_employee_edit_pay(
         id_order,
         format_func=_emp_label,
         key=pick_key,
-        help="Department grids above stay as the full sheet. This desk edits and pays one person.",
+        help="Edit and pay one person. Department grids stay on Edit Lines.",
     )
     line = line_by_id[int(sel_id)]
     line_paid = (line.get("paid_status") or "") == "paid"
@@ -402,7 +402,7 @@ def _render_single_employee_edit_pay(
         st.markdown("</div>", unsafe_allow_html=True)
         return
 
-    with st.form(f"payroll_line_edit_{pid}"):
+    with st.form(f"payroll_sep_edit_{pid}"):
         st.markdown("<p class='sep-section-lbl'>Earnings</p>", unsafe_allow_html=True)
         e1, e2, e3, e4 = st.columns(4)
         with e1:
@@ -410,28 +410,28 @@ def _render_single_employee_edit_pay(
                 "Basic Salary",
                 value=float(line.get("basic_salary") or 0),
                 min_value=0.0,
-                key=f"pr_ed_basic_{pid}",
+                key=f"pr_sep_basic_{pid}",
             )
         with e2:
             allowances = money_input(
                 "Allowances",
                 value=float(line.get("allowances") or 0),
                 min_value=0.0,
-                key=f"pr_ed_allw_{pid}",
+                key=f"pr_sep_allw_{pid}",
             )
         with e3:
             overtime = money_input(
                 "Overtime",
                 value=float(line.get("overtime") or 0),
                 min_value=0.0,
-                key=f"pr_ed_ot_{pid}",
+                key=f"pr_sep_ot_{pid}",
             )
         with e4:
             bonus = money_input(
                 "Bonus",
                 value=float(line.get("bonus") or 0),
                 min_value=0.0,
-                key=f"pr_ed_bonus_{pid}",
+                key=f"pr_sep_bonus_{pid}",
             )
 
         st.markdown(
@@ -445,7 +445,7 @@ def _render_single_employee_edit_pay(
                 "Advance recovery (this month)",
                 value=float(line.get("advance_recovery") or 0),
                 min_value=0.0,
-                key=f"pr_ed_adv_{pid}",
+                key=f"pr_sep_adv_{pid}",
                 help=f"Total advance outstanding: {fmt(adv_out)}",
             )
         with d2:
@@ -453,7 +453,7 @@ def _render_single_employee_edit_pay(
                 "Loan recovery (this month)",
                 value=float(line.get("loan_recovery") or 0),
                 min_value=0.0,
-                key=f"pr_ed_loan_{pid}",
+                key=f"pr_sep_loan_{pid}",
                 help=f"Total loan outstanding: {fmt(loan_out)}",
             )
         with d3:
@@ -461,7 +461,7 @@ def _render_single_employee_edit_pay(
                 "Other deductions",
                 value=float(line.get("other_deductions") or 0),
                 min_value=0.0,
-                key=f"pr_ed_other_{pid}",
+                key=f"pr_sep_other_{pid}",
             )
 
         st.markdown("<p class='sep-section-lbl'>Attendance & overtime</p>", unsafe_allow_html=True)
@@ -471,27 +471,27 @@ def _render_single_employee_edit_pay(
             min_value=0.0,
             value=float(line.get("days_present") or 0),
             step=0.5,
-            key=f"pr_ed_dp_{pid}",
+            key=f"pr_sep_dp_{pid}",
         )
         days_absent = a2.number_input(
             "Days Absent",
             min_value=0.0,
             value=float(line.get("days_absent") or 0),
             step=0.5,
-            key=f"pr_ed_da_{pid}",
+            key=f"pr_sep_da_{pid}",
         )
         ot_hrs = a3.number_input(
             "Overtime Hours",
             min_value=0.0,
             value=float(line.get("overtime_hrs") or 0),
             step=0.5,
-            key=f"pr_ed_oth_{pid}",
+            key=f"pr_sep_oth_{pid}",
         )
         derive_hrs = a4.checkbox(
             "Derive hrs from OT amt",
             value=False,
             help="Keep Overtime amount and reverse-calculate hours",
-            key=f"pr_ed_derive_{pid}",
+            key=f"pr_sep_derive_{pid}",
         )
 
         preview_gross = round(
@@ -579,24 +579,24 @@ def _render_single_employee_edit_pay(
                     uid(),
                     sync_ot=("from_amount" if derive_hrs else None),
                 )
-                # Stay on Edit Lines + same employee; remount fields from saved DB values
+                # Stay on Single employee pay + same employee; remount fields from DB
                 retain = {
                     pick_key: int(line["id"]),
-                    "hr_pay_tab": "Edit Lines",
-                    "pr_edit_run": st.session_state.get("pr_edit_run"),
+                    "hr_pay_tab": "Single employee pay",
+                    "pr_sep_run": st.session_state.get("pr_sep_run"),
                 }
                 form_prefixes = (
-                    f"pr_ed_basic_{pid}",
-                    f"pr_ed_allw_{pid}",
-                    f"pr_ed_ot_{pid}",
-                    f"pr_ed_bonus_{pid}",
-                    f"pr_ed_adv_{pid}",
-                    f"pr_ed_loan_{pid}",
-                    f"pr_ed_other_{pid}",
-                    f"pr_ed_dp_{pid}",
-                    f"pr_ed_da_{pid}",
-                    f"pr_ed_oth_{pid}",
-                    f"pr_ed_derive_{pid}",
+                    f"pr_sep_basic_{pid}",
+                    f"pr_sep_allw_{pid}",
+                    f"pr_sep_ot_{pid}",
+                    f"pr_sep_bonus_{pid}",
+                    f"pr_sep_adv_{pid}",
+                    f"pr_sep_loan_{pid}",
+                    f"pr_sep_other_{pid}",
+                    f"pr_sep_dp_{pid}",
+                    f"pr_sep_da_{pid}",
+                    f"pr_sep_oth_{pid}",
+                    f"pr_sep_derive_{pid}",
                 )
                 if do_pay:
                     if pmode_edit == "bank" and not bank_id_edit:
@@ -1776,7 +1776,14 @@ def page_payroll():
         status_kind="shell" if peek == "Payroll Runs" else "invoice",
     )
     tab = sticky_page_tabs(
-        ["Payroll Runs", "Generate Payroll", "Process / Pay", "Edit Lines", "Salary Slips"],
+        [
+            "Payroll Runs",
+            "Generate Payroll",
+            "Process / Pay",
+            "Edit Lines",
+            "Single employee pay",
+            "Salary Slips",
+        ],
         "hr_pay_tab",
     )
     if tab == "Payroll Runs":
@@ -2389,7 +2396,7 @@ def page_payroll():
                             "<div class='pr-desk-label'>Employee-wise salary payment</div>"
                             "<div class='pr-desk-meta'>"
                             "Pick one employee from the whole sheet — post their cash/bank voucher only. "
-                            "To change Advance/Loan/amounts first, use <b>Single employee — edit &amp; pay</b> below. "
+                            "To change Advance/Loan/amounts first, open the <b>Single employee pay</b> tab. "
                             "If already paid, the system will say so."
                             "</div></div>",
                             unsafe_allow_html=True,
@@ -2892,19 +2899,102 @@ def page_payroll():
                         """
                     )
 
-                with st.expander("Single employee pay desk", expanded=True):
-                    _render_single_employee_edit_pay(
-                        pid=pid,
-                        pr=pr,
-                        py=py,
-                        pm=pm,
-                        mdays=mdays,
-                        can_post_row=can_post_row,
-                        pmode_edit=pmode_edit,
-                        pay_date_edit=pay_date_edit,
-                        bank_id_edit=bank_id_edit,
-                        print_edit_key=print_edit_key,
+    elif tab == "Single employee pay":
+        runs = [r for r in db.get_payroll_runs() if r["status"] == "draft"]
+        if not runs:
+            st.info(
+                "No draft payroll. **Unapprove** on **Process / Pay**, or generate a new run. "
+                "Department-wise grids stay on **Edit Lines**."
+            )
+        elif not db.user_can_hr(st.session_state.user, "edit"):
+            st.info("You need HR edit permission to modify payroll lines.")
+        else:
+            sel = st.selectbox(
+                "Draft Payroll",
+                [
+                    f"{r['document_no']} — {_payroll_period_label(r['payroll_month'], r['payroll_year'])}"
+                    for r in runs
+                ],
+                key="pr_sep_run",
+            )
+            pid = next(r["id"] for r in runs if r["document_no"] in sel)
+            pr = db.get_payroll_run(pid)
+            if not pr or not pr.get("lines"):
+                st.warning("No payroll lines found.")
+            else:
+                py = int(pr.get("payroll_year") or 0)
+                pm = int(pr.get("payroll_month") or 0)
+                mdays = db.days_in_month(py, pm) if py and pm else 30
+                can_post_row = (
+                    db.user_can_hr(st.session_state.user, "post")
+                    or db.user_can_hr(st.session_state.user, "add")
+                )
+                pay_date_edit = None
+                pmode_edit = "cash"
+                bank_id_edit = None
+                if can_post_row:
+                    st.markdown(
+                        "<div style='margin:0 0 10px 0;padding:12px 14px;background:#f8fafc;"
+                        "border:1px solid #e2e8f0;border-radius:8px'>"
+                        "<div style='font-size:0.95rem;font-weight:700;color:#0f172a;margin:0 0 2px 0'>"
+                        "Payment settings</div>"
+                        "<div style='font-size:0.8rem;color:#64748b;line-height:1.35'>"
+                        "Set date and mode, then edit one employee below and "
+                        "<b>Save</b> or <b>Save &amp; post voucher</b>. "
+                        "Department grids remain on <b>Edit Lines</b>."
+                        "</div></div>",
+                        unsafe_allow_html=True,
                     )
+                    pc1, pc2, pc3 = st.columns([1.1, 1.0, 2.2], gap="small")
+                    pay_date_edit = pc1.date_input(
+                        "Payment date",
+                        value=date.fromisoformat(str(pr["run_date"])[:10])
+                        if pr.get("run_date") else date.today(),
+                        key=f"pr_sep_pay_date_{pid}",
+                    )
+                    pmode_edit = pc2.radio(
+                        "Mode", ["cash", "bank"], horizontal=True, key=f"pr_sep_pay_mode_{pid}",
+                    )
+                    if pmode_edit == "cash" and db.is_cash_day_closed(str(pay_date_edit)):
+                        st.warning(
+                            f"Cash book for **{pay_date_edit}** is closed — "
+                            "change date or reopen in **Finance → Cash Book**."
+                        )
+                    if pmode_edit == "bank":
+                        bank_accts = [
+                            a for a in db.get_accounts()
+                            if (a.get("account_type") or "").lower() in ("bank", "asset")
+                            and str(a.get("code") or "").startswith("11")
+                        ] or [a for a in db.get_accounts() if a.get("is_active")]
+                        bank_opts = {f"{a['code']} - {a['name']}": a["id"] for a in bank_accts}
+                        if bank_opts:
+                            bank_id_edit = bank_opts[
+                                pc3.selectbox(
+                                    "Bank account", list(bank_opts.keys()),
+                                    key=f"pr_sep_bank_{pid}",
+                                )
+                            ]
+                        else:
+                            st.warning("Add a bank account in Chart of Accounts first.")
+
+                print_sep_key = f"pr_sep_print_line_{pid}"
+                _render_single_employee_edit_pay(
+                    pid=pid,
+                    pr=pr,
+                    py=py,
+                    pm=pm,
+                    mdays=mdays,
+                    can_post_row=can_post_row,
+                    pmode_edit=pmode_edit,
+                    pay_date_edit=pay_date_edit,
+                    bank_id_edit=bank_id_edit,
+                    print_edit_key=print_sep_key,
+                )
+                if st.session_state.get(print_sep_key):
+                    _print_salary_voucher(st.session_state[print_sep_key], f"pr_sep_v_{pid}")
+                    if st.button("Hide voucher preview", key=f"pr_sep_hide_v_{pid}"):
+                        st.session_state.pop(print_sep_key, None)
+                        st.rerun()
 
     elif tab == "Salary Slips":
         runs = db.get_payroll_runs() or []
