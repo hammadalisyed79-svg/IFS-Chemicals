@@ -788,8 +788,15 @@ def render_ceo_desktop(nav: dict, user: dict, company: str) -> None:
     display_name = (user.get("full_name") or user.get("username") or "User").split()[0]
     _render_hero_banner(display_name, company)
 
-    from erp_ui.home_kpis import render_home_kpi_strip
-    render_home_kpi_strip(nav, user)
+    from erp_ui.user_prefs import (
+        home_section_visible,
+        render_home_layout_controls,
+    )
+    render_home_layout_controls()
+
+    if home_section_visible("business_pulse"):
+        from erp_ui.home_kpis import render_home_kpi_strip
+        render_home_kpi_strip(nav, user)
 
     from erp_ui.home_health import render_books_health_strip
     render_books_health_strip(nav, user)
@@ -802,8 +809,10 @@ def render_ceo_desktop(nav: dict, user: dict, company: str) -> None:
             unsafe_allow_html=True,
         )
 
-    _render_quick_actions(nav, user)
-    _render_my_work_panel(nav, user)
+    if home_section_visible("quick_actions"):
+        _render_quick_actions(nav, user)
+    if home_section_visible("my_work"):
+        _render_my_work_panel(nav, user)
 
     from erp_ui.user_prefs import list_favorites
     from erp_ui.nav import go_screen, screen_title

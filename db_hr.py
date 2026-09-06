@@ -120,6 +120,12 @@ def apply_hr(conn, db_module):
             "ON CONFLICT(key) DO UPDATE SET value='7'"
         )
         ver = 7
+    # Idempotent: Cash & HR role + shabab assignment
+    try:
+        aid = conn.execute("SELECT id FROM users WHERE username='admin'").fetchone()
+        ensure_cash_hr_role(conn, aid[0] if aid else None)
+    except Exception:
+        pass
 
 
 def _apply_hr_v2(conn):
@@ -291,6 +297,45 @@ def _seed_hr(conn, db_module):
                     "VALUES(?,?,?,?,?,?,?,?)",
                     (hr_rid, m, *perms),
                 )
+    ensure_cash_hr_role(conn, aid)
+
+
+def ensure_cash_hr_role(conn, created_by=None):
+    """Cash desk + HR officer role (e.g. user shabab) — Finance cash ops and HR only."""
+    row = conn.execute("SELECT id FROM roles WHERE upper(code)='CASH_HR'").fetchone()
+    if not row:
+        conn.execute(
+            """INSERT INTO roles(code,name,description,created_by)
+               VALUES('CASH_HR','Cash & HR Officer',
+                      'Cash book / receipts / payments and HR & payroll only',?)""",
+            (created_by,),
+        )
+        row = conn.execute("SELECT id FROM roles WHERE upper(code)='CASH_HR'").fetchone()
+    rid = int(row[0])
+    wanted = {
+        "Dashboard": (1, 0, 0, 0, 0, 0),
+        "Finance": (1, 1, 1, 0, 1, 1),
+        "HR": (1, 1, 1, 0, 1, 1),
+    }
+    for module, perms in wanted.items():
+        exists = conn.execute(
+            "SELECT 1 FROM role_permissions WHERE role_id=? AND module_name=?",
+            (rid, module),
+        ).fetchone()
+        if not exists:
+            conn.execute(
+                """INSERT INTO role_permissions(
+                       role_id,module_name,can_view,can_add,can_edit,can_delete,can_post,can_approve)
+                   VALUES(?,?,?,?,?,?,?,?)""",
+                (rid, module, *perms),
+            )
+    # Cash/HR clerk login (shabab) — always keep on this role
+    conn.execute(
+        """UPDATE users SET role='cash_hr', role_id=?
+           WHERE lower(username)='shabab'""",
+        (rid,),
+    )
+    return rid
 
 
 def user_can_hr(user, action="view"):

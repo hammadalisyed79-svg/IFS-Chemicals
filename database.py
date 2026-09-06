@@ -1206,6 +1206,14 @@ def add_user(username, password, full_name, role="user", created_by=None, **extr
     with get_connection() as conn:
         if _find_user_row(conn, username):
             raise ValueError("Username already exists (not case sensitive).")
+        # Map role string → roles.id when role_id not provided
+        if "role_id" not in cols:
+            rid_map = _resolve_role_id(conn, role)
+            if rid_map is not None:
+                cols.append("role_id")
+                vals.append(rid_map)
+                placeholders = ", ".join("?" * len(cols))
+                col_sql = ", ".join(cols)
         cur = conn.execute(
             f"INSERT INTO users ({col_sql}) VALUES ({placeholders})",
             vals,
@@ -1221,6 +1229,25 @@ def add_user(username, password, full_name, role="user", created_by=None, **extr
             pass
 
 
+def _resolve_role_id(conn, role: str):
+    """Map users.role string to roles.id (ADMIN, USER, CASH_HR, …)."""
+    code = str(role or "").strip().upper()
+    if not code:
+        return None
+    aliases = {
+        "ADMIN": "ADMIN",
+        "USER": "USER",
+        "CASH_HR": "CASH_HR",
+        "CASHHR": "CASH_HR",
+        "HR": "HR",
+    }
+    code = aliases.get(code, code)
+    row = conn.execute(
+        "SELECT id FROM roles WHERE upper(code)=?", (code,)
+    ).fetchone()
+    return int(row[0]) if row else None
+
+
 def update_user(user_id, full_name, role, is_active, password=None, modified_by=None, **extra):
     from erp_core.v15_security import hash_password_secure, validate_password_strength
     with get_connection() as conn:
@@ -1233,6 +1260,11 @@ def update_user(user_id, full_name, role, is_active, password=None, modified_by=
                 raise ValueError(msg)
             sets.append("password_hash=?")
             params.append(hash_password_secure(password))
+        if "role_id" not in extra:
+            rid_map = _resolve_role_id(conn, role)
+            if rid_map is not None:
+                sets.append("role_id=?")
+                params.append(rid_map)
         for k in ("user_type", "linked_customer_id", "role_id"):
             if k in extra:
                 sets.append(f"{k}=?")

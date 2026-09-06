@@ -486,11 +486,38 @@ def can_view_screen(user, screen):
         return False
     if user.get("role") == "admin":
         return True
+    # Role-specific screen allowlists (cash desk / HR clerk, etc.)
+    role_key = str(user.get("role") or "").strip().lower()
+    allow = ROLE_SCREEN_ALLOWLIST.get(role_key)
+    if allow is not None and screen not in allow:
+        return False
     module = SCREEN_PERMISSION.get(screen, "Masters")
     if module == "HR":
         return db.user_can(user, "HR", "view") or db.user_can(user, "Admin", "view")
     return db.user_can(user, module, "view")
 
+
+# Screens visible to Cash & HR Officer (shabab) — cash ops + HR only
+ROLE_SCREEN_ALLOWLIST = {
+    "cash_hr": frozenset({
+        "Dashboard",
+        "Cash Book",
+        "Bank Book",
+        "Customer Receipt",
+        "Supplier Payment",
+        "Expense Payment",
+        "Expense Bill",
+        "Cash Advance",
+        "Account Ledger",
+        "Employees",
+        "Attendance",
+        "Leave Management",
+        "Payroll",
+        "Employee Advances",
+        "Employee Loans",
+        "Employee Ledger",
+    }),
+}
 
 def filtered_nav_groups(user):
     out = {}

@@ -78,3 +78,64 @@ def track_recent_doc(doc_no: str, *, label: str = "", group: str = "", screen: s
 
 def list_recent_docs() -> list[dict]:
     return list(st.session_state.get(_RECENT_DOCS_KEY) or [])
+
+
+# --- Home dashboard section visibility (per browser session) ---
+_HOME_LAYOUT_KEY = "erp_home_layout"
+
+
+def _home_layout() -> dict:
+    raw = st.session_state.get(_HOME_LAYOUT_KEY)
+    if not isinstance(raw, dict):
+        raw = {
+            "show_business_pulse": True,
+            "show_quick_actions": True,
+            "show_my_work": True,
+        }
+        st.session_state[_HOME_LAYOUT_KEY] = raw
+    return raw
+
+
+def home_section_visible(section: str) -> bool:
+    """section: business_pulse | quick_actions | my_work"""
+    layout = _home_layout()
+    return bool(layout.get(f"show_{section}", True))
+
+
+def set_home_section_visible(section: str, visible: bool) -> None:
+    layout = _home_layout()
+    layout[f"show_{section}"] = bool(visible)
+    st.session_state[_HOME_LAYOUT_KEY] = layout
+
+
+def render_home_layout_controls() -> None:
+    """Toggle Business Pulse / Quick Actions / My Work on the desktop home."""
+    layout = _home_layout()
+    with st.expander("Home layout — show / hide sections", expanded=False):
+        c1, c2, c3 = st.columns(3)
+        pulse = c1.checkbox(
+            "Business Pulse",
+            value=bool(layout.get("show_business_pulse", True)),
+            key="home_layout_pulse",
+        )
+        qa = c2.checkbox(
+            "Quick Actions",
+            value=bool(layout.get("show_quick_actions", True)),
+            key="home_layout_qa",
+        )
+        mw = c3.checkbox(
+            "My Work",
+            value=bool(layout.get("show_my_work", True)),
+            key="home_layout_mywork",
+        )
+        changed = (
+            pulse != bool(layout.get("show_business_pulse", True))
+            or qa != bool(layout.get("show_quick_actions", True))
+            or mw != bool(layout.get("show_my_work", True))
+        )
+        if changed:
+            set_home_section_visible("business_pulse", pulse)
+            set_home_section_visible("quick_actions", qa)
+            set_home_section_visible("my_work", mw)
+            st.rerun()
+        st.caption("These choices apply on this device until you sign out.")

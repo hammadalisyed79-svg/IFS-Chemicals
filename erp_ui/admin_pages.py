@@ -56,7 +56,7 @@ def page_users():
             username = st.text_input("Username *")
             full_name = st.text_input("Full Name *")
             password = st.text_input("Password *", type="password")
-            role = st.selectbox("Role", ["admin", "user"])
+            role = st.selectbox("Role", ["admin", "user", "cash_hr"])
             if st.form_submit_button("Create User", type="primary"):
                 if not username or not full_name or not password:
                     st.error("All fields required.")
@@ -79,9 +79,18 @@ def page_users():
         if not sel:
             return
         u = opts[sel]
+        role_opts = ["admin", "user", "cash_hr"]
+        cur_role = (u.get("role") or "user").strip().lower()
+        if cur_role not in role_opts:
+            role_opts = [cur_role] + role_opts
         with st.form("edit_user"):
             full_name = st.text_input("Full Name", value=u["full_name"])
-            role = st.selectbox("Role", ["admin", "user"], index=0 if u["role"] == "admin" else 1)
+            role = st.selectbox(
+                "Role",
+                role_opts,
+                index=role_opts.index(cur_role) if cur_role in role_opts else 0,
+                help="cash_hr = Cash Book / payments + HR & payroll only",
+            )
             active = st.checkbox("Active", value=bool(u["is_active"]))
             new_pass = st.text_input("New Password (leave blank to keep)", type="password")
             c1, c2 = st.columns(2)

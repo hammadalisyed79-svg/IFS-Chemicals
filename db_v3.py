@@ -960,10 +960,19 @@ def user_can(user, module, action="view"):
     with get_connection() as conn:
         role_id = user.get("role_id")
         if not role_id:
-            r = conn.execute("SELECT id FROM roles WHERE code='ADMIN'").fetchone()
+            # Resolve by users.role code — never silently fall back to ADMIN
+            code = str(user.get("role") or "").strip().upper()
+            if code in ("ADMIN", "SUPER_ADMIN"):
+                r = conn.execute(
+                    "SELECT id FROM roles WHERE upper(code) IN ('ADMIN','SUPER_ADMIN') ORDER BY id LIMIT 1"
+                ).fetchone()
+            else:
+                r = conn.execute(
+                    "SELECT id FROM roles WHERE upper(code)=?", (code,)
+                ).fetchone()
             role_id = r[0] if r else None
         if not role_id:
-            return user.get("role") == "admin"
+            return False
         if conn.execute(
             "SELECT 1 FROM sqlite_master WHERE type='table' AND name='role_permission_matrix'"
         ).fetchone():
@@ -978,7 +987,7 @@ def user_can(user, module, action="view"):
             f"FROM role_permissions WHERE role_id=? AND module_name=?",
             (role_id, module),
         ).fetchone()
-        return bool(row and row[0]) if row else user.get("role") == "admin"
+        return bool(row and row[0]) if row else False
 
 
 def _acct_id(conn, code):
