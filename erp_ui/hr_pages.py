@@ -69,44 +69,74 @@ def _payroll_edit_row(l: dict) -> dict:
 
 
 def _payroll_edit_column_config():
+    """Compact columns so the department grid fits without horizontal scroll."""
+    num = dict(width="small", format="%.2f")
+    day = dict(width="small", format="%.1f", min_value=0.0, step=0.5)
     return {
         "line_id": None,
         "Department": None,
+        "Code": None,
+        "Gross": None,
+        "Total Ded.": None,
         "_tax": None,
         "_eobi": None,
         "_ss": None,
         "_paid": None,
         "_voucher": None,
-        "Employee": st.column_config.TextColumn("Employee", disabled=True, width="medium"),
-        "Code": st.column_config.TextColumn("Code", disabled=True, width="small"),
-        "Present": st.column_config.NumberColumn("Present", min_value=0.0, step=0.5, format="%.1f", width="small"),
+        "Employee": st.column_config.TextColumn("Employee", disabled=True, width="small"),
+        "Present": st.column_config.NumberColumn("Pres", **day),
         "Absent": st.column_config.NumberColumn(
-            "Absent", min_value=0.0, step=0.5, format="%.1f", width="small",
+            "Abs",
             help="Unpaid days (LWP). Leave is paid — mark attendance as Leave, not Absent.",
+            **day,
         ),
-        "OT Hrs": st.column_config.NumberColumn("OT Hrs", min_value=0.0, step=0.5, format="%.1f", width="small"),
-        "Basic": st.column_config.NumberColumn("Basic", min_value=0.0, step=100.0, format="%.2f"),
-        "Allowances": st.column_config.NumberColumn("Allowances", min_value=0.0, step=100.0, format="%.2f"),
-        "Overtime": st.column_config.NumberColumn("Overtime", min_value=0.0, step=100.0, format="%.2f"),
-        "Bonus": st.column_config.NumberColumn("Bonus", min_value=0.0, step=100.0, format="%.2f"),
-        "Gross": st.column_config.NumberColumn("Gross", disabled=True, format="%.2f"),
+        "OT Hrs": st.column_config.NumberColumn("OT h", **day),
+        "Basic": st.column_config.NumberColumn("Basic", min_value=0.0, step=100.0, **num),
+        "Allowances": st.column_config.NumberColumn("Allw", min_value=0.0, step=100.0, **num),
+        "Overtime": st.column_config.NumberColumn("OT $", min_value=0.0, step=100.0, **num),
+        "Bonus": st.column_config.NumberColumn("Bonus", min_value=0.0, step=100.0, **num),
         "Advance": st.column_config.NumberColumn(
-            "Advance (this month)", min_value=0.0, step=100.0, format="%.2f",
-            help="This month's advance recovery — not full outstanding. Lower for partial.",
+            "Adv",
+            min_value=0.0,
+            step=100.0,
+            help="This month's advance recovery — not full outstanding.",
+            **num,
         ),
         "Loan": st.column_config.NumberColumn(
-            "Loan (this month)", min_value=0.0, step=100.0, format="%.2f",
-            help="This month's loan installment — not full outstanding. Lower for partial.",
+            "Loan",
+            min_value=0.0,
+            step=100.0,
+            help="This month's loan installment — not full outstanding.",
+            **num,
         ),
-        "Other Ded.": st.column_config.NumberColumn("Other Ded.", min_value=0.0, step=50.0, format="%.2f"),
+        "Other Ded.": st.column_config.NumberColumn("Oth", min_value=0.0, step=50.0, **num),
         "Absent Ded.": st.column_config.NumberColumn(
-            "Absent Ded.", disabled=True, format="%.2f",
-            help="Auto: Basic ÷ month days × Absent. Leave is paid — not deducted.",
+            "LWP",
+            disabled=True,
+            help="Auto: Basic ÷ month days × Absent.",
+            **num,
         ),
-        "Total Ded.": st.column_config.NumberColumn("Total Ded.", disabled=True, format="%.2f"),
-        "Net": st.column_config.NumberColumn("Net", disabled=True, format="%.2f"),
+        "Net": st.column_config.NumberColumn("Net", disabled=True, **num),
         "Paid": st.column_config.TextColumn("Paid", disabled=True, width="small"),
     }
+
+
+_PAYROLL_EDIT_VISIBLE_COLS = (
+    "Employee",
+    "Present",
+    "Absent",
+    "OT Hrs",
+    "Basic",
+    "Allowances",
+    "Overtime",
+    "Bonus",
+    "Advance",
+    "Loan",
+    "Other Ded.",
+    "Absent Ded.",
+    "Net",
+    "Paid",
+)
 
 
 _PAYROLL_EDIT_CMP_COLS = (
@@ -2193,6 +2223,16 @@ def page_payroll():
                       [role="row"]:nth-child(odd) [role="gridcell"] {
                       background-color: #ffffff !important;
                     }
+                    div[class*="st-key-pr_tab_editor_"] [data-testid="stDataFrame"] {
+                      font-size: 0.78rem !important;
+                    }
+                    div[class*="st-key-pr_tab_editor_"] [data-testid="stDataFrame"]
+                      [role="columnheader"],
+                    div[class*="st-key-pr_tab_editor_"] [data-testid="stDataFrame"]
+                      [role="gridcell"] {
+                      padding-left: 4px !important;
+                      padding-right: 4px !important;
+                    }
                     </style>
                     """,
                     unsafe_allow_html=True,
@@ -2444,16 +2484,31 @@ def page_payroll():
                             "**Nil** = unpaid with net ≤ 0 (lower Advance/Loan or skip). "
                             "Use each department desk below, or **Single employee pay**."
                         )
-                        dept_df = pd.DataFrame(dept_rows)
+                        dept_df = pd.DataFrame(dept_rows)[
+                            [
+                                "Department",
+                                "Staff",
+                                "Paid",
+                                "Unpaid",
+                                "Nil",
+                                "Remaining",
+                                "Status",
+                            ]
+                        ]
                         st.dataframe(
                             dept_df,
                             use_container_width=True,
                             hide_index=True,
                             column_config={
-                                "Gross": st.column_config.NumberColumn(format="%.2f"),
-                                "Sheet net": st.column_config.NumberColumn(format="%.2f"),
-                                "Paid net": st.column_config.NumberColumn(format="%.2f"),
-                                "Remaining": st.column_config.NumberColumn(format="%.2f"),
+                                "Department": st.column_config.TextColumn("Dept", width="small"),
+                                "Staff": st.column_config.NumberColumn(width="small"),
+                                "Paid": st.column_config.NumberColumn(width="small"),
+                                "Unpaid": st.column_config.NumberColumn(width="small"),
+                                "Nil": st.column_config.NumberColumn(width="small"),
+                                "Remaining": st.column_config.NumberColumn(
+                                    "Remaining", format="%.2f", width="small",
+                                ),
+                                "Status": st.column_config.TextColumn(width="small"),
                             },
                         )
                         if n_ready == 0 and n_nil == 0 and n_paid == n_staff and n_staff:
@@ -2663,6 +2718,7 @@ def page_payroll():
                         edited_raw = st.data_editor(
                             working,
                             column_config=col_cfg,
+                            column_order=list(_PAYROLL_EDIT_VISIBLE_COLS),
                             hide_index=True,
                             use_container_width=True,
                             num_rows="fixed",
