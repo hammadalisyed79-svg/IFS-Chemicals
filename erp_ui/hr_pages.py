@@ -31,12 +31,13 @@ def _payroll_edit_row(l: dict) -> dict:
     adv = float(l.get("advance_recovery") or 0)
     loan = float(l.get("loan_recovery") or 0)
     other = float(l.get("other_deductions") or 0)
+    absent_ded = float(l.get("absent_deduction") or 0)
     # Keep statutory amounts for save/preserve; not shown in the grid
     tax = float(l.get("tax_deduction") or 0)
     eobi = float(l.get("eobi") or 0)
     ss = float(l.get("social_security") or 0)
     gross = float(l.get("gross_salary") or (basic + allw + ot + bonus))
-    ded = float(l.get("total_deductions") or (tax + eobi + ss + adv + loan + other))
+    ded = float(l.get("total_deductions") or (tax + eobi + ss + adv + loan + other + absent_ded))
     net = float(l.get("net_salary") or (gross - ded))
     paid = (l.get("paid_status") or "") == "paid"
     return {
@@ -55,6 +56,7 @@ def _payroll_edit_row(l: dict) -> dict:
         "Advance": adv,
         "Loan": loan,
         "Other Ded.": other,
+        "Absent Ded.": absent_ded,
         "Total Ded.": ded,
         "Net": net,
         "Paid": "PAID" if paid else "",
@@ -78,7 +80,10 @@ def _payroll_edit_column_config():
         "Employee": st.column_config.TextColumn("Employee", disabled=True, width="medium"),
         "Code": st.column_config.TextColumn("Code", disabled=True, width="small"),
         "Present": st.column_config.NumberColumn("Present", min_value=0.0, step=0.5, format="%.1f", width="small"),
-        "Absent": st.column_config.NumberColumn("Absent", min_value=0.0, step=0.5, format="%.1f", width="small"),
+        "Absent": st.column_config.NumberColumn(
+            "Absent", min_value=0.0, step=0.5, format="%.1f", width="small",
+            help="Unpaid days (LWP). Leave is paid — mark attendance as Leave, not Absent.",
+        ),
         "OT Hrs": st.column_config.NumberColumn("OT Hrs", min_value=0.0, step=0.5, format="%.1f", width="small"),
         "Basic": st.column_config.NumberColumn("Basic", min_value=0.0, step=100.0, format="%.2f"),
         "Allowances": st.column_config.NumberColumn("Allowances", min_value=0.0, step=100.0, format="%.2f"),
@@ -94,6 +99,10 @@ def _payroll_edit_column_config():
             help="This month's loan installment — not full outstanding. Lower for partial.",
         ),
         "Other Ded.": st.column_config.NumberColumn("Other Ded.", min_value=0.0, step=50.0, format="%.2f"),
+        "Absent Ded.": st.column_config.NumberColumn(
+            "Absent Ded.", disabled=True, format="%.2f",
+            help="Auto: Basic ÷ month days × Absent. Leave is paid — not deducted.",
+        ),
         "Total Ded.": st.column_config.NumberColumn("Total Ded.", disabled=True, format="%.2f"),
         "Net": st.column_config.NumberColumn("Net", disabled=True, format="%.2f"),
         "Paid": st.column_config.TextColumn("Paid", disabled=True, width="small"),
@@ -107,7 +116,10 @@ _PAYROLL_EDIT_CMP_COLS = (
 
 
 def _payroll_recalc_edit_df(df: pd.DataFrame, year: int | None = None, month: int | None = None) -> pd.DataFrame:
-    """Live Gross / Total Ded. / Net (and OT amount from hours when OT Hrs > 0)."""
+    """Live Gross / Total Ded. / Net (and OT amount from hours when OT Hrs > 0).
+
+    Absent Ded. = Basic ÷ calendar days × Absent (leave is paid, not deducted).
+    """
     if df is None or df.empty:
         return df
     out = df.copy()
@@ -128,11 +140,24 @@ def _payroll_recalc_edit_df(df: pd.DataFrame, year: int | None = None, month: in
         adv = float(out.at[i, "Advance"] or 0)
         loan = float(out.at[i, "Loan"] or 0)
         other = float(out.at[i, "Other Ded."] or 0)
+        days_absent = float(out.at[i, "Absent"] or 0)
+        absent_ded = 0.0
+        if year and month and hasattr(db, "calc_absent_deduction"):
+            try:
+                absent_ded = float(
+                    db.calc_absent_deduction(basic, int(year), int(month), days_absent) or 0
+                )
+            except Exception:
+                absent_ded = float(out.at[i, "Absent Ded."] or 0) if "Absent Ded." in out.columns else 0.0
+        elif "Absent Ded." in out.columns:
+            absent_ded = float(out.at[i, "Absent Ded."] or 0)
         tax = float(out.at[i, "_tax"] or 0) if "_tax" in out.columns else 0.0
         eobi = float(out.at[i, "_eobi"] or 0) if "_eobi" in out.columns else 0.0
         ss = float(out.at[i, "_ss"] or 0) if "_ss" in out.columns else 0.0
-        ded = round(tax + eobi + ss + adv + loan + other, 2)
+        ded = round(tax + eobi + ss + adv + loan + other + absent_ded, 2)
         out.at[i, "Gross"] = gross
+        if "Absent Ded." in out.columns:
+            out.at[i, "Absent Ded."] = absent_ded
         out.at[i, "Total Ded."] = ded
         out.at[i, "Net"] = round(gross - ded, 2)
     return out
@@ -198,7 +223,8 @@ def _payroll_lines_df(lines):
             "Other Ded.": float(r.get("other_deductions") or 0)
                 + float(r.get("tax_deduction") or 0)
                 + float(r.get("eobi") or 0)
-                + float(r.get("social_security") or 0),
+                + float(r.get("social_security") or 0)
+                + float(r.get("absent_deduction") or 0),
             "Total Ded.": float(r.get("total_deductions") or 0),
             "Net Salary": float(r.get("net_salary") or 0),
             "Paid": (r.get("paid_status") or "unpaid").title(),
@@ -224,6 +250,7 @@ def _payroll_lines_detail_df(lines):
             "SS": float(r.get("social_security") or 0),
             "Advance Rec.": float(r.get("advance_recovery") or 0),
             "Loan Rec.": float(r.get("loan_recovery") or 0),
+            "Absent Ded.": float(r.get("absent_deduction") or 0),
             "Other Ded.": float(r.get("other_deductions") or 0),
             "Total Ded.": float(r.get("total_deductions") or 0),
             "Net Salary": float(r.get("net_salary") or 0),
@@ -2008,7 +2035,8 @@ def page_payroll():
                             working, edited_raw, _PAYROLL_EDIT_CMP_COLS,
                         )
                         derived_stale = _payroll_edit_df_changed(
-                            edited_raw, recalc, ("Gross", "Total Ded.", "Net", "Overtime"),
+                            edited_raw, recalc,
+                            ("Gross", "Total Ded.", "Net", "Overtime", "Absent Ded."),
                         )
                         st.session_state[live_key] = recalc
                         edited_by_dept[dept] = recalc

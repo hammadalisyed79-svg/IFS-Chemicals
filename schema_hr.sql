@@ -125,6 +125,7 @@ CREATE TABLE IF NOT EXISTS payroll_lines (
     advance_recovery REAL DEFAULT 0,
     loan_recovery REAL DEFAULT 0,
     other_deductions REAL DEFAULT 0,
+    absent_deduction REAL DEFAULT 0,
     total_deductions REAL DEFAULT 0,
     net_salary REAL DEFAULT 0,
     days_present REAL DEFAULT 0,

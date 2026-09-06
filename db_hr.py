@@ -33,6 +33,19 @@ def calc_overtime_hours(basic_salary, year, month, ot_amount):
         return 0.0
     return round(float(ot_amount or 0) / rate, 2)
 
+
+def calc_absent_deduction(basic_salary, year, month, days_absent):
+    """Unpaid absent (LWP) = Basic ÷ calendar days × absent days.
+
+    Attendance status ``leave`` is paid and must not be passed here.
+    """
+    basic = float(basic_salary or 0)
+    abs_d = float(days_absent or 0)
+    days = days_in_month(year, month) if year and month else 0
+    if basic <= 0 or days <= 0 or abs_d <= 0:
+        return 0.0
+    return round(basic / days * abs_d, 2)
+
 HR_AC = {
     "salary_expense": "6200",
     "salary_payable": "2150",
@@ -99,6 +112,14 @@ def apply_hr(conn, db_module):
             "INSERT INTO schema_meta(key,value) VALUES('hr_version','6') "
             "ON CONFLICT(key) DO UPDATE SET value='6'"
         )
+        ver = 6
+    if ver < 7:
+        _apply_hr_v7(conn)
+        conn.execute(
+            "INSERT INTO schema_meta(key,value) VALUES('hr_version','7') "
+            "ON CONFLICT(key) DO UPDATE SET value='7'"
+        )
+        ver = 7
 
 
 def _apply_hr_v2(conn):
@@ -139,6 +160,11 @@ def _apply_hr_v6(conn):
     for table in ("employee_advances", "employee_loans"):
         _add_col(conn, table, "payment_mode", "TEXT")
         _add_col(conn, table, "payment_document_no", "TEXT")
+
+
+def _apply_hr_v7(conn):
+    """Absent (LWP) deduction on payroll lines — leave remains paid."""
+    _add_col(conn, "payroll_lines", "absent_deduction", "REAL DEFAULT 0")
 
 
 def _col_exists(conn, table, col):
@@ -887,7 +913,9 @@ def get_payroll_run(pid):
                           COALESCE(d.name, e.department, 'Unassigned') AS department_name,
                           pl.basic_salary, pl.allowances, pl.overtime, pl.bonus, pl.gross_salary,
                           pl.tax_deduction, pl.eobi, pl.social_security, pl.advance_recovery,
-                          pl.loan_recovery, pl.other_deductions, pl.total_deductions, pl.net_salary,
+                          pl.loan_recovery, pl.other_deductions,
+                          COALESCE(pl.absent_deduction, 0) AS absent_deduction,
+                          pl.total_deductions, pl.net_salary,
                           pl.days_present, pl.days_absent, pl.overtime_hrs, e.bank_account,
                           COALESCE(pl.paid_status, 'unpaid') AS paid_status,
                           pl.paid_amount, pl.paid_date, pl.payment_mode, pl.payment_document_no
@@ -924,11 +952,12 @@ def generate_payroll(month, year, user_id=None):
             conn.execute(
                 """INSERT INTO payroll_lines(payroll_id,employee_id,basic_salary,allowances,overtime,bonus,
                    gross_salary,tax_deduction,eobi,social_security,advance_recovery,loan_recovery,other_deductions,
-                   total_deductions,net_salary,days_present,days_absent,overtime_hrs)
-                   VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                   absent_deduction,total_deductions,net_salary,days_present,days_absent,overtime_hrs)
+                   VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                 (pid, eid, line["basic_salary"], line["allowances"], line["overtime"], line["bonus"],
                  line["gross_salary"], line["tax_deduction"], line["eobi"], line["social_security"],
                  line["advance_recovery"], line["loan_recovery"], line["other_deductions"],
+                 line.get("absent_deduction", 0),
                  line["total_deductions"], line["net_salary"], line["days_present"],
                  line["days_absent"], line["overtime_hrs"]),
             )
@@ -1108,16 +1137,20 @@ def _calc_payroll_line(conn, employee_id, month, year, payroll_id):
     # Tax / EOBI / SS default nil — enter manually on Edit Lines if required
     tax = eobi = ss = 0.0
 
+    # Absent = unpaid (LWP). Leave days are paid — never deducted here.
+    absent_deduction = calc_absent_deduction(basic, year, month, days_absent)
+
     advance_recovery = _recover_advances(conn, employee_id, payroll_id, period_end)
     loan_recovery = _recover_loans(conn, employee_id, payroll_id, period_end)
 
-    total_ded = tax + eobi + ss + advance_recovery + loan_recovery
+    total_ded = tax + eobi + ss + advance_recovery + loan_recovery + absent_deduction
     net = gross - total_ded
 
     return {
         "basic_salary": basic, "allowances": allowances, "overtime": overtime, "bonus": bonus,
         "gross_salary": gross, "tax_deduction": tax, "eobi": eobi, "social_security": ss,
         "advance_recovery": advance_recovery, "loan_recovery": loan_recovery, "other_deductions": 0,
+        "absent_deduction": absent_deduction,
         "total_deductions": total_ded, "net_salary": net,
         "days_present": days_present, "days_absent": days_absent, "overtime_hrs": overtime_hrs,
     }
@@ -1672,12 +1705,16 @@ def _recalc_payroll_line_fields(data, year=None, month=None, sync_ot=None):
       - "from_hours": Overtime = (Basic / days / 6) × OT hrs (default when hrs > 0)
       - "from_amount": OT hrs derived from Overtime amount (prior months)
       - None: keep both values as provided (legacy / manual)
+
+    Absent deduction is always recomputed from Basic × absent ÷ month days when
+    year/month are known. Leave is paid and is not part of days_absent.
     """
     basic = float(data.get("basic_salary") or 0)
     allowances = float(data.get("allowances") or 0)
     overtime = float(data.get("overtime") or 0)
     ot_hrs = float(data.get("overtime_hrs") or 0)
     bonus = float(data.get("bonus") or 0)
+    days_absent = float(data.get("days_absent") or 0)
 
     if year and month:
         if sync_ot == "from_amount":
@@ -1693,7 +1730,11 @@ def _recalc_payroll_line_fields(data, year=None, month=None, sync_ot=None):
     adv = float(data.get("advance_recovery") or 0)
     loan = float(data.get("loan_recovery") or 0)
     other = float(data.get("other_deductions") or 0)
-    total_ded = round(tax + eobi + ss + adv + loan + other, 2)
+    if year and month:
+        absent_ded = calc_absent_deduction(basic, year, month, days_absent)
+    else:
+        absent_ded = round(float(data.get("absent_deduction") or 0), 2)
+    total_ded = round(tax + eobi + ss + adv + loan + other + absent_ded, 2)
     net = round(gross - total_ded, 2)
     return {
         "basic_salary": basic,
@@ -1707,9 +1748,11 @@ def _recalc_payroll_line_fields(data, year=None, month=None, sync_ot=None):
         "advance_recovery": adv,
         "loan_recovery": loan,
         "other_deductions": other,
+        "absent_deduction": absent_ded,
         "total_deductions": total_ded,
         "net_salary": net,
         "overtime_hrs": ot_hrs,
+        "days_absent": days_absent,
     }
 
 
@@ -1790,7 +1833,8 @@ def update_payroll_line(line_id, data, user_id=None, sync_ot=None):
                 + float(calc.get("eobi") or 0)
                 + float(calc.get("social_security") or 0)
                 + actual_adv + actual_loan
-                + float(calc.get("other_deductions") or 0),
+                + float(calc.get("other_deductions") or 0)
+                + float(calc.get("absent_deduction") or 0),
                 2,
             )
             calc["net_salary"] = round(
@@ -1800,13 +1844,15 @@ def update_payroll_line(line_id, data, user_id=None, sync_ot=None):
             """UPDATE payroll_lines SET
                basic_salary=?, allowances=?, overtime=?, bonus=?, gross_salary=?,
                tax_deduction=?, eobi=?, social_security=?, advance_recovery=?,
-               loan_recovery=?, other_deductions=?, total_deductions=?, net_salary=?,
+               loan_recovery=?, other_deductions=?, absent_deduction=?,
+               total_deductions=?, net_salary=?,
                days_present=?, days_absent=?, overtime_hrs=?
                WHERE id=?""",
             (
                 calc["basic_salary"], calc["allowances"], calc["overtime"], calc["bonus"],
                 calc["gross_salary"], calc["tax_deduction"], calc["eobi"], calc["social_security"],
                 calc["advance_recovery"], calc["loan_recovery"], calc["other_deductions"],
+                calc.get("absent_deduction", 0),
                 calc["total_deductions"], calc["net_salary"],
                 float(merged.get("days_present") or 0),
                 float(merged.get("days_absent") or 0),
@@ -1895,7 +1941,8 @@ def adjust_unpaid_payroll_line(line_id, data, user_id=None):
                 + float(calc.get("eobi") or 0)
                 + float(calc.get("social_security") or 0)
                 + actual_adv + actual_loan
-                + float(calc.get("other_deductions") or 0),
+                + float(calc.get("other_deductions") or 0)
+                + float(calc.get("absent_deduction") or 0),
                 2,
             )
             calc["net_salary"] = round(
@@ -2098,7 +2145,8 @@ def update_payroll_lines_bulk(updates, user_id=None, sync_ot=None):
                     + float(calc.get("eobi") or 0)
                     + float(calc.get("social_security") or 0)
                     + actual_adv + actual_loan
-                    + float(calc.get("other_deductions") or 0),
+                    + float(calc.get("other_deductions") or 0)
+                    + float(calc.get("absent_deduction") or 0),
                     2,
                 )
                 calc["net_salary"] = round(
@@ -2108,13 +2156,15 @@ def update_payroll_lines_bulk(updates, user_id=None, sync_ot=None):
                 """UPDATE payroll_lines SET
                    basic_salary=?, allowances=?, overtime=?, bonus=?, gross_salary=?,
                    tax_deduction=?, eobi=?, social_security=?, advance_recovery=?,
-                   loan_recovery=?, other_deductions=?, total_deductions=?, net_salary=?,
+                   loan_recovery=?, other_deductions=?, absent_deduction=?,
+                   total_deductions=?, net_salary=?,
                    days_present=?, days_absent=?, overtime_hrs=?
                    WHERE id=?""",
                 (
                     calc["basic_salary"], calc["allowances"], calc["overtime"], calc["bonus"],
                     calc["gross_salary"], calc["tax_deduction"], calc["eobi"], calc["social_security"],
                     calc["advance_recovery"], calc["loan_recovery"], calc["other_deductions"],
+                    calc.get("absent_deduction", 0),
                     calc["total_deductions"], calc["net_salary"],
                     float(merged.get("days_present") or 0),
                     float(merged.get("days_absent") or 0),
@@ -2159,10 +2209,12 @@ def sync_payroll_overtime(payroll_id, mode="from_hours", user_id=None):
             calc = _recalc_payroll_line_fields(merged, year=year, month=month, sync_ot=mode)
             conn.execute(
                 """UPDATE payroll_lines SET
-                   overtime=?, gross_salary=?, total_deductions=?, net_salary=?, overtime_hrs=?
+                   overtime=?, absent_deduction=?, gross_salary=?, total_deductions=?,
+                   net_salary=?, overtime_hrs=?
                    WHERE id=?""",
                 (
-                    calc["overtime"], calc["gross_salary"], calc["total_deductions"],
+                    calc["overtime"], calc.get("absent_deduction", 0),
+                    calc["gross_salary"], calc["total_deductions"],
                     calc["net_salary"], calc["overtime_hrs"], merged["id"],
                 ),
             )
@@ -2228,10 +2280,11 @@ def refresh_payroll_attendance_days(payroll_id, user_id=None):
             conn.execute(
                 """UPDATE payroll_lines SET
                    days_present=?, days_absent=?, overtime_hrs=?, overtime=?,
-                   gross_salary=?, total_deductions=?, net_salary=?
+                   absent_deduction=?, gross_salary=?, total_deductions=?, net_salary=?
                    WHERE id=?""",
                 (
                     att["days_present"], att["days_absent"], att["overtime_hrs"], overtime,
+                    calc.get("absent_deduction", 0),
                     calc["gross_salary"], calc["total_deductions"], calc["net_salary"],
                     ln["id"],
                 ),
@@ -2307,11 +2360,12 @@ def refresh_payroll_loan_advance_recoveries(payroll_id, user_id=None):
             calc = _recalc_payroll_line_fields(merged, year=year, month=month, sync_ot=None)
             conn.execute(
                 """UPDATE payroll_lines SET
-                   advance_recovery=?, loan_recovery=?,
+                   advance_recovery=?, loan_recovery=?, absent_deduction=?,
                    total_deductions=?, net_salary=?, gross_salary=?
                    WHERE id=?""",
                 (
                     calc["advance_recovery"], calc["loan_recovery"],
+                    calc.get("absent_deduction", 0),
                     calc["total_deductions"], calc["net_salary"], calc["gross_salary"],
                     ln["id"],
                 ),
@@ -2373,11 +2427,12 @@ def _sync_employee_recoveries_on_draft_payroll(conn, employee_id, salary_month):
     calc = _recalc_payroll_line_fields(merged, year=year, month=month, sync_ot=None)
     conn.execute(
         """UPDATE payroll_lines SET
-           advance_recovery=?, loan_recovery=?,
+           advance_recovery=?, loan_recovery=?, absent_deduction=?,
            total_deductions=?, net_salary=?, gross_salary=?
            WHERE id=?""",
         (
             calc["advance_recovery"], calc["loan_recovery"],
+            calc.get("absent_deduction", 0),
             calc["total_deductions"], calc["net_salary"], calc["gross_salary"],
             ln["id"],
         ),
@@ -2655,6 +2710,8 @@ def post_payroll_gl(payroll_id, user_id):
         ss = sum(float(dict(l)["social_security"] or 0) for l in lines)
         tax = sum(float(dict(l)["tax_deduction"] or 0) for l in lines)
         loan_rec = sum(float(dict(l)["loan_recovery"] or 0) for l in lines)
+        other_ded = sum(float(dict(l).get("other_deductions") or 0) for l in lines)
+        absent_ded = sum(float(dict(l).get("absent_deduction") or 0) for l in lines)
         entry_date = pr["run_date"]
         ref_no = pr["document_no"]
 
@@ -2669,6 +2726,16 @@ def post_payroll_gl(payroll_id, user_id):
             post_gl(conn, entry_date, HR_AC["tax_payable_payroll"], 0, tax, "Payroll tax", "payroll", payroll_id, ref_no, user_id)
         if loan_rec:
             post_gl(conn, entry_date, HR_AC["employee_advance"], 0, loan_rec, "Loan recovery", "payroll", payroll_id, ref_no, user_id)
+        if absent_ded:
+            post_gl(
+                conn, entry_date, HR_AC["salary_expense"], 0, absent_ded,
+                "Absent (LWP)", "payroll", payroll_id, ref_no, user_id,
+            )
+        if other_ded:
+            post_gl(
+                conn, entry_date, HR_AC["salary_expense"], 0, other_ded,
+                "Other salary deductions", "payroll", payroll_id, ref_no, user_id,
+            )
         post_gl(conn, entry_date, HR_AC["salary_payable"], 0, net, "Net salary payable", "payroll", payroll_id, ref_no, user_id)
 
         conn.execute(
@@ -2709,7 +2776,8 @@ def _post_payroll_line_accrual(conn, row, user_id):
     ss = round(float(row.get("social_security") or 0), 2)
     tax = round(float(row.get("tax_deduction") or 0), 2)
     other = round(float(row.get("other_deductions") or 0), 2)
-    # Balance: expense = credits (other folds into reducing net vs expense — post as payable adjust via net)
+    absent = round(float(row.get("absent_deduction") or 0), 2)
+    # Balance: expense = credits (other/absent reduce expense; recoveries → liability)
     if gross > 0.009:
         post_gl(conn, entry_date, HR_AC["salary_expense"], gross, 0, label, "payroll_line_accrual", line_id, ref_no, user_id)
     if adv > 0.009:
@@ -2722,8 +2790,18 @@ def _post_payroll_line_accrual(conn, row, user_id):
         post_gl(conn, entry_date, HR_AC["ss_payable"], 0, ss, f"{label} — SS", "payroll_line_accrual", line_id, ref_no, user_id)
     if tax > 0.009:
         post_gl(conn, entry_date, HR_AC["tax_payable_payroll"], 0, tax, f"{label} — tax", "payroll_line_accrual", line_id, ref_no, user_id)
-    # Net payable = gross - all deductions (includes other)
-    payable = round(gross - adv - loan - eobi - ss - tax - other, 2)
+    if absent > 0.009:
+        post_gl(
+            conn, entry_date, HR_AC["salary_expense"], 0, absent,
+            f"{label} — absent LWP", "payroll_line_accrual", line_id, ref_no, user_id,
+        )
+    if other > 0.009:
+        post_gl(
+            conn, entry_date, HR_AC["salary_expense"], 0, other,
+            f"{label} — other ded.", "payroll_line_accrual", line_id, ref_no, user_id,
+        )
+    # Net payable = gross - all deductions
+    payable = round(gross - adv - loan - eobi - ss - tax - other - absent, 2)
     if abs(payable - net) > 0.05:
         payable = net
     if payable > 0.009:
