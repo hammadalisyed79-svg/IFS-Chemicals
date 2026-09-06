@@ -1783,7 +1783,7 @@ def _money_cell(v) -> str:
 
 
 _SALARY_VOUCHER_CSS_EXTRA = """
-/* Exact top half of A4 (148mm): body at top, flexible gap, signatures at cut line */
+/* Exact top half of A4 (148mm): body + short gap + signatures, blank fills to fold */
 .salary-half-page-zone {
   width: 100%;
   max-width: 210mm;
@@ -1814,10 +1814,16 @@ _SALARY_VOUCHER_CSS_EXTRA = """
   min-height: 0;
   overflow: hidden;
 }
-/* Absorbs leftover space so signatures sit on the half-page fold */
+/* Short gap above signatures (~half of prior stretch); leftover blank goes below */
 .half-page-sheet.salary-voucher-sheet .salary-voucher-gap {
+  flex: 0 0 12mm;
+  height: 12mm;
+  min-height: 8mm;
+  max-height: 14mm;
+}
+.half-page-sheet.salary-voucher-sheet .salary-voucher-below {
   flex: 1 1 auto;
-  min-height: 6mm;
+  min-height: 0;
 }
 .half-page-sheet.salary-voucher-sheet .header {
   padding-bottom: 2px !important;
