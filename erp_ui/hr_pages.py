@@ -2313,16 +2313,25 @@ def page_payroll():
 
 
 def _advance_register_rows(employee_id=None):
-    """Salary advances only (100% next salary)."""
+    """Salary advances only (100% from selected salary month)."""
     rows = []
     for r in db.get_advances(employee_id=employee_id) or []:
         months = int(r.get("recovery_months") or 1)
+        sm = (r.get("salary_month") or "").strip()
+        if sm and len(sm) >= 7:
+            try:
+                sm_lbl = date(int(sm[:4]), int(sm[5:7]), 1).strftime("%b %Y")
+            except ValueError:
+                sm_lbl = sm
+        else:
+            sm_lbl = "Next salary"
         rows.append({
             "Document": r.get("document_no"),
             "Employee": r.get("employee_name"),
-            "Date": r.get("request_date"),
+            "Posting date": r.get("request_date"),
+            "Salary month": sm_lbl,
             "Amount": float(r.get("amount") or 0),
-            "Recovery": "100% next salary" if months <= 1 else f"{months} months",
+            "Recovery": "100% salary month" if months <= 1 else f"{months} months",
             "Recovered": float(r.get("recovered_amount") or 0),
             "Outstanding": float(r.get("outstanding_amount") or 0),
             "Status": (r.get("status") or "").upper(),
@@ -2471,14 +2480,15 @@ def page_advances():
         status_kind="shell" if peek == "Advance List" else "invoice",
     )
     st.caption(
-        "**Salary Advance** only — issued and recovered **100%** from the next salary. "
+        "**Salary Advance** — cash on **posting date**, recovered **100%** from the chosen "
+        "**salary month** payroll (dates can differ — e.g. cash 6 Sep, salary month August). "
         "For installment loans use **HR → Loan**."
     )
     tab = sticky_page_tabs(["Advance List", "New Request", "Approve / Issue"], "hr_adv_tab")
     if tab == "Advance List":
         _render_hr_payment_register(
             kind="advance",
-            show_cols=["Document", "Employee", "Date", "Amount", "Recovery",
+            show_cols=["Document", "Employee", "Posting date", "Salary month", "Amount", "Recovery",
                        "Recovered", "Outstanding", "Status", "Reason"],
             filter_prefix="hr_adv",
             page_key="hr_adv_list_pg",
@@ -2491,6 +2501,9 @@ def page_advances():
             outstanding_heading="Outstanding Salary Advances",
         )
     elif tab == "New Request":
+        from html import escape
+        import calendar as _cal
+
         emps = _emp_opts()
         if not emps:
             st.info("No active employees.")
@@ -2498,24 +2511,102 @@ def page_advances():
         if not db.user_can_hr(st.session_state.user, "add"):
             st.warning("You do not have permission to create requests.")
             return
-        st.info("Recovered **100%** from the next salary payroll (single deduction).")
+
+        st.markdown(
+            "<div style='margin:0 0 12px 0;padding:10px 14px;background:#eff6ff;"
+            "border:1px solid #bfdbfe;border-radius:8px;color:#1e3a8a;font-size:0.88rem'>"
+            "Recovered <b>100%</b> from the selected <b>salary month</b> payroll. "
+            "Posting date is when cash is given (GL) — it may be after that salary month."
+            "</div>",
+            unsafe_allow_html=True,
+        )
+
+        emp_lbl = st.selectbox("Employee", list(emps.keys()), key="hr_adv_emp")
+        eid = emps[emp_lbl]
+        ctx = None
+        try:
+            ctx = db.get_employee_advance_context(eid)
+        except Exception:
+            ctx = None
+        if ctx:
+            k1, k2, k3, k4 = st.columns(4, gap="small")
+            k1.markdown(
+                f"<div class='txn-kpi-card'><p class='txn-kpi'>Basic salary</p>"
+                f"<p class='txn-kpi-val' style='font-size:1.05rem'>{escape(fmt(ctx['basic_salary']))}</p></div>",
+                unsafe_allow_html=True,
+            )
+            k2.markdown(
+                f"<div class='txn-kpi-card'><p class='txn-kpi'>Ledger balance</p>"
+                f"<p class='txn-kpi-val' style='font-size:1.05rem'>{escape(fmt(ctx['ledger_balance']))}</p></div>",
+                unsafe_allow_html=True,
+            )
+            k3.markdown(
+                f"<div class='txn-kpi-card'><p class='txn-kpi'>Advance outstanding</p>"
+                f"<p class='txn-kpi-val' style='font-size:1.05rem'>{escape(fmt(ctx['advance_outstanding']))}</p></div>",
+                unsafe_allow_html=True,
+            )
+            k4.markdown(
+                f"<div class='txn-kpi-card'><p class='txn-kpi'>Loan outstanding</p>"
+                f"<p class='txn-kpi-val' style='font-size:1.05rem'>{escape(fmt(ctx['loan_outstanding']))}</p></div>",
+                unsafe_allow_html=True,
+            )
+            st.caption(
+                "Ledger balance: positive = employee owes company; negative = company owes employee."
+            )
+
+        today = date.today()
+        # Default salary month = previous calendar month (cash in Sept → August salary)
+        def_y, def_m = today.year, today.month - 1
+        if def_m < 1:
+            def_m, def_y = 12, def_y - 1
+
         with st.form("adv_req"):
-            emp = st.selectbox("Employee", list(emps.keys()))
-            amt = money_input("Amount", value=0.0, min_value=0.0, key="hr_adv_amt")
-            req_date = st.date_input("Request Date", value=date.today())
-            reason = st.text_input("Reason")
-            if st.form_submit_button("Submit"):
+            r1, r2, r3 = st.columns([1.2, 1.1, 1.4], gap="medium")
+            with r1:
+                amt = money_input("Amount", value=0.0, min_value=0.0, key="hr_adv_amt")
+            with r2:
+                post_date = st.date_input(
+                    "Posting date",
+                    value=today,
+                    help="Date cash / bank is given (GL posting date).",
+                    key="hr_adv_post_date",
+                )
+            with r3:
+                sal_year = st.number_input(
+                    "Salary year",
+                    min_value=2020, max_value=2035, value=def_y, step=1,
+                    key="hr_adv_sal_year",
+                )
+                sal_month = st.selectbox(
+                    "Salary month",
+                    list(range(1, 13)),
+                    index=def_m - 1,
+                    format_func=lambda m: f"{m:02d} — {_cal.month_name[m]}",
+                    help="Payroll month this advance is deducted from (can differ from posting date).",
+                    key="hr_adv_sal_month",
+                )
+            st.caption(
+                f"Example: posting date **{today.strftime('%d %b %Y')}**, "
+                f"salary month **{_cal.month_name[def_m]} {def_y}** — cash today, recover from that payroll."
+            )
+            reason = st.text_area("Reason", height=80, key="hr_adv_reason")
+            if st.form_submit_button("Submit", type="primary"):
                 try:
                     if float(amt or 0) <= 0:
                         raise ValueError("Enter an amount greater than zero.")
+                    salary_month = f"{int(sal_year):04d}-{int(sal_month):02d}"
                     db.save_advance({
-                        "employee_id": emps[emp],
+                        "employee_id": eid,
                         "amount": amt,
                         "recovery_months": 1,
-                        "request_date": str(req_date),
+                        "request_date": str(post_date),
+                        "salary_month": salary_month,
                         "reason": reason,
                     }, uid())
-                    ff.action_done("Salary advance submitted — full recovery on next salary.")
+                    ff.action_done(
+                        f"Salary advance submitted — posting **{post_date}**, "
+                        f"recover from **{_cal.month_name[int(sal_month)]} {int(sal_year)}** payroll."
+                    )
                 except Exception as e:
                     st.error(str(e))
     elif tab == "Approve / Issue":
@@ -2526,9 +2617,11 @@ def page_advances():
             if not pending:
                 st.caption("Nothing pending.")
             for r in pending:
+                sm = (r.get("salary_month") or "").strip()
+                sm_lbl = sm if sm else "next salary"
                 st.write(
                     f"**{r['document_no']}** — {r['employee_name']} — {fmt(r['amount'])} "
-                    f"(100% next salary)"
+                    f"· posting {r.get('request_date')} · salary month **{sm_lbl}**"
                 )
                 c1, c2 = st.columns(2)
                 if c1.button("Approve", key=f"adv_a_{r['id']}"):
@@ -2542,7 +2635,12 @@ def page_advances():
             if not approved:
                 st.caption("Nothing to issue.")
             for r in approved:
-                st.write(f"**{r['document_no']}** — {r['employee_name']} — {fmt(r['amount'])}")
+                sm = (r.get("salary_month") or "").strip()
+                sm_lbl = sm if sm else "next salary"
+                st.write(
+                    f"**{r['document_no']}** — {r['employee_name']} — {fmt(r['amount'])} "
+                    f"· posting {r.get('request_date')} · salary month **{sm_lbl}**"
+                )
                 if st.button("Issue Advance", key=f"adv_i_{r['id']}"):
                     db.issue_advance(r["id"], uid())
                     st.rerun()

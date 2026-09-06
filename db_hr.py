@@ -85,6 +85,13 @@ def apply_hr(conn, db_module):
             "INSERT INTO schema_meta(key,value) VALUES('hr_version','4') "
             "ON CONFLICT(key) DO UPDATE SET value='4'"
         )
+        ver = 4
+    if ver < 5:
+        _apply_hr_v5(conn)
+        conn.execute(
+            "INSERT INTO schema_meta(key,value) VALUES('hr_version','5') "
+            "ON CONFLICT(key) DO UPDATE SET value='5'"
+        )
 
 
 def _apply_hr_v2(conn):
@@ -113,6 +120,11 @@ def _apply_hr_v4(conn):
         ("closed_at", "TEXT"),
     ):
         _add_col(conn, "payroll_runs", col, ddl)
+
+
+def _apply_hr_v5(conn):
+    """Salary month on advances — posting date and recovery payroll month can differ."""
+    _add_col(conn, "employee_advances", "salary_month", "TEXT")
 
 
 def _col_exists(conn, table, col):
@@ -1165,10 +1177,24 @@ def _advance_recovery_capacity(conn, employee_id, payroll_id) -> float:
            WHERE s.payroll_id=? AND a.employee_id=? AND s.recovered=1""",
         (payroll_id, employee_id),
     ).fetchone()[0]
+    pr = conn.execute(
+        "SELECT payroll_month, payroll_year FROM payroll_runs WHERE id=?",
+        (payroll_id,),
+    ).fetchone()
+    payroll_ym = "9999-12"
+    if pr:
+        try:
+            payroll_ym = f"{int(pr['payroll_year']):04d}-{int(pr['payroll_month']):02d}"
+        except (TypeError, ValueError, KeyError):
+            pass
     outstanding = conn.execute(
         """SELECT COALESCE(SUM(outstanding_amount),0) FROM employee_advances
-           WHERE employee_id=? AND status='issued' AND outstanding_amount>0""",
-        (employee_id,),
+           WHERE employee_id=? AND status='issued' AND outstanding_amount>0
+             AND (
+               salary_month IS NULL OR TRIM(COALESCE(salary_month,''))=''
+               OR substr(salary_month,1,7) <= ?
+             )""",
+        (employee_id, payroll_ym),
     ).fetchone()[0]
     return round(float(on_pay or 0) + float(outstanding or 0), 2)
 
@@ -1426,11 +1452,25 @@ def _rebuild_unpaid_advance_schedule(conn, advance_id):
 
 
 def _recover_advances_capped(conn, employee_id, payroll_id, due_date, target_amount=None):
-    """Recover advance schedule; auto mode = one installment per advance this payroll."""
+    """Recover advance schedule; auto mode = one installment per advance this payroll.
+
+    Advances with ``salary_month`` only recover on that payroll month or later
+    (posting date can be later — e.g. cash on 6 Sep for August salary).
+    """
     total = 0.0
     cap = None if target_amount is None else round(float(target_amount), 2)
+    pr = conn.execute(
+        "SELECT payroll_month, payroll_year FROM payroll_runs WHERE id=?",
+        (payroll_id,),
+    ).fetchone()
+    payroll_ym = None
+    if pr:
+        try:
+            payroll_ym = f"{int(pr['payroll_year']):04d}-{int(pr['payroll_month']):02d}"
+        except (TypeError, ValueError, KeyError):
+            payroll_ym = None
     advances = conn.execute(
-        """SELECT id, monthly_recovery, outstanding_amount FROM employee_advances
+        """SELECT id, monthly_recovery, outstanding_amount, salary_month FROM employee_advances
            WHERE employee_id=? AND status='issued' AND outstanding_amount>0
            ORDER BY id""",
         (employee_id,),
@@ -1439,6 +1479,10 @@ def _recover_advances_capped(conn, employee_id, payroll_id, due_date, target_amo
         if cap is not None and total >= cap - 0.009:
             break
         a = dict(adv)
+        sm = (a.get("salary_month") or "").strip()[:7]
+        if sm and payroll_ym and sm > payroll_ym:
+            # Scheduled for a later salary month — skip this payroll
+            continue
         auto_one = cap is None
         took = 0
         while float(a["outstanding_amount"] or 0) > 0.01:
@@ -2992,17 +3036,84 @@ def rollback_payroll_line_payment(line_id, user_id, reason=""):
 
 
 # ---------- Advances ----------
+def _normalize_salary_month(raw) -> str | None:
+    """Return YYYY-MM or None."""
+    if raw is None or raw == "":
+        return None
+    s = str(raw).strip()[:7]
+    if len(s) >= 7 and s[4] == "-":
+        try:
+            y, m = int(s[:4]), int(s[5:7])
+            if 1 <= m <= 12:
+                return f"{y:04d}-{m:02d}"
+        except ValueError:
+            pass
+    return None
+
+
+def _salary_month_due_date(salary_month: str | None, fallback_date: str) -> str:
+    """Last day of salary month, else fallback (+0)."""
+    import calendar
+    sm = _normalize_salary_month(salary_month)
+    if sm:
+        y, m = int(sm[:4]), int(sm[5:7])
+        return f"{y:04d}-{m:02d}-{calendar.monthrange(y, m)[1]:02d}"
+    return str(fallback_date)[:10]
+
+
+def get_employee_advance_context(employee_id: int) -> dict | None:
+    """Salary + ledger/outstanding snapshot for Advance New Request."""
+    emp = get_employee_hr(employee_id)
+    if not emp:
+        return None
+    _, entries = get_employee_ledger(employee_id)
+    closing = float(entries[-1]["balance"]) if entries else 0.0
+    adv_out = sum(
+        float(a.get("outstanding_amount") or 0)
+        for a in (get_advances(status="issued", employee_id=employee_id) or [])
+    )
+    loan_out = sum(
+        float(l.get("outstanding_amount") or 0)
+        for l in (get_loans(status="issued", employee_id=employee_id) or [])
+    )
+    basic = float(emp.get("basic_salary") or 0)
+    # Prefer active salary structure basic if present
+    from database import get_connection
+    with get_connection() as conn:
+        apply_hr(conn, __import__("database"))
+        struct = conn.execute(
+            """SELECT basic_salary FROM salary_structures
+               WHERE employee_id=? AND is_active=1
+               ORDER BY effective_from DESC LIMIT 1""",
+            (int(employee_id),),
+        ).fetchone()
+        if struct and float(struct[0] or 0) > 0:
+            basic = float(struct[0] or 0)
+    return {
+        "employee_id": int(employee_id),
+        "code": emp.get("code"),
+        "full_name": emp.get("full_name"),
+        "basic_salary": round(basic, 2),
+        "ledger_balance": round(closing, 2),
+        "advance_outstanding": round(adv_out, 2),
+        "loan_outstanding": round(loan_out, 2),
+    }
+
+
 def save_advance(data, user_id=None):
     from database import get_connection, ensure_document_no
     with get_connection() as conn:
+        apply_hr(conn, __import__("database"))
         months = max(1, int(data.get("recovery_months", 1)))
         monthly = round(data["amount"] / months, 2)
+        salary_month = _normalize_salary_month(data.get("salary_month"))
         cur = conn.execute(
             """INSERT INTO employee_advances(document_no,employee_id,request_date,amount,reason,
-               recovery_months,monthly_recovery,outstanding_amount,status,created_by)
-               VALUES(?,?,?,?,?,?,?,?,?,?)""",
+               recovery_months,monthly_recovery,outstanding_amount,status,salary_month,created_by)
+               VALUES(?,?,?,?,?,?,?,?,?,?,?)""",
             (ensure_document_no("ADV", data.get("document_no"), conn), data["employee_id"], data["request_date"],
-             data["amount"], data.get("reason"), months, monthly, data["amount"], "pending", user_id),
+             data["amount"], data.get("reason"), months, monthly, data["amount"], "pending",
+             salary_month, user_id),
         )
         return cur.lastrowid
 
@@ -3019,6 +3130,7 @@ def get_advances(status=None, employee_id=None):
         q += " AND a.employee_id=?"; p.append(employee_id)
     q += " ORDER BY a.request_date DESC"
     with get_connection() as conn:
+        apply_hr(conn, __import__("database"))
         rows = rows_to_list(conn.execute(q, p).fetchall())
     for r in rows:
         code = (r.get("employee_code") or "").strip()
@@ -3032,6 +3144,7 @@ def approve_advance(advance_id, user_id, approve=True):
     from database import get_connection
     ts = now()
     with get_connection() as conn:
+        apply_hr(conn, __import__("database"))
         adv = conn.execute("SELECT * FROM employee_advances WHERE id=?", (advance_id,)).fetchone()
         if not adv or adv["status"] != "pending":
             raise ValueError("Invalid advance request")
@@ -3048,11 +3161,13 @@ def issue_advance(advance_id, user_id, payment_mode="cash"):
     from database import get_connection
     from db_v3 import post_gl, AC
     with get_connection() as conn:
+        apply_hr(conn, __import__("database"))
         adv = conn.execute("SELECT * FROM employee_advances WHERE id=?", (advance_id,)).fetchone()
         if not adv or adv["status"] != "approved":
             raise ValueError("Advance must be approved before issue")
         adv = dict(adv)
         acct = AC["bank"] if payment_mode == "bank" else AC["cash"]
+        # GL on posting date (request_date); recovery targets salary_month
         post_gl(conn, adv["request_date"], HR_AC["employee_advance"], adv["amount"], 0,
                 "Advance issue", "employee_advance", advance_id, adv["document_no"], user_id)
         post_gl(conn, adv["request_date"], acct, 0, adv["amount"],
@@ -3062,10 +3177,14 @@ def issue_advance(advance_id, user_id, payment_mode="cash"):
             (user_id, now(), advance_id),
         )
         from datetime import timedelta
-        base = datetime.strptime(adv["request_date"], "%Y-%m-%d")
+        due0 = _salary_month_due_date(adv.get("salary_month"), adv["request_date"])
+        base = datetime.strptime(due0, "%Y-%m-%d")
         monthly = adv["monthly_recovery"]
         for i in range(adv["recovery_months"]):
-            due = (base + timedelta(days=30 * (i + 1))).strftime("%Y-%m-%d")
+            if i == 0:
+                due = due0
+            else:
+                due = (base + timedelta(days=30 * i)).strftime("%Y-%m-%d")
             conn.execute(
                 "INSERT INTO advance_recovery_schedule(advance_id,installment_no,due_date,amount) VALUES(?,?,?,?)",
                 (advance_id, i + 1, due, monthly),
