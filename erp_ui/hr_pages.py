@@ -956,10 +956,10 @@ def _print_salary_voucher(line_id, key_prefix: str):
         return
     with st.expander("Salary payment voucher (signature copy)", expanded=True):
         st.caption(
-            "Signatures on this voucher: Prepared By · Checked By · Approved By · "
-            "Received by (Employee). Use Print / Open print dialog for wet-ink signing."
+            "A4 portrait · top half page. Signatures: Prepared By · Checked By · "
+            "Approved By · Received by (Employee)."
         )
-        components.html(html, height=640, scrolling=True)
+        components.html(html, height=700, scrolling=True)
         b1, b2 = st.columns(2)
         b1.download_button(
             "Download HTML",

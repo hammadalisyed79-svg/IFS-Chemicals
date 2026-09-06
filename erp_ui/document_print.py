@@ -1783,57 +1783,220 @@ def _money_cell(v) -> str:
 
 
 _SALARY_VOUCHER_CSS_EXTRA = """
-/* Keep signature block visible inside fixed half-page height */
+/* A4 portrait — top half only (~148mm), professional salary slip */
 .half-page-sheet.salary-voucher-sheet {
   display: flex;
   flex-direction: column;
+  justify-content: space-between;
   overflow: hidden;
+  padding: 6px 8px !important;
+  box-sizing: border-box;
 }
 .half-page-sheet.salary-voucher-sheet .salary-voucher-body {
   flex: 1 1 auto;
   min-height: 0;
   overflow: hidden;
 }
-.half-page-sheet.salary-voucher-sheet .salary-voucher-sigs {
-  flex: 0 0 auto;
-  margin-top: 6px;
+.half-page-sheet.salary-voucher-sheet .header {
+  padding-bottom: 3px !important;
+  margin-bottom: 4px !important;
 }
-.half-page-sheet.salary-voucher-sheet .salary-voucher-sigs .signatures {
-  margin-top: 4px;
+.half-page-sheet.salary-voucher-sheet .header h1 { font-size: 14px !important; }
+.half-page-sheet.salary-voucher-sheet .header .sub { font-size: 9px !important; }
+.half-page-sheet.salary-voucher-sheet h2 {
+  font-size: 13px !important;
+  margin: 2px 0 4px 0 !important;
+  letter-spacing: .02em;
+  text-align: center;
+  border-bottom: 1px solid #111;
+  padding-bottom: 3px;
 }
-.half-page-sheet.salary-voucher-sheet .salary-voucher-sigs .sig-line {
-  margin: 18px 0 4px 0;
-  min-height: 18px;
-  border-top: 1px solid #111;
+.half-page-sheet.salary-voucher-sheet .meta {
+  margin: 2px 0 4px 0 !important;
+  font-size: 10px !important;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 14px;
 }
-.half-page-sheet.salary-voucher-sheet .salary-voucher-sigs .sig-prepared-name {
-  min-height: 1em;
-  font-size: 11px;
+.half-page-sheet.salary-voucher-sheet .party-block {
+  margin: 2px 0 4px 0;
+  padding: 3px 6px;
+  border: 1px solid #111;
 }
-.half-page-sheet.salary-voucher-sheet .salary-voucher-sigs .sig-role {
+.half-page-sheet.salary-voucher-sheet .party-block .party-label {
   font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  color: #333;
 }
-.half-page-sheet.salary-voucher-sheet table.lines th,
-.half-page-sheet.salary-voucher-sheet table.lines td {
-  padding: 2px 4px;
-  font-size: 10px;
-  line-height: 1.15;
+.half-page-sheet.salary-voucher-sheet .party-block .party-name {
+  font-size: 14px !important;
+  font-weight: 700;
 }
 .half-page-sheet.salary-voucher-sheet .summary-box {
-  padding: 4px 6px;
-  margin: 4px 0;
-  font-size: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 12px;
+  padding: 3px 6px !important;
+  margin: 0 0 4px 0 !important;
+  font-size: 9px !important;
+  border: 1px solid #333;
 }
-.half-page-sheet.salary-voucher-sheet .meta { font-size: 10px; margin: 4px 0; }
+.half-page-sheet.salary-voucher-sheet .summary-box div { min-width: 0; }
+.salary-two-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  margin: 0 0 4px 0;
+  width: 100%;
+}
+.salary-two-col table.lines {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0;
+}
+.salary-two-col table.lines th {
+  background: transparent;
+  border: 1px solid #111;
+  padding: 2px 4px;
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: .03em;
+  text-align: left;
+}
+.salary-two-col table.lines th.num,
+.salary-two-col table.lines td.num { text-align: right; }
+.salary-two-col table.lines td {
+  border: 1px solid #333;
+  padding: 1px 4px;
+  font-size: 10px;
+  line-height: 1.2;
+}
+.salary-two-col table.lines tr.total-row td {
+  font-weight: 700;
+  border-top: 1.5px solid #111;
+}
+.salary-net-box {
+  border: 1.5px solid #111;
+  padding: 4px 8px;
+  margin: 0 0 4px 0;
+  text-align: center;
+}
+.salary-net-box .voucher-amt-label {
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  color: #333;
+}
+.salary-net-box .voucher-amt-value {
+  font-size: 16px;
+  font-weight: 700;
+  margin: 1px 0;
+  color: #111;
+}
+.salary-net-box .voucher-amt-words {
+  font-size: 9px;
+  line-height: 1.25;
+  margin-top: 1px;
+  color: #111;
+}
+.salary-bal-strip {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 4px;
+  margin: 0 0 3px 0;
+  border: 1px solid #333;
+  padding: 3px 4px;
+  font-size: 9px;
+}
+.salary-bal-strip .bal-cell { text-align: center; }
+.salary-bal-strip .bal-lbl {
+  display: block;
+  text-transform: uppercase;
+  letter-spacing: .02em;
+  color: #333;
+  font-size: 8px;
+}
+.salary-bal-strip .bal-val { font-weight: 700; font-size: 10px; }
 .half-page-sheet.salary-voucher-sheet .recv-line {
-  margin: 4px 0 0 0;
-  font-size: 11px;
+  margin: 0 0 2px 0;
+  font-size: 10px;
+  text-align: center;
+  border-top: 1px dotted #666;
+  padding-top: 3px;
+}
+.half-page-sheet.salary-voucher-sheet .salary-voucher-sigs {
+  flex: 0 0 auto;
+  margin-top: 4px;
+  border-top: 1px solid #111;
+  padding-top: 4px;
+}
+.half-page-sheet.salary-voucher-sheet .salary-voucher-sigs .signatures {
+  margin-top: 0 !important;
+  gap: 6px;
+}
+.half-page-sheet.salary-voucher-sheet .salary-voucher-sigs .sig-cell {
+  flex: 1 1 0;
+  min-width: 0;
+}
+.half-page-sheet.salary-voucher-sheet .salary-voucher-sigs .sig-space {
+  height: 22px;
+}
+.half-page-sheet.salary-voucher-sheet .salary-voucher-sigs .sig-line {
+  margin: 0 0 3px 0 !important;
+  min-height: 0 !important;
+  border-top: 1px solid #111;
+}
+.half-page-sheet.salary-voucher-sheet .salary-voucher-sigs .sig-role {
+  font-size: 8px !important;
+  margin: 0;
+  line-height: 1.2;
+}
+.half-page-sheet.salary-voucher-sheet .salary-voucher-sigs .sig-prepared-name {
+  font-size: 9px !important;
+  font-weight: 700;
+  margin: 1px 0 0 0;
+  min-height: 1em;
+  line-height: 1.15;
+}
+@media print {
+  .half-page-sheet.salary-voucher-sheet {
+    height: 148mm !important;
+    max-height: 148mm !important;
+    page-break-inside: avoid;
+  }
 }
 """
 
 
+def _salary_sig_block_html(prepared_name: str, employee_name: str) -> str:
+    """Half-page salary signatures: blank ink space, line, role, printed name."""
+    blank = "\u00a0"
+    roles = (
+        ("Prepared By", prepared_name),
+        ("Checked By", ""),
+        ("Approved By", ""),
+        ("Received by (Employee)", employee_name),
+    )
+    cells = []
+    for label, show_name in roles:
+        nm = escape((show_name or "").strip() or blank)
+        cells.append(
+            f'<div class="sig-cell">'
+            f'<div class="sig-space"></div>'
+            f'<div class="sig-line"></div>'
+            f'<div class="sig-role">{escape(label)}</div>'
+            f'<div class="sig-prepared-name">{nm}</div>'
+            f"</div>"
+        )
+    return (
+        f'<div class="signatures cash-sig-block sig-4">'
+        f'{"".join(cells)}</div>'
+    )
+
+
 def salary_payment_voucher_html(line_id):
-    """Half-page cash/bank salary voucher for employee signature."""
+    """A4 portrait half-page salary cash/bank voucher for wet-ink signatures."""
     from db_hr import get_payroll_line_voucher_data
 
     v = get_payroll_line_voucher_data(line_id)
@@ -1861,19 +2024,18 @@ def salary_payment_voucher_html(line_id):
     dept = v.get("department_name") or "—"
     payroll_no = v.get("payroll_no") or "—"
 
-    absent_days = float(v.get("days_absent") or 0)
-    absent_lbl = "Absent deduction"
-    if absent_days > 0.009:
-        unit = "day" if abs(absent_days - 1.0) < 0.001 else "days"
-        absent_lbl = f"Absent deduction ({absent_days:.1f} {unit})"
-
     def _amt(x) -> float:
         try:
             return float(x or 0)
         except (TypeError, ValueError):
             return 0.0
 
-    # Skip zero earning/deduction lines so signatures fit on half-page
+    absent_days = _amt(v.get("days_absent"))
+    absent_lbl = "Absent deduction"
+    if absent_days > 0.009:
+        unit = "day" if abs(absent_days - 1.0) < 0.001 else "days"
+        absent_lbl = f"Absent ({absent_days:.1f} {unit})"
+
     earn_rows = [
         ("Basic", v.get("basic_salary")),
         ("Allowances", v.get("allowances")),
@@ -1881,7 +2043,9 @@ def salary_payment_voucher_html(line_id):
         ("Bonus", v.get("bonus")),
     ]
     earn_rows = [(lbl, amt) for lbl, amt in earn_rows if abs(_amt(amt)) > 0.009]
-    earn_rows.append(("Gross", v.get("gross_salary")))
+    if not earn_rows:
+        earn_rows = [("Basic", v.get("basic_salary"))]
+
     ded_rows = [
         ("Advance recovery", v.get("advance_recovery")),
         ("Loan recovery", v.get("loan_recovery")),
@@ -1889,22 +2053,29 @@ def salary_payment_voucher_html(line_id):
         (absent_lbl, v.get("absent_deduction")),
     ]
     ded_rows = [(lbl, amt) for lbl, amt in ded_rows if abs(_amt(amt)) > 0.009]
-    ded_rows.append(("Total deductions", v.get("total_deductions")))
-    ded_rows.append(("Net paid", v.get("paid_amount") or v.get("net_salary")))
-    rows = earn_rows + ded_rows
-    lines_html = "".join(
-        f"<tr><td>{escape(lbl)}</td><td class='num'>{_money_cell(amt)}</td></tr>"
-        for lbl, amt in rows
+
+    def _rows_html(rows, *, total_label: str, total_amt) -> str:
+        body = "".join(
+            f"<tr><td>{escape(lbl)}</td><td class='num'>{_money_cell(amt)}</td></tr>"
+            for lbl, amt in rows
+        )
+        body += (
+            f"<tr class='total-row'><td>{escape(total_label)}</td>"
+            f"<td class='num'>{_money_cell(total_amt)}</td></tr>"
+        )
+        return body
+
+    earn_html = _rows_html(earn_rows, total_label="Gross", total_amt=v.get("gross_salary"))
+    ded_html = _rows_html(
+        ded_rows if ded_rows else [("—", 0)],
+        total_label="Total deductions",
+        total_amt=v.get("total_deductions"),
     )
-    bal_html = (
-        f"<tr><td>Advance outstanding</td><td class='num'>{_money_cell(v.get('advance_outstanding'))}</td></tr>"
-        f"<tr><td>Loan outstanding</td><td class='num'>{_money_cell(v.get('loan_outstanding'))}</td></tr>"
-        f"<tr><td>Ledger balance</td><td class='num'>{_money_cell(v.get('ledger_balance'))}</td></tr>"
-    )
+    net_paid = _amt(v.get("paid_amount") or v.get("net_salary"))
     att = (
-        f"Present {float(v.get('days_present') or 0):.1f} · "
-        f"Absent {float(v.get('days_absent') or 0):.1f} · "
-        f"OT hrs {float(v.get('overtime_hrs') or 0):.1f}"
+        f"P {float(v.get('days_present') or 0):.1f} / "
+        f"A {float(v.get('days_absent') or 0):.1f} / "
+        f"OT {float(v.get('overtime_hrs') or 0):.1f}h"
     )
     body = _doc_header(
         title,
@@ -1919,25 +2090,38 @@ def salary_payment_voucher_html(line_id):
             "Attendance": att,
             "Mode": mode.upper(),
         },
+        party_on_new_line=True,
         doc_time=v.get("paid_at") or v.get("paid_date"),
     )
     body += (
-        "<table class='lines' style='width:100%;margin-top:4px'>"
-        "<thead><tr><th>Particulars</th><th class='num'>Amount (Rs.)</th></tr></thead>"
-        f"<tbody>{lines_html}</tbody></table>"
-        "<table class='lines' style='width:100%;margin-top:4px'>"
-        "<thead><tr><th>Balances (after this payment)</th>"
-        "<th class='num'>Amount (Rs.)</th></tr></thead>"
-        f"<tbody>{bal_html}</tbody></table>"
-        f"<p class='recv-line'>Received Rs. "
-        f"<strong>{_money_cell(v.get('paid_amount') or v.get('net_salary'))}</strong> "
-        f"as salary for <strong>{escape(period)}</strong>.</p>"
+        '<div class="salary-two-col">'
+        "<table class='lines'><thead><tr>"
+        "<th>Earnings</th><th class='num'>Rs.</th>"
+        "</tr></thead>"
+        f"<tbody>{earn_html}</tbody></table>"
+        "<table class='lines'><thead><tr>"
+        "<th>Deductions</th><th class='num'>Rs.</th>"
+        "</tr></thead>"
+        f"<tbody>{ded_html}</tbody></table>"
+        "</div>"
+        '<div class="salary-net-box">'
+        '<div class="voucher-amt-label">Net paid</div>'
+        f'<div class="voucher-amt-value">Rs. {_money_cell(net_paid)}</div>'
+        f'<div class="voucher-amt-words"><b>In words:</b> {escape(amount_in_words(net_paid))}</div>'
+        "</div>"
+        '<div class="salary-bal-strip">'
+        f'<div class="bal-cell"><span class="bal-lbl">Advance outstanding</span>'
+        f'<span class="bal-val">{_money_cell(v.get("advance_outstanding"))}</span></div>'
+        f'<div class="bal-cell"><span class="bal-lbl">Loan outstanding</span>'
+        f'<span class="bal-val">{_money_cell(v.get("loan_outstanding"))}</span></div>'
+        f'<div class="bal-cell"><span class="bal-lbl">Ledger balance</span>'
+        f'<span class="bal-val">{_money_cell(v.get("ledger_balance"))}</span></div>'
+        "</div>"
+        f'<p class="recv-line">Received <strong>Rs. {_money_cell(net_paid)}</strong> '
+        f'as salary for <strong>{escape(period)}</strong>.</p>'
     )
     prep = resolve_preparer_name(v.get("paid_by") or v.get("created_by"))
-    sigs = cash_signatures_html(
-        prep,
-        extra_roles=(("Received by (Employee)", emp),),
-    )
+    sigs = _salary_sig_block_html(prep, emp)
     css = PRINT_CSS_PORTRAIT_HALF.replace(
         "</style>",
         f"{_VOUCHER_PRINT_CSS_EXTRA}{_SALARY_VOUCHER_CSS_EXTRA}</style>",
@@ -1947,16 +2131,15 @@ def salary_payment_voucher_html(line_id):
         f'<div class="salary-voucher-body">{body}</div>'
         f'<div class="salary-voucher-sigs">{sigs}</div>'
         f"</div>"
-        f'<div class="half-page-cut">— cut line — bottom half blank —</div>'
-        f'<div class="half-page-blank no-print">Bottom half of A4 left blank</div>'
+        f'<div class="half-page-cut">— cut / fold — bottom half of A4 blank —</div>'
+        f'<div class="half-page-blank no-print">Bottom half of A4 left blank for filing</div>'
     )
     return f"""<!DOCTYPE html><html><head><meta charset="utf-8">
 <title>{escape(title)} {escape(str(doc_no))}</title>
 {css}<script>function doPrint(){{window.print();}}</script></head>
 <body class="voucher-dual-body">{inner}
-<p class="no-print"><button class="print-btn" onclick="doPrint()">Print salary voucher</button></p>
+<p class="no-print"><button class="print-btn" onclick="doPrint()">Print salary voucher (half-page portrait)</button></p>
 </body></html>"""
-
 
 def production_batch_html(prod_id):
     rows = [r for r in db.get_production_orders() if r["id"] == prod_id]
