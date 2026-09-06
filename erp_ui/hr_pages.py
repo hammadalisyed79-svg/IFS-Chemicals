@@ -1624,8 +1624,8 @@ def page_payroll():
                     f"<div style='font-size:1.15rem;font-weight:700;color:#0f172a'>"
                     f"{escape(period_lbl)}</div></div>"
                     f"<div style='color:#64748b;font-size:0.9rem;max-width:48rem'>"
-                    f"Edit amounts → <b>Save</b> → <b>Post &amp; voucher</b> on that employee "
-                    f"(cash voucher, no whole-sheet Post/rollback). "
+                    f"Edit amounts → <b>Save</b> → use the <b>payment desk</b> under each department "
+                    f"to post one employee (cash/bank voucher, no whole-sheet Post). "
                     f"OT = Basic ÷ {mdays} ÷ 6 × hours. "
                     f"Lower Loan/Advance for partial recovery.</div>"
                     f"</div>",
@@ -1784,11 +1784,11 @@ def page_payroll():
                 if can_post_row:
                     st.markdown(
                         "<div class='pr-pay-toolbar'>"
-                        "<div class='pr-pay-toolbar-title'>Post one employee</div>"
+                        "<div class='pr-pay-toolbar-title'>Payment desk</div>"
                         "<div class='pr-pay-toolbar-hint'>"
                         "Save the grid first if you edited amounts. "
-                        "Each row’s <b>Post</b> pays that employee only (cash/bank voucher); "
-                        "others stay on this draft."
+                        "Choose an employee under each department and post their voucher only — "
+                        "the rest of the sheet stays draft."
                         "</div></div>",
                         unsafe_allow_html=True,
                     )
@@ -1824,101 +1824,13 @@ def page_payroll():
                         else:
                             st.warning("Add a bank account in Chart of Accounts first.")
 
-                # Align Action column buttons to data_editor row pitch
                 st.markdown(
                     """
 <style>
-div[data-testid="stHorizontalBlock"]:has(div[data-testid="stDataEditor"]) {
-  align-items: flex-start !important;
-  gap: 0.35rem !important;
-}
-div[data-testid="stHorizontalBlock"]:has(div[data-testid="stDataEditor"])
-  > div[data-testid="column"]:last-child div[data-testid="stVerticalBlock"] {
-  gap: 0 !important;
-  row-gap: 0 !important;
-}
-div[data-testid="stHorizontalBlock"]:has(div[data-testid="stDataEditor"])
-  > div[data-testid="column"]:last-child div[data-testid="stElementContainer"],
-div[data-testid="stHorizontalBlock"]:has(div[data-testid="stDataEditor"])
-  > div[data-testid="column"]:last-child div[data-testid="element-container"] {
-  margin: 0 !important;
-  padding: 0 !important;
-}
-div[data-testid="stHorizontalBlock"]:has(div[data-testid="stDataEditor"])
-  > div[data-testid="column"]:last-child .stButton {
-  margin: 0 !important;
-  padding: 0 !important;
-}
-div[data-testid="stHorizontalBlock"]:has(div[data-testid="stDataEditor"])
-  > div[data-testid="column"]:last-child .stButton > button {
-  height: 35px !important;
-  min-height: 35px !important;
-  max-height: 35px !important;
-  padding: 0 10px !important;
-  margin: 0 !important;
-  font-size: 0.72rem !important;
-  font-weight: 600 !important;
-  letter-spacing: 0.02em !important;
-  border-radius: 6px !important;
-  line-height: 1 !important;
-  width: 100% !important;
-  box-shadow: none !important;
-}
-div[data-testid="stHorizontalBlock"]:has(div[data-testid="stDataEditor"])
-  > div[data-testid="column"]:last-child .stButton > button[kind="primary"] {
-  background: #0f766e !important;
-  border: 1px solid #0f766e !important;
-  color: #fff !important;
-}
-div[data-testid="stHorizontalBlock"]:has(div[data-testid="stDataEditor"])
-  > div[data-testid="column"]:last-child .stButton > button[kind="secondary"] {
-  background: #f8fafc !important;
-  border: 1px solid #cbd5e1 !important;
-  color: #334155 !important;
-}
-div[data-testid="stHorizontalBlock"]:has(div[data-testid="stDataEditor"])
-  > div[data-testid="column"]:last-child .pr-act-head {
-  height: 38px;
-  box-sizing: border-box;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin: 0;
-  padding: 0 6px;
-  font-size: 0.68rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: #64748b;
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
-  border-radius: 6px 6px 0 0;
-}
-div[data-testid="stHorizontalBlock"]:has(div[data-testid="stDataEditor"])
-  > div[data-testid="column"]:last-child .pr-act-empty,
-div[data-testid="stHorizontalBlock"]:has(div[data-testid="stDataEditor"])
-  > div[data-testid="column"]:last-child .pr-act-paid {
-  height: 35px;
-  box-sizing: border-box;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin: 0;
-  padding: 0 6px;
-  font-size: 0.72rem;
-  font-weight: 600;
-  color: #94a3b8;
-  border-bottom: 1px solid #f1f5f9;
-}
-div[data-testid="stHorizontalBlock"]:has(div[data-testid="stDataEditor"])
-  > div[data-testid="column"]:last-child .pr-act-paid {
-  color: #047857;
-  background: #ecfdf5;
-}
 .pr-pay-toolbar {
   margin: 0 0 10px 0;
-  padding: 10px 14px;
-  background: linear-gradient(180deg, #f8fafc 0%, #fff 100%);
+  padding: 12px 14px;
+  background: #f8fafc;
   border: 1px solid #e2e8f0;
   border-radius: 8px;
 }
@@ -1933,12 +1845,31 @@ div[data-testid="stHorizontalBlock"]:has(div[data-testid="stDataEditor"])
   color: #64748b;
   line-height: 1.35;
 }
-.pr-undo-bar {
-  margin-top: 8px;
-  padding: 8px 12px;
+.pr-desk {
+  margin-top: 10px;
+  padding: 12px 14px;
   background: #fff;
-  border: 1px dashed #cbd5e1;
+  border: 1px solid #e2e8f0;
   border-radius: 8px;
+}
+.pr-desk-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #64748b;
+  margin: 0 0 8px 0;
+}
+.pr-desk-net {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #0f172a;
+  padding-top: 1.55rem;
+}
+.pr-desk-meta {
+  font-size: 0.78rem;
+  color: #64748b;
+  margin-top: 6px;
 }
 </style>
                     """,
@@ -2006,26 +1937,16 @@ div[data-testid="stHorizontalBlock"]:has(div[data-testid="stDataEditor"])
                         line_meta = {
                             int(l["id"]): l for l in (pr.get("lines") or [])
                         }
-                        show_post_col = can_post_row and (
-                            pmode_edit == "cash" or bank_id_edit
+                        ed_height = min(420, 72 + max(n_emp, 1) * 35)
+                        edited_raw = st.data_editor(
+                            working,
+                            column_config=col_cfg,
+                            hide_index=True,
+                            use_container_width=True,
+                            num_rows="fixed",
+                            height=ed_height,
+                            key=editor_key,
                         )
-                        if show_post_col:
-                            grid_col, act_col = st.columns([6.2, 0.95], gap="small")
-                        else:
-                            grid_col, act_col = st.container(), None
-
-                        with grid_col:
-                            # Full list height so Post column stays row-aligned (no inner scroll drift)
-                            ed_height = 72 + max(n_emp, 1) * 35
-                            edited_raw = st.data_editor(
-                                working,
-                                column_config=col_cfg,
-                                hide_index=True,
-                                use_container_width=True,
-                                num_rows="fixed",
-                                height=ed_height,
-                                key=editor_key,
-                            )
                         recalc = _payroll_recalc_edit_df(edited_raw, year=py, month=pm)
                         editable_changed = _payroll_edit_df_changed(
                             working, edited_raw, _PAYROLL_EDIT_CMP_COLS,
@@ -2036,112 +1957,120 @@ div[data-testid="stHorizontalBlock"]:has(div[data-testid="stDataEditor"])
                         st.session_state[live_key] = recalc
                         edited_by_dept[dept] = recalc
                         if editable_changed and derived_stale:
-                            # Refresh disabled Gross / Total Ded. / Net in the grid
                             if editor_key in st.session_state:
                                 del st.session_state[editor_key]
                             need_live_rerun = True
 
-                        # One control per row — same pitch as data_editor (35px)
-                        paid_for_undo = []
-                        if show_post_col and act_col is not None:
-                            with act_col:
-                                st.markdown(
-                                    "<div class='pr-act-head'>Post</div>",
-                                    unsafe_allow_html=True,
+                        # Payment desk under the grid (no side button column)
+                        can_desk = can_post_row and (pmode_edit == "cash" or bank_id_edit)
+                        if can_desk:
+                            unpaid_opts = {}
+                            paid_opts = {}
+                            for _, r in recalc.iterrows():
+                                lid = int(r["line_id"])
+                                meta = line_meta.get(lid) or {}
+                                code = str(r.get("Code") or meta.get("emp_code") or "")
+                                name = str(
+                                    r.get("Employee")
+                                    or meta.get("employee_name")
+                                    or meta.get("full_name")
+                                    or f"#{lid}"
                                 )
-                                for _, r in recalc.iterrows():
-                                    lid = int(r["line_id"])
-                                    meta = line_meta.get(lid) or {}
-                                    emp_name = str(
-                                        r.get("Employee")
-                                        or meta.get("employee_name")
-                                        or meta.get("full_name")
-                                        or f"#{lid}"
-                                    )
-                                    is_paid = (
-                                        bool(r.get("_paid"))
-                                        or (meta.get("paid_status") or "") == "paid"
-                                    )
-                                    net_v = float(
-                                        meta.get("net_salary") or r.get("Net") or 0
-                                    )
-                                    if is_paid:
-                                        paid_for_undo.append((lid, emp_name))
-                                        if st.button(
-                                            "Print",
-                                            key=f"pr_edit_pv_{lid}",
-                                            use_container_width=True,
-                                            type="secondary",
-                                            help=f"Print voucher — {emp_name}",
-                                        ):
-                                            st.session_state[print_edit_key] = lid
-                                            st.rerun()
-                                    elif net_v > 0.009:
-                                        btn_lbl = (
-                                            "Post"
-                                            if pmode_edit == "cash"
-                                            else "Bank"
-                                        )
-                                        if st.button(
-                                            btn_lbl,
-                                            type="primary",
-                                            key=f"pr_edit_post_{lid}",
-                                            use_container_width=True,
-                                            help=f"Post & voucher — {emp_name}",
-                                        ):
-                                            try:
-                                                if pmode_edit == "bank" and not bank_id_edit:
-                                                    raise ValueError("Select bank account.")
-                                                res = db.post_and_pay_payroll_line(
-                                                    lid, uid(), pmode_edit,
-                                                    str(pay_date_edit), bank_id_edit,
-                                                )
-                                                st.session_state[print_edit_key] = lid
-                                                ff.action_done(
-                                                    f"**{res['document_no']}** — "
-                                                    f"{res['employee']} paid. "
-                                                    "Print for signature. "
-                                                    "Other employees stay on this draft."
-                                                )
-                                            except Exception as e:
-                                                st.error(str(e))
-                                    else:
-                                        st.markdown(
-                                            "<div class='pr-act-empty'>—</div>",
-                                            unsafe_allow_html=True,
-                                        )
+                                label = f"{name} · {code}".strip(" ·")
+                                net_v = float(r.get("Net") or meta.get("net_salary") or 0)
+                                is_paid = (
+                                    bool(r.get("_paid"))
+                                    or (meta.get("paid_status") or "") == "paid"
+                                )
+                                if is_paid:
+                                    paid_opts[label] = lid
+                                elif net_v > 0.009:
+                                    unpaid_opts[f"{label}  —  {fmt(net_v)}"] = {
+                                        "id": lid, "net": net_v, "name": name,
+                                    }
 
-                        if paid_for_undo:
+                            n_paid = len(paid_opts)
+                            n_ready = len(unpaid_opts)
                             st.markdown(
-                                "<div class='pr-undo-bar'><b>Undo payment</b> "
-                                "<span style='color:#64748b;font-size:0.8rem'>"
-                                "— reverses that employee’s voucher only</span></div>",
+                                f"<div class='pr-desk'>"
+                                f"<div class='pr-desk-label'>Pay / print — {escape(str(dept))}</div>"
+                                f"<div class='pr-desk-meta'>"
+                                f"Ready to post: <b>{n_ready}</b> &nbsp;·&nbsp; "
+                                f"Already paid: <b>{n_paid}</b>"
+                                f"</div></div>",
                                 unsafe_allow_html=True,
                             )
-                            u1, u2 = st.columns([3.2, 1], gap="small")
-                            undo_opts = {
-                                f"{name}": lid for lid, name in paid_for_undo
-                            }
-                            pick_undo = u1.selectbox(
-                                "Paid employee",
-                                list(undo_opts.keys()),
-                                key=f"pr_edit_undo_pick_{pid}_{safe_dept}",
-                                label_visibility="collapsed",
-                            )
-                            if u2.button(
-                                "Undo",
-                                key=f"pr_edit_undo_go_{pid}_{safe_dept}",
-                                use_container_width=True,
-                            ):
-                                try:
-                                    db.rollback_payroll_line_payment(
-                                        int(undo_opts[pick_undo]),
-                                        uid(),
-                                        "Undo from Edit Lines",
-                                    )
+
+                            if unpaid_opts:
+                                d1, d2, d3 = st.columns([3.2, 1.2, 1.4], gap="small")
+                                pick = d1.selectbox(
+                                    "Employee to post",
+                                    list(unpaid_opts.keys()),
+                                    key=f"pr_desk_pick_{pid}_{safe_dept}",
+                                )
+                                sel = unpaid_opts[pick]
+                                d2.markdown(
+                                    f"<div class='pr-desk-net'>{escape(fmt(sel['net']))}</div>",
+                                    unsafe_allow_html=True,
+                                )
+                                post_lbl = (
+                                    "Post cash voucher"
+                                    if pmode_edit == "cash"
+                                    else "Post bank voucher"
+                                )
+                                if d3.button(
+                                    post_lbl,
+                                    type="primary",
+                                    key=f"pr_desk_post_{pid}_{safe_dept}",
+                                    use_container_width=True,
+                                ):
+                                    try:
+                                        if pmode_edit == "bank" and not bank_id_edit:
+                                            raise ValueError("Select bank account.")
+                                        res = db.post_and_pay_payroll_line(
+                                            int(sel["id"]), uid(), pmode_edit,
+                                            str(pay_date_edit), bank_id_edit,
+                                        )
+                                        st.session_state[print_edit_key] = int(sel["id"])
+                                        ff.action_done(
+                                            f"**{res['document_no']}** — "
+                                            f"{res['employee']} paid. "
+                                            "Voucher ready to print. "
+                                            "Other employees stay on this draft."
+                                        )
+                                    except Exception as e:
+                                        st.error(str(e))
+                            else:
+                                st.caption("All staff in this department are paid (or net is zero).")
+
+                            if paid_opts:
+                                p1, p2, p3 = st.columns([3.2, 1.1, 1.1], gap="small")
+                                paid_pick = p1.selectbox(
+                                    "Paid employee",
+                                    list(paid_opts.keys()),
+                                    key=f"pr_desk_paid_{pid}_{safe_dept}",
+                                )
+                                if p2.button(
+                                    "Print voucher",
+                                    key=f"pr_desk_print_{pid}_{safe_dept}",
+                                    use_container_width=True,
+                                ):
+                                    st.session_state[print_edit_key] = int(paid_opts[paid_pick])
                                     st.rerun()
-                                except Exception as e:
-                                    st.error(str(e))
+                                if p3.button(
+                                    "Undo payment",
+                                    key=f"pr_desk_undo_{pid}_{safe_dept}",
+                                    use_container_width=True,
+                                ):
+                                    try:
+                                        db.rollback_payroll_line_payment(
+                                            int(paid_opts[paid_pick]),
+                                            uid(),
+                                            "Undo from Edit Lines",
+                                        )
+                                        st.rerun()
+                                    except Exception as e:
+                                        st.error(str(e))
 
                 if need_live_rerun:
                     st.rerun()
@@ -2206,7 +2135,7 @@ div[data-testid="stHorizontalBlock"]:has(div[data-testid="stDataEditor"])
                             ff.action_done(
                                 f"Updated **{n}** payroll line(s). "
                                 "Where OT Hrs > 0, Overtime was recalculated from the formula. "
-                                "Use **Post & voucher** on a row to pay that employee only."
+                                "Use the **payment desk** under each department to post one employee."
                             )
                         except Exception as e:
                             st.error(str(e))
