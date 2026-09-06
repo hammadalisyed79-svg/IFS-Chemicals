@@ -62,6 +62,11 @@ def create_and_persist_session(user: dict) -> None:
     st.session_state.portal_mode = is_portal_user(user)
     st.session_state[SESSION_STATE_KEY] = token
     st.session_state.pop(SESSION_ENDED_KEY, None)
+    try:
+        from erp_ui.user_prefs import load_home_layout_for_user
+        load_home_layout_for_user(user)
+    except Exception:
+        pass
     _persist_client_session(token)
     _clear_url_session_param()
     _clear_bootstrap_query_param()
@@ -135,6 +140,11 @@ def try_restore_session() -> bool:
         st.session_state.user = user
         st.session_state.portal_mode = is_portal_user(user)
         st.session_state.pop(SESSION_ENDED_KEY, None)
+        try:
+            from erp_ui.user_prefs import load_home_layout_for_user
+            load_home_layout_for_user(user)
+        except Exception:
+            pass
         _persist_client_session(token)
         _clear_bootstrap_query_param()
         _clear_url_session_param()
@@ -199,6 +209,11 @@ def clear_session(*, revoke_token: bool = True) -> None:
         "_portal_sidebar_bootstrapped",
     ):
         st.session_state.pop(key, None)
+    try:
+        from erp_ui.user_prefs import clear_home_layout_session
+        clear_home_layout_session()
+    except Exception:
+        pass
     _clear_client_session()
     _clear_url_session_param()
     _clear_bootstrap_query_param()
