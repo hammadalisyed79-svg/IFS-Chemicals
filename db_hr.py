@@ -3259,6 +3259,8 @@ def issue_advance(advance_id, user_id, payment_mode="cash", bank_account_id=None
         return {
             "document_no": adv["document_no"],
             "payment_document_no": doc_no,
+            "payment_id": entry_id,
+            "vch_source": "cash_payment" if mode == "cash" else "bank_payment",
             "amount": amt,
             "payment_mode": mode,
             "employee": adv.get("employee_name"),
@@ -3415,11 +3417,16 @@ def issue_loan(loan_id, user_id, payment_mode="cash", bank_account_id=None):
         emp_lbl = f"{ln.get('employee_name') or ''} ({ln.get('emp_code') or ''})".strip()
         label = f"Employee loan {ln['document_no']} - {emp_lbl}"
         ref = ln["document_no"]
+        adv_acct = conn.execute(
+            "SELECT id FROM chart_of_accounts WHERE code=?", (HR_AC["employee_advance"],)
+        ).fetchone()
+        adv_acct_id = int(adv_acct[0]) if adv_acct else None
 
         if mode == "cash":
             entry_id, doc_no = db._add_cash_payment(
                 conn, post_date, label, ref, amt, user_id,
-                party_type="employee", party_id=ln["employee_id"],
+                account_id=adv_acct_id,
+                party_type="account", party_id=adv_acct_id,
             )
             asset_id = conn.execute(
                 "SELECT id FROM chart_of_accounts WHERE code=?", (AC["cash"],)
@@ -3428,7 +3435,7 @@ def issue_loan(loan_id, user_id, payment_mode="cash", bank_account_id=None):
         else:
             entry_id, doc_no = db._add_bank_payment(
                 conn, post_date, label, ref, amt, bank_account_id, user_id,
-                party_type="employee", party_id=ln["employee_id"],
+                party_type="account", party_id=adv_acct_id,
             )
             asset_id = bank_account_id
 
@@ -3458,10 +3465,33 @@ def issue_loan(loan_id, user_id, payment_mode="cash", bank_account_id=None):
         return {
             "document_no": ln["document_no"],
             "payment_document_no": doc_no,
+            "payment_id": entry_id,
+            "vch_source": "cash_payment" if mode == "cash" else "bank_payment",
             "amount": amt,
             "payment_mode": mode,
             "employee": ln.get("employee_name"),
         }
+
+
+def resolve_cash_bank_voucher(document_no):
+    """Map CP-/BP- document_no → {id, vch_source, document_no} for print toolbar."""
+    from database import get_connection
+
+    doc = (document_no or "").strip()
+    if not doc:
+        return None
+    with get_connection() as conn:
+        row = conn.execute(
+            "SELECT id FROM cash_payments WHERE document_no=?", (doc,),
+        ).fetchone()
+        if row:
+            return {"id": int(row[0]), "vch_source": "cash_payment", "document_no": doc}
+        row = conn.execute(
+            "SELECT id FROM bank_payments WHERE document_no=?", (doc,),
+        ).fetchone()
+        if row:
+            return {"id": int(row[0]), "vch_source": "bank_payment", "document_no": doc}
+    return None
 
 
 # ---------- Expense claims ----------

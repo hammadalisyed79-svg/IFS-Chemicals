@@ -2611,8 +2611,27 @@ def page_advances():
                 except Exception as e:
                     st.error(str(e))
     elif tab == "Approve / Issue":
+        from erp_ui.document_print import document_print_toolbar
+
         pending = db.get_advances(status="pending") or []
         approved = db.get_advances(status="approved") or []
+
+        print_info = st.session_state.get("last_adv_print")
+        if print_info and print_info.get("id"):
+            st.success(
+                f"Voucher **{print_info.get('document_no')}** ready — print for signature."
+            )
+            document_print_toolbar(
+                "Payment Voucher",
+                int(print_info["id"]),
+                key_prefix="hr_adv_issue_print",
+                vch_source=print_info.get("vch_source"),
+            )
+            if st.button("Clear print preview", key="hr_adv_print_clear"):
+                st.session_state.pop("last_adv_print", None)
+                st.rerun()
+            st.divider()
+
         if db.user_can_hr(st.session_state.user, "approve"):
             st.subheader("Pending approval")
             if not pending:
@@ -2668,13 +2687,53 @@ def page_advances():
                             res = db.issue_advance(
                                 r["id"], uid(), payment_mode=pmode, bank_account_id=bank_id,
                             )
+                            retain = None
+                            if res.get("payment_id"):
+                                retain = {
+                                    "last_adv_print": {
+                                        "id": res["payment_id"],
+                                        "vch_source": res.get("vch_source"),
+                                        "document_no": res.get("payment_document_no"),
+                                        "adv_no": res.get("document_no"),
+                                    }
+                                }
                             ff.action_done(
                                 f"**{res['document_no']}** issued — "
                                 f"cash book voucher **{res['payment_document_no']}** "
-                                f"({fmt(res['amount'])})."
+                                f"({fmt(res['amount'])}). Print voucher above.",
+                                retain=retain,
                             )
                         except Exception as e:
                             st.error(str(e))
+
+            # Reprint for already-issued advances (list empties after issue)
+            issued = [
+                r for r in (db.get_advances(status="issued") or [])
+                if (r.get("payment_document_no") or "").strip()
+            ][:20]
+            if issued:
+                st.subheader("Reprint issued vouchers")
+                pick = {
+                    f"{r['document_no']} · {r.get('payment_document_no')} · "
+                    f"{r['employee_name']} · {fmt(r['amount'])}": r
+                    for r in issued
+                }
+                sel = st.selectbox(
+                    "Issued advance", list(pick.keys()), key="hr_adv_reprint_sel",
+                )
+                if st.button("Print voucher", key="hr_adv_reprint_btn", type="primary"):
+                    row = pick[sel]
+                    vch = db.resolve_cash_bank_voucher(row.get("payment_document_no"))
+                    if not vch:
+                        st.error("Cash/bank voucher not found for this advance.")
+                    else:
+                        st.session_state["last_adv_print"] = {
+                            "id": vch["id"],
+                            "vch_source": vch["vch_source"],
+                            "document_no": vch["document_no"],
+                            "adv_no": row.get("document_no"),
+                        }
+                        st.rerun()
 
 
 def page_loans():
