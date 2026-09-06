@@ -3124,6 +3124,98 @@ def rollback_payroll_line_payment(line_id, user_id, reason=""):
 
 
 # ---------- Advances ----------
+# Recoveries on draft/approved payroll are provisional — cash is still outstanding
+# until the salary run is posted or paid.
+_PAYROLL_RECOVERY_FINAL = frozenset({"posted", "paid"})
+
+
+def _payroll_recovery_is_final(status) -> bool:
+    return str(status or "").strip().lower() in _PAYROLL_RECOVERY_FINAL
+
+
+def _provisional_advance_recovery_map(conn, employee_id=None) -> dict[int, float]:
+    """advance_id → amount recovered only on non-final (draft/approved) payroll."""
+    q = """SELECT s.advance_id, COALESCE(SUM(s.amount),0) AS amt
+           FROM advance_recovery_schedule s
+           JOIN employee_advances a ON a.id=s.advance_id
+           JOIN payroll_runs pr ON pr.id=s.payroll_id
+           WHERE COALESCE(s.recovered,0)=1
+             AND LOWER(COALESCE(pr.status,'')) NOT IN ('posted','paid')"""
+    p = []
+    if employee_id is not None:
+        q += " AND a.employee_id=?"
+        p.append(int(employee_id))
+    q += " GROUP BY s.advance_id"
+    return {int(r[0]): float(r[1] or 0) for r in conn.execute(q, p).fetchall()}
+
+
+def _provisional_loan_recovery_map(conn, employee_id=None) -> dict[int, float]:
+    """loan_id → installment amount recovered only on non-final payroll."""
+    q = """SELECT i.loan_id, COALESCE(SUM(i.amount),0) AS amt
+           FROM loan_installments i
+           JOIN employee_loans l ON l.id=i.loan_id
+           JOIN payroll_runs pr ON pr.id=i.payroll_id
+           WHERE COALESCE(i.recovered,0)=1
+             AND LOWER(COALESCE(pr.status,'')) NOT IN ('posted','paid')"""
+    p = []
+    if employee_id is not None:
+        q += " AND l.employee_id=?"
+        p.append(int(employee_id))
+    q += " GROUP BY i.loan_id"
+    return {int(r[0]): float(r[1] or 0) for r in conn.execute(q, p).fetchall()}
+
+
+def _annotate_advance_effective(row: dict, provisional: dict[int, float]) -> dict:
+    """Add effective_outstanding / display status (draft recoveries still outstanding)."""
+    bump = float(provisional.get(int(row["id"]), 0) or 0)
+    stored = float(row.get("outstanding_amount") or 0)
+    effective = round(stored + bump, 2)
+    amt = float(row.get("amount") or 0)
+    row["effective_outstanding"] = effective
+    row["effective_recovered"] = round(max(0.0, amt - effective), 2)
+    st = (row.get("status") or "").lower()
+    if effective > 0.009 and st in ("issued", "closed"):
+        row["display_status"] = "issued"
+    else:
+        row["display_status"] = st or "issued"
+    return row
+
+
+def _annotate_loan_effective(row: dict, provisional: dict[int, float]) -> dict:
+    bump = float(provisional.get(int(row["id"]), 0) or 0)
+    stored = float(row.get("outstanding_amount") or 0)
+    effective = round(stored + bump, 2)
+    amt = float(row.get("amount") or 0)
+    row["effective_outstanding"] = effective
+    row["effective_recovered"] = round(max(0.0, amt - effective), 2)
+    st = (row.get("status") or "").lower()
+    if effective > 0.009 and st in ("issued", "closed"):
+        row["display_status"] = "issued"
+    else:
+        row["display_status"] = st or "issued"
+    return row
+
+
+def _effective_advance_outstanding(conn, employee_id: int) -> float:
+    stored = float(conn.execute(
+        """SELECT COALESCE(SUM(outstanding_amount),0) FROM employee_advances
+           WHERE employee_id=? AND status IN ('issued','closed')""",
+        (int(employee_id),),
+    ).fetchone()[0] or 0)
+    bump = sum(_provisional_advance_recovery_map(conn, employee_id).values())
+    return round(stored + bump, 2)
+
+
+def _effective_loan_outstanding(conn, employee_id: int) -> float:
+    stored = float(conn.execute(
+        """SELECT COALESCE(SUM(outstanding_amount),0) FROM employee_loans
+           WHERE employee_id=? AND status IN ('issued','closed')""",
+        (int(employee_id),),
+    ).fetchone()[0] or 0)
+    bump = sum(_provisional_loan_recovery_map(conn, employee_id).values())
+    return round(stored + bump, 2)
+
+
 def _normalize_salary_month(raw) -> str | None:
     """Return YYYY-MM or None."""
     if raw is None or raw == "":
@@ -3150,25 +3242,22 @@ def _salary_month_due_date(salary_month: str | None, fallback_date: str) -> str:
 
 
 def get_employee_advance_context(employee_id: int) -> dict | None:
-    """Salary + ledger/outstanding snapshot for Advance New Request."""
+    """Salary + ledger/outstanding snapshot for Advance / Loan New Request.
+
+    Outstanding ignores recoveries that only sit on draft/approved payroll
+    (cash is still out until salary is posted/paid).
+    """
     emp = get_employee_hr(employee_id)
     if not emp:
         return None
     _, entries = get_employee_ledger(employee_id)
     closing = float(entries[-1]["balance"]) if entries else 0.0
-    adv_out = sum(
-        float(a.get("outstanding_amount") or 0)
-        for a in (get_advances(status="issued", employee_id=employee_id) or [])
-    )
-    loan_out = sum(
-        float(l.get("outstanding_amount") or 0)
-        for l in (get_loans(status="issued", employee_id=employee_id) or [])
-    )
-    basic = float(emp.get("basic_salary") or 0)
-    # Prefer active salary structure basic if present
     from database import get_connection
     with get_connection() as conn:
         apply_hr(conn, __import__("database"))
+        adv_out = _effective_advance_outstanding(conn, int(employee_id))
+        loan_out = _effective_loan_outstanding(conn, int(employee_id))
+        basic = float(emp.get("basic_salary") or 0)
         struct = conn.execute(
             """SELECT basic_salary FROM salary_structures
                WHERE employee_id=? AND is_active=1
@@ -3220,11 +3309,13 @@ def get_advances(status=None, employee_id=None):
     with get_connection() as conn:
         apply_hr(conn, __import__("database"))
         rows = rows_to_list(conn.execute(q, p).fetchall())
+        prov = _provisional_advance_recovery_map(conn, employee_id)
     for r in rows:
         code = (r.get("employee_code") or "").strip()
         name = (r.get("employee_name") or "").strip()
         if code and name:
             r["employee_name"] = f"{code} - {name}"
+        _annotate_advance_effective(r, prov)
     return rows
 
 
@@ -3447,11 +3538,13 @@ def get_loans(status=None, employee_id=None):
     with get_connection() as conn:
         apply_hr(conn, __import__("database"))
         rows = rows_to_list(conn.execute(q, p).fetchall())
+        prov = _provisional_loan_recovery_map(conn, employee_id)
     for r in rows:
         code = (r.get("employee_code") or "").strip()
         name = (r.get("employee_name") or "").strip()
         if code and name:
             r["employee_name"] = f"{code} - {name}"
+        _annotate_loan_effective(r, prov)
     return rows
 
 
@@ -3704,11 +3797,35 @@ def report_salary_sheet(payroll_id):
 
 
 def report_outstanding_advances():
-    return get_advances(status="issued")
+    """Advances still owed — includes those only recovered on draft payroll."""
+    rows = get_advances() or []
+    out = []
+    for r in rows:
+        if (r.get("status") or "").lower() in ("rejected", "pending", "approved"):
+            continue
+        if float(r.get("effective_outstanding") or 0) > 0.009:
+            # Expose effective figures as the report columns
+            r = dict(r)
+            r["outstanding_amount"] = r["effective_outstanding"]
+            r["recovered_amount"] = r.get("effective_recovered")
+            r["status"] = r.get("display_status") or r.get("status")
+            out.append(r)
+    return out
 
 
 def report_outstanding_loans():
-    return get_loans(status="issued")
+    rows = get_loans() or []
+    out = []
+    for r in rows:
+        if (r.get("status") or "").lower() in ("rejected", "pending", "approved"):
+            continue
+        if float(r.get("effective_outstanding") or 0) > 0.009:
+            r = dict(r)
+            r["outstanding_amount"] = r["effective_outstanding"]
+            r["recovered_amount"] = r.get("effective_recovered")
+            r["status"] = r.get("display_status") or r.get("status")
+            out.append(r)
+    return out
 
 
 def report_dept_salary_cost(payroll_id):
@@ -3753,12 +3870,14 @@ def get_employee_ledger(employee_id, from_date=None, to_date=None):
     out_loan = 0.0
 
     with get_connection() as conn:
+        out_adv = _effective_advance_outstanding(conn, int(employee_id))
+        out_loan = _effective_loan_outstanding(conn, int(employee_id))
+
         for adv in rows_to_list(conn.execute(
             """SELECT document_no, request_date, issued_at, amount, outstanding_amount, status
                FROM employee_advances WHERE employee_id=? AND status IN ('issued','closed')""",
             (employee_id,),
         ).fetchall()):
-            out_adv += float(adv.get("outstanding_amount") or 0)
             dt = adv.get("issued_at") or adv.get("request_date")
             raw.append((dt, adv["document_no"], "Advance issued", float(adv["amount"] or 0), 0.0))
 
@@ -3767,7 +3886,6 @@ def get_employee_ledger(employee_id, from_date=None, to_date=None):
                FROM employee_loans WHERE employee_id=? AND status IN ('issued','closed')""",
             (employee_id,),
         ).fetchall()):
-            out_loan += float(ln.get("outstanding_amount") or 0)
             dt = ln.get("issued_at") or ln.get("issue_date")
             raw.append((dt, ln["document_no"], "Loan issued", float(ln["amount"] or 0), 0.0))
 
@@ -3789,10 +3907,12 @@ def get_employee_ledger(employee_id, from_date=None, to_date=None):
             adv_rec = float(pr.get("advance_recovery") or 0)
             loan_rec = float(pr.get("loan_recovery") or 0)
             net = float(pr.get("net_salary") or 0)
-            if adv_rec:
-                raw.append((dt, ref, f"Advance recovery ({period})", 0.0, adv_rec))
-            if loan_rec:
-                raw.append((dt, ref, f"Loan recovery ({period})", 0.0, loan_rec))
+            # Draft/approved recoveries are provisional — do not credit ledger yet
+            if _payroll_recovery_is_final(pr.get("status")):
+                if adv_rec:
+                    raw.append((dt, ref, f"Advance recovery ({period})", 0.0, adv_rec))
+                if loan_rec:
+                    raw.append((dt, ref, f"Loan recovery ({period})", 0.0, loan_rec))
             if net and pr.get("status") in ("posted", "paid", "approved"):
                 raw.append((dt, ref, f"Net salary ({period})", 0.0, net))
             paid_amt = float(pr.get("paid_amount") or 0)

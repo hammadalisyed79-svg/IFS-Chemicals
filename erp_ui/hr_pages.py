@@ -2325,6 +2325,11 @@ def _advance_register_rows(employee_id=None):
                 sm_lbl = sm
         else:
             sm_lbl = "Next salary"
+        outstanding = float(r.get("effective_outstanding") if r.get("effective_outstanding") is not None
+                            else r.get("outstanding_amount") or 0)
+        recovered = float(r.get("effective_recovered") if r.get("effective_recovered") is not None
+                          else r.get("recovered_amount") or 0)
+        status = (r.get("display_status") or r.get("status") or "").upper()
         rows.append({
             "Document": r.get("document_no"),
             "Employee": r.get("employee_name"),
@@ -2333,9 +2338,9 @@ def _advance_register_rows(employee_id=None):
             "Voucher": r.get("payment_document_no") or "—",
             "Amount": float(r.get("amount") or 0),
             "Recovery": "100% salary month" if months <= 1 else f"{months} months",
-            "Recovered": float(r.get("recovered_amount") or 0),
-            "Outstanding": float(r.get("outstanding_amount") or 0),
-            "Status": (r.get("status") or "").upper(),
+            "Recovered": recovered,
+            "Outstanding": outstanding,
+            "Status": status,
             "Reason": r.get("reason") or "",
             "_sort": r.get("request_date") or "",
             "_id": r.get("id"),
@@ -2350,6 +2355,11 @@ def _loan_register_rows(employee_id=None):
     rows = []
     for r in db.get_loans(employee_id=employee_id) or []:
         inst = int(r.get("installments") or 1)
+        outstanding = float(r.get("effective_outstanding") if r.get("effective_outstanding") is not None
+                            else r.get("outstanding_amount") or 0)
+        recovered = float(r.get("effective_recovered") if r.get("effective_recovered") is not None
+                          else r.get("recovered_amount") or 0)
+        status = (r.get("display_status") or r.get("status") or "").upper()
         rows.append({
             "Document": r.get("document_no"),
             "Employee": r.get("employee_name"),
@@ -2358,9 +2368,9 @@ def _loan_register_rows(employee_id=None):
             "Amount": float(r.get("amount") or 0),
             "Installments": inst,
             "Monthly": float(r.get("monthly_installment") or 0),
-            "Recovered": float(r.get("recovered_amount") or 0),
-            "Outstanding": float(r.get("outstanding_amount") or 0),
-            "Status": (r.get("status") or "").upper(),
+            "Recovered": recovered,
+            "Outstanding": outstanding,
+            "Status": status,
             "Reason": r.get("reason") or "",
             "_sort": r.get("issue_date") or "",
             "_id": r.get("id"),
@@ -3068,14 +3078,24 @@ def page_employee_ledger():
         return
     closing = float(entries[-1]["balance"]) if entries else 0.0
     st.subheader(f"{emp.get('full_name') or emp.get('code')}")
-    adv_out = sum(
-        float(a.get("outstanding_amount") or 0)
-        for a in db.get_advances(status="issued", employee_id=emp["id"])
-    )
-    loan_out = sum(
-        float(l.get("outstanding_amount") or 0)
-        for l in db.get_loans(status="issued", employee_id=emp["id"])
-    )
+    ctx = None
+    try:
+        ctx = db.get_employee_advance_context(emp["id"])
+    except Exception:
+        ctx = None
+    adv_out = float((ctx or {}).get("advance_outstanding") or 0)
+    loan_out = float((ctx or {}).get("loan_outstanding") or 0)
+    if ctx is None:
+        adv_out = sum(
+            float(a.get("effective_outstanding") or a.get("outstanding_amount") or 0)
+            for a in db.get_advances(employee_id=emp["id"]) or []
+            if (a.get("display_status") or a.get("status") or "").lower() == "issued"
+        )
+        loan_out = sum(
+            float(l.get("effective_outstanding") or l.get("outstanding_amount") or 0)
+            for l in db.get_loans(employee_id=emp["id"]) or []
+            if (l.get("display_status") or l.get("status") or "").lower() == "issued"
+        )
     k1, k2, k3 = st.columns(3, gap="small")
     k1.markdown(
         f"<div class='txn-kpi-card'><p class='txn-kpi'>Outstanding Advance</p>"
