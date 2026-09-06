@@ -2698,12 +2698,19 @@ def page_advances():
                                         "adv_no": res.get("document_no"),
                                     }
                                 }
-                            ff.action_done(
+                            msg = (
                                 f"**{res['document_no']}** issued — "
                                 f"cash book voucher **{res['payment_document_no']}** "
-                                f"({fmt(res['amount'])}). Print voucher above.",
-                                retain=retain,
+                                f"({fmt(res['amount'])}). Print voucher above."
                             )
+                            sync = res.get("payroll_sync") or {}
+                            if sync.get("synced"):
+                                msg += (
+                                    f" Synced to draft **{sync.get('payroll_no')}** — "
+                                    f"Advance recovery now **{fmt(sync.get('advance_recovery'))}** "
+                                    f"(net **{fmt(sync.get('net_salary'))}**)."
+                                )
+                            ff.action_done(msg, retain=retain)
                         except Exception as e:
                             st.error(str(e))
 

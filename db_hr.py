@@ -2300,6 +2300,80 @@ def refresh_payroll_loan_advance_recoveries(payroll_id, user_id=None):
         return n
 
 
+def _sync_employee_recoveries_on_draft_payroll(conn, employee_id, salary_month):
+    """Pull newly issued advances/loans onto matching draft payroll (one employee).
+
+    Used when cash is issued after the draft salary sheet already exists.
+    """
+    sm = _normalize_salary_month(salary_month)
+    if not sm:
+        return None
+    try:
+        year, month = int(sm[:4]), int(sm[5:7])
+    except (TypeError, ValueError):
+        return None
+    pr = conn.execute(
+        """SELECT id, status, payroll_year, payroll_month FROM payroll_runs
+           WHERE payroll_year=? AND payroll_month=? AND status='draft'
+           ORDER BY id DESC LIMIT 1""",
+        (year, month),
+    ).fetchone()
+    if not pr:
+        return None
+    payroll_id = int(pr["id"])
+    line = conn.execute(
+        """SELECT id, employee_id, basic_salary, allowances, overtime, bonus,
+                  tax_deduction, eobi, social_security, other_deductions,
+                  days_present, days_absent, overtime_hrs, paid_status
+           FROM payroll_lines WHERE payroll_id=? AND employee_id=?""",
+        (payroll_id, int(employee_id)),
+    ).fetchone()
+    if not line:
+        return None
+    ln = dict(line)
+    if (ln.get("paid_status") or "") == "paid":
+        return {
+            "payroll_id": payroll_id,
+            "synced": False,
+            "reason": "line already paid",
+        }
+
+    period_end = _period_bounds(month, year)[1]
+    adv_ids = _undo_advance_recoveries_for_employee(conn, payroll_id, int(employee_id))
+    loan_ids = _undo_loan_recoveries_for_employee(conn, payroll_id, int(employee_id))
+    for aid in adv_ids:
+        _rebuild_unpaid_advance_schedule(conn, aid)
+    for lid in loan_ids:
+        _rebuild_unpaid_loan_installments(conn, lid)
+
+    adv = _recover_advances(conn, int(employee_id), payroll_id, period_end)
+    loan = _recover_loans(conn, int(employee_id), payroll_id, period_end)
+    merged = {**ln, "advance_recovery": adv, "loan_recovery": loan}
+    calc = _recalc_payroll_line_fields(merged, year=year, month=month, sync_ot=None)
+    conn.execute(
+        """UPDATE payroll_lines SET
+           advance_recovery=?, loan_recovery=?,
+           total_deductions=?, net_salary=?, gross_salary=?
+           WHERE id=?""",
+        (
+            calc["advance_recovery"], calc["loan_recovery"],
+            calc["total_deductions"], calc["net_salary"], calc["gross_salary"],
+            ln["id"],
+        ),
+    )
+    _refresh_payroll_run_totals(conn, payroll_id)
+    return {
+        "payroll_id": payroll_id,
+        "payroll_no": conn.execute(
+            "SELECT document_no FROM payroll_runs WHERE id=?", (payroll_id,),
+        ).fetchone()[0],
+        "synced": True,
+        "advance_recovery": calc["advance_recovery"],
+        "loan_recovery": calc["loan_recovery"],
+        "net_salary": calc["net_salary"],
+    }
+
+
 def approve_payroll(payroll_id, user_id):
     from database import get_connection
     with get_connection() as conn:
@@ -3259,7 +3333,10 @@ def issue_advance(advance_id, user_id, payment_mode="cash", bank_account_id=None
                 "INSERT INTO advance_recovery_schedule(advance_id,installment_no,due_date,amount) VALUES(?,?,?,?)",
                 (advance_id, i + 1, due, monthly),
             )
-        return {
+        sync = _sync_employee_recoveries_on_draft_payroll(
+            conn, adv["employee_id"], adv.get("salary_month"),
+        )
+        out = {
             "document_no": adv["document_no"],
             "payment_document_no": doc_no,
             "payment_id": entry_id,
@@ -3268,6 +3345,9 @@ def issue_advance(advance_id, user_id, payment_mode="cash", bank_account_id=None
             "payment_mode": mode,
             "employee": adv.get("employee_name"),
         }
+        if sync:
+            out["payroll_sync"] = sync
+        return out
 
 
 def backfill_advance_cash_voucher(advance_id, user_id=None):
