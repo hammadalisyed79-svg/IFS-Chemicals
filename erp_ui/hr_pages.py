@@ -115,6 +115,26 @@ _PAYROLL_EDIT_CMP_COLS = (
 )
 
 
+def _payroll_edit_row_payload(r) -> dict:
+    """Build update_payroll_lines_bulk payload from an Edit Lines grid row."""
+    return {
+        "line_id": int(r["line_id"]),
+        "basic_salary": float(r.get("Basic") or 0),
+        "allowances": float(r.get("Allowances") or 0),
+        "overtime": float(r.get("Overtime") or 0),
+        "bonus": float(r.get("Bonus") or 0),
+        "tax_deduction": float(r.get("_tax") or 0),
+        "eobi": float(r.get("_eobi") or 0),
+        "social_security": float(r.get("_ss") or 0),
+        "advance_recovery": float(r.get("Advance") or 0),
+        "loan_recovery": float(r.get("Loan") or 0),
+        "other_deductions": float(r.get("Other Ded.") or 0),
+        "days_present": float(r.get("Present") or 0),
+        "days_absent": float(r.get("Absent") or 0),
+        "overtime_hrs": float(r.get("OT Hrs") or 0),
+    }
+
+
 def _payroll_recalc_edit_df(df: pd.DataFrame, year: int | None = None, month: int | None = None) -> pd.DataFrame:
     """Live Gross / Total Ded. / Net (and OT amount from hours when OT Hrs > 0).
 
@@ -2075,13 +2095,26 @@ def page_payroll():
 
                             n_paid = len(paid_opts)
                             n_ready = len(unpaid_opts)
+                            n_neg = sum(
+                                1 for _, r in recalc.iterrows()
+                                if not (
+                                    bool(r.get("_paid"))
+                                    or ((line_meta.get(int(r["line_id"])) or {}).get("paid_status") or "") == "paid"
+                                )
+                                and float(r.get("Net") or 0) <= 0.009
+                            )
                             st.markdown(
                                 f"<div class='pr-desk'>"
                                 f"<div class='pr-desk-label'>Pay / print — {escape(str(dept))}</div>"
                                 f"<div class='pr-desk-meta'>"
                                 f"Ready to post: <b>{n_ready}</b> &nbsp;·&nbsp; "
                                 f"Already paid: <b>{n_paid}</b>"
-                                f"</div></div>",
+                                + (
+                                    f" &nbsp;·&nbsp; Negative / nil net: <b>{n_neg}</b> "
+                                    f"(adjust Advance/Loan — not payable)"
+                                    if n_neg else ""
+                                )
+                                + f"</div></div>",
                                 unsafe_allow_html=True,
                             )
 
@@ -2111,6 +2144,23 @@ def page_payroll():
                                     try:
                                         if pmode_edit == "bank" and not bank_id_edit:
                                             raise ValueError("Select bank account.")
+                                        # Persist live grid amounts first — desk shows grid Net,
+                                        # but pay reads the database (unsaved Loan/Advance caused
+                                        # "Net salary is zero" while the dropdown showed a positive Net).
+                                        row_live = recalc.loc[
+                                            recalc["line_id"].astype(int) == int(sel["id"])
+                                        ]
+                                        if not row_live.empty:
+                                            db.update_payroll_lines_bulk(
+                                                [_payroll_edit_row_payload(row_live.iloc[0])],
+                                                uid(),
+                                            )
+                                        grid_net = float(sel.get("net") or 0)
+                                        if grid_net <= 0.009:
+                                            raise ValueError(
+                                                "Net salary is zero or negative — "
+                                                "lower Advance/Loan or skip this employee."
+                                            )
                                         res = db.post_and_pay_payroll_line(
                                             int(sel["id"]), uid(), pmode_edit,
                                             str(pay_date_edit), bank_id_edit,
@@ -2204,22 +2254,7 @@ def page_payroll():
                                 break
                         if not changed:
                             continue
-                        updates.append({
-                            "line_id": int(lid),
-                            "basic_salary": float(cur.at[lid, "Basic"] or 0),
-                            "allowances": float(cur.at[lid, "Allowances"] or 0),
-                            "overtime": float(cur.at[lid, "Overtime"] or 0),
-                            "bonus": float(cur.at[lid, "Bonus"] or 0),
-                            "tax_deduction": float(cur.at[lid, "_tax"] or 0),
-                            "eobi": float(cur.at[lid, "_eobi"] or 0),
-                            "social_security": float(cur.at[lid, "_ss"] or 0),
-                            "advance_recovery": float(cur.at[lid, "Advance"] or 0),
-                            "loan_recovery": float(cur.at[lid, "Loan"] or 0),
-                            "other_deductions": float(cur.at[lid, "Other Ded."] or 0),
-                            "days_present": float(cur.at[lid, "Present"] or 0),
-                            "days_absent": float(cur.at[lid, "Absent"] or 0),
-                            "overtime_hrs": float(cur.at[lid, "OT Hrs"] or 0),
-                        })
+                        updates.append(_payroll_edit_row_payload(cur.loc[lid]))
                     if not updates:
                         st.warning("No changes to save.")
                     else:

@@ -3121,7 +3121,10 @@ def pay_payroll_line(line_id, user_id, payment_mode="cash", payment_date=None, b
             raise ValueError(f"Already paid ({row.get('payment_document_no') or '—'}).")
         amt = round(float(row.get("net_salary") or 0), 2)
         if amt <= 0:
-            raise ValueError("Net salary is zero — nothing to pay.")
+            raise ValueError(
+                "Net salary is zero or negative — nothing to pay. "
+                "Save the sheet (or lower Advance/Loan) so Net is positive, then post again."
+            )
 
         whole_posted = bool(conn.execute(
             "SELECT 1 FROM general_ledger WHERE reference_type='payroll' AND reference_id=? LIMIT 1",
