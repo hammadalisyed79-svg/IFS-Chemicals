@@ -2948,7 +2948,20 @@ def get_payroll_line_voucher_data(line_id):
                WHERE pl.id=?""",
             (int(line_id),),
         ).fetchone()
-        return row_to_dict(row) if row else None
+        data = row_to_dict(row) if row else None
+    if not data:
+        return None
+    eid = int(data.get("employee_id") or 0)
+    if eid:
+        ctx = get_employee_advance_context(eid) or {}
+        data["advance_outstanding"] = float(ctx.get("advance_outstanding") or 0)
+        data["loan_outstanding"] = float(ctx.get("loan_outstanding") or 0)
+        data["ledger_balance"] = float(ctx.get("ledger_balance") or 0)
+    else:
+        data["advance_outstanding"] = 0.0
+        data["loan_outstanding"] = 0.0
+        data["ledger_balance"] = 0.0
+    return data
 
 
 def _undo_gl_by_reference(conn, ref_type, ref_id):

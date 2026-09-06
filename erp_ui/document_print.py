@@ -1833,6 +1833,15 @@ def salary_payment_voucher_html(line_id):
         f"<tr><td>{escape(lbl)}</td><td class='num'>{_money_cell(amt)}</td></tr>"
         for lbl, amt in rows
     )
+    bal_rows = [
+        ("Total advance outstanding", v.get("advance_outstanding")),
+        ("Total loan outstanding", v.get("loan_outstanding")),
+        ("Ledger balance", v.get("ledger_balance")),
+    ]
+    bal_html = "".join(
+        f"<tr><td>{escape(lbl)}</td><td class='num'>{_money_cell(amt)}</td></tr>"
+        for lbl, amt in bal_rows
+    )
     att = (
         f"Present {float(v.get('days_present') or 0):.1f} · "
         f"Absent {float(v.get('days_absent') or 0):.1f} · "
@@ -1857,6 +1866,10 @@ def salary_payment_voucher_html(line_id):
         "<table class='lines' style='width:100%;margin-top:6px'>"
         "<thead><tr><th>Particulars</th><th class='num'>Amount (Rs.)</th></tr></thead>"
         f"<tbody>{lines_html}</tbody></table>"
+        "<table class='lines' style='width:100%;margin-top:8px'>"
+        "<thead><tr><th>Balances (after this payment)</th>"
+        "<th class='num'>Amount (Rs.)</th></tr></thead>"
+        f"<tbody>{bal_html}</tbody></table>"
         f"<p style='margin-top:8px;font-size:0.9rem'>Received Rs. "
         f"<strong>{_money_cell(v.get('paid_amount') or v.get('net_salary'))}</strong> "
         f"as salary for <strong>{escape(period)}</strong>.</p>"
