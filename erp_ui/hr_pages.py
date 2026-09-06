@@ -439,7 +439,7 @@ def _render_single_employee_edit_pay(
             "(recoveries reduce outstanding)</p>",
             unsafe_allow_html=True,
         )
-        d1, d2, d3 = st.columns(3)
+        d1, d2, d3, d4 = st.columns(4)
         with d1:
             adv = money_input(
                 "Advance recovery (this month)",
@@ -463,6 +463,26 @@ def _render_single_employee_edit_pay(
                 min_value=0.0,
                 key=f"pr_sep_other_{pid}",
             )
+        with d4:
+            leave_ded_saved = float(line.get("absent_deduction") or 0)
+            try:
+                leave_ded_calc = float(
+                    db.calc_absent_deduction(
+                        float(line.get("basic_salary") or 0), py, pm,
+                        float(line.get("days_absent") or 0),
+                    ) or 0
+                )
+            except Exception:
+                leave_ded_calc = leave_ded_saved
+            st.metric(
+                "Absent / leave deduction",
+                fmt(leave_ded_saved),
+                help=(
+                    f"LWP auto: Basic ÷ {mdays} × Days Absent "
+                    f"(= {fmt(leave_ded_calc)} from current Basic/Absent). "
+                    "Paid Leave is not deducted — mark attendance as Leave, not Absent."
+                ),
+            )
 
         st.markdown("<p class='sep-section-lbl'>Attendance & overtime</p>", unsafe_allow_html=True)
         a1, a2, a3, a4 = st.columns(4)
@@ -479,6 +499,7 @@ def _render_single_employee_edit_pay(
             value=float(line.get("days_absent") or 0),
             step=0.5,
             key=f"pr_sep_da_{pid}",
+            help="Unpaid days (LWP). Paid leave must be marked Leave in attendance, not Absent.",
         )
         ot_hrs = a3.number_input(
             "Overtime Hours",
@@ -499,31 +520,27 @@ def _render_single_employee_edit_pay(
             + float(overtime or 0) + float(bonus or 0),
             2,
         )
+        try:
+            leave_ded_prev = float(
+                db.calc_absent_deduction(
+                    float(basic or 0), py, pm, float(days_absent or 0),
+                ) or 0
+            )
+        except Exception:
+            leave_ded_prev = float(line.get("absent_deduction") or 0)
         preview_ded = round(
             float(line.get("tax_deduction") or 0)
             + float(line.get("eobi") or 0)
             + float(line.get("social_security") or 0)
             + float(adv or 0) + float(loan or 0) + float(other or 0)
-            + float(line.get("absent_deduction") or 0),
+            + float(leave_ded_prev or 0),
             2,
         )
-        if abs(float(days_absent or 0) - float(line.get("days_absent") or 0)) > 0.009:
-            try:
-                abs_prev = db.calc_absent_deduction(
-                    float(basic or 0), py, pm, float(days_absent or 0),
-                )
-                preview_ded = round(
-                    preview_ded
-                    - float(line.get("absent_deduction") or 0)
-                    + float(abs_prev or 0),
-                    2,
-                )
-            except Exception:
-                pass
         preview_net = round(preview_gross - preview_ded, 2)
         st.markdown(
             f"<div class='sep-preview'><b>Preview</b> · "
             f"Gross {escape(fmt(preview_gross))} · "
+            f"Absent/LWP {escape(fmt(leave_ded_prev))} · "
             f"Deductions {escape(fmt(preview_ded))} · "
             f"Net <b>{escape(fmt(preview_net))}</b></div>",
             unsafe_allow_html=True,
