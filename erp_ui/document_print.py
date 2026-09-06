@@ -1783,71 +1783,76 @@ def _money_cell(v) -> str:
 
 
 _SALARY_VOUCHER_CSS_EXTRA = """
-/* A4 portrait — top half only (~148mm), professional salary slip */
+/* A4 portrait — pack voucher tightly in top half; no gap above signatures */
 .half-page-sheet.salary-voucher-sheet {
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
+  justify-content: flex-start;
+  align-content: flex-start;
+  height: auto !important;
+  min-height: 0 !important;
+  max-height: 148mm !important;
   overflow: hidden;
-  padding: 6px 8px !important;
+  padding: 5px 7px !important;
   box-sizing: border-box;
 }
 .half-page-sheet.salary-voucher-sheet .salary-voucher-body {
-  flex: 1 1 auto;
+  flex: 0 0 auto;
   min-height: 0;
-  overflow: hidden;
+  overflow: visible;
 }
 .half-page-sheet.salary-voucher-sheet .header {
-  padding-bottom: 3px !important;
-  margin-bottom: 4px !important;
+  padding-bottom: 2px !important;
+  margin-bottom: 3px !important;
 }
-.half-page-sheet.salary-voucher-sheet .header h1 { font-size: 14px !important; }
-.half-page-sheet.salary-voucher-sheet .header .sub { font-size: 9px !important; }
+.half-page-sheet.salary-voucher-sheet .header h1 { font-size: 13px !important; }
+.half-page-sheet.salary-voucher-sheet .header .sub { font-size: 8px !important; line-height: 1.2; }
 .half-page-sheet.salary-voucher-sheet h2 {
-  font-size: 13px !important;
-  margin: 2px 0 4px 0 !important;
+  font-size: 12px !important;
+  margin: 1px 0 3px 0 !important;
   letter-spacing: .02em;
   text-align: center;
   border-bottom: 1px solid #111;
-  padding-bottom: 3px;
+  padding-bottom: 2px;
 }
 .half-page-sheet.salary-voucher-sheet .meta {
-  margin: 2px 0 4px 0 !important;
-  font-size: 10px !important;
+  margin: 1px 0 3px 0 !important;
+  font-size: 9px !important;
   display: flex;
   flex-wrap: wrap;
-  gap: 2px 14px;
+  gap: 1px 12px;
 }
 .half-page-sheet.salary-voucher-sheet .party-block {
-  margin: 2px 0 4px 0;
-  padding: 3px 6px;
+  margin: 1px 0 3px 0;
+  padding: 2px 5px;
   border: 1px solid #111;
 }
 .half-page-sheet.salary-voucher-sheet .party-block .party-label {
-  font-size: 9px;
+  font-size: 8px;
   text-transform: uppercase;
   letter-spacing: .04em;
   color: #333;
 }
 .half-page-sheet.salary-voucher-sheet .party-block .party-name {
-  font-size: 14px !important;
+  font-size: 13px !important;
   font-weight: 700;
+  line-height: 1.2;
 }
 .half-page-sheet.salary-voucher-sheet .summary-box {
   display: flex;
   flex-wrap: wrap;
-  gap: 2px 12px;
-  padding: 3px 6px !important;
-  margin: 0 0 4px 0 !important;
-  font-size: 9px !important;
+  gap: 1px 10px;
+  padding: 2px 5px !important;
+  margin: 0 0 3px 0 !important;
+  font-size: 8px !important;
   border: 1px solid #333;
 }
 .half-page-sheet.salary-voucher-sheet .summary-box div { min-width: 0; }
 .salary-two-col {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 6px;
-  margin: 0 0 4px 0;
+  gap: 5px;
+  margin: 0 0 3px 0;
   width: 100%;
 }
 .salary-two-col table.lines {
@@ -1858,8 +1863,8 @@ _SALARY_VOUCHER_CSS_EXTRA = """
 .salary-two-col table.lines th {
   background: transparent;
   border: 1px solid #111;
-  padding: 2px 4px;
-  font-size: 9px;
+  padding: 1px 3px;
+  font-size: 8px;
   text-transform: uppercase;
   letter-spacing: .03em;
   text-align: left;
@@ -1868,9 +1873,9 @@ _SALARY_VOUCHER_CSS_EXTRA = """
 .salary-two-col table.lines td.num { text-align: right; }
 .salary-two-col table.lines td {
   border: 1px solid #333;
-  padding: 1px 4px;
-  font-size: 10px;
-  line-height: 1.2;
+  padding: 1px 3px;
+  font-size: 9px;
+  line-height: 1.15;
 }
 .salary-two-col table.lines tr.total-row td {
   font-weight: 700;
@@ -1878,36 +1883,37 @@ _SALARY_VOUCHER_CSS_EXTRA = """
 }
 .salary-net-box {
   border: 1.5px solid #111;
-  padding: 4px 8px;
-  margin: 0 0 4px 0;
+  padding: 3px 6px;
+  margin: 0 0 3px 0;
   text-align: center;
 }
 .salary-net-box .voucher-amt-label {
-  font-size: 9px;
+  font-size: 8px;
   text-transform: uppercase;
   letter-spacing: .05em;
   color: #333;
 }
 .salary-net-box .voucher-amt-value {
-  font-size: 16px;
+  font-size: 14px;
   font-weight: 700;
-  margin: 1px 0;
+  margin: 0;
   color: #111;
+  line-height: 1.2;
 }
 .salary-net-box .voucher-amt-words {
-  font-size: 9px;
-  line-height: 1.25;
+  font-size: 8px;
+  line-height: 1.2;
   margin-top: 1px;
   color: #111;
 }
 .salary-bal-strip {
   display: grid;
   grid-template-columns: 1fr 1fr 1fr;
-  gap: 4px;
-  margin: 0 0 3px 0;
+  gap: 3px;
+  margin: 0 0 2px 0;
   border: 1px solid #333;
-  padding: 3px 4px;
-  font-size: 9px;
+  padding: 2px 3px;
+  font-size: 8px;
 }
 .salary-bal-strip .bal-cell { text-align: center; }
 .salary-bal-strip .bal-lbl {
@@ -1915,55 +1921,78 @@ _SALARY_VOUCHER_CSS_EXTRA = """
   text-transform: uppercase;
   letter-spacing: .02em;
   color: #333;
-  font-size: 8px;
+  font-size: 7px;
 }
-.salary-bal-strip .bal-val { font-weight: 700; font-size: 10px; }
+.salary-bal-strip .bal-val { font-weight: 700; font-size: 9px; }
 .half-page-sheet.salary-voucher-sheet .recv-line {
-  margin: 0 0 2px 0;
-  font-size: 10px;
+  margin: 0;
+  font-size: 9px;
   text-align: center;
   border-top: 1px dotted #666;
-  padding-top: 3px;
+  padding-top: 2px;
 }
+/* Signatures sit immediately under body — no flex gap */
 .half-page-sheet.salary-voucher-sheet .salary-voucher-sigs {
   flex: 0 0 auto;
-  margin-top: 4px;
+  margin-top: 4px !important;
   border-top: 1px solid #111;
-  padding-top: 4px;
+  padding-top: 3px;
 }
 .half-page-sheet.salary-voucher-sheet .salary-voucher-sigs .signatures {
   margin-top: 0 !important;
-  gap: 6px;
+  margin-bottom: 0 !important;
+  gap: 5px;
 }
 .half-page-sheet.salary-voucher-sheet .salary-voucher-sigs .sig-cell {
   flex: 1 1 0;
   min-width: 0;
 }
 .half-page-sheet.salary-voucher-sheet .salary-voucher-sigs .sig-space {
-  height: 22px;
+  height: 16px;
 }
 .half-page-sheet.salary-voucher-sheet .salary-voucher-sigs .sig-line {
-  margin: 0 0 3px 0 !important;
+  margin: 0 0 2px 0 !important;
   min-height: 0 !important;
   border-top: 1px solid #111;
 }
 .half-page-sheet.salary-voucher-sheet .salary-voucher-sigs .sig-role {
-  font-size: 8px !important;
+  font-size: 7px !important;
   margin: 0;
-  line-height: 1.2;
+  line-height: 1.15;
 }
 .half-page-sheet.salary-voucher-sheet .salary-voucher-sigs .sig-prepared-name {
-  font-size: 9px !important;
+  font-size: 8px !important;
   font-weight: 700;
-  margin: 1px 0 0 0;
-  min-height: 1em;
-  line-height: 1.15;
+  margin: 0;
+  min-height: 0.95em;
+  line-height: 1.1;
+}
+/* Keep cut line flush under the packed voucher */
+body.voucher-dual-body .half-page-cut {
+  margin-top: 4px !important;
+}
+/* Reserve exact top half of A4; voucher packs at top of that zone */
+.salary-half-page-zone {
+  width: 100%;
+  max-width: 210mm;
+  margin: 0 auto;
+  height: auto;
+  max-height: 148mm;
+  overflow: hidden;
+  box-sizing: border-box;
 }
 @media print {
   .half-page-sheet.salary-voucher-sheet {
-    height: 148mm !important;
+    height: auto !important;
+    min-height: 0 !important;
     max-height: 148mm !important;
     page-break-inside: avoid;
+    page-break-after: avoid;
+  }
+  .salary-half-page-zone {
+    height: 148mm !important;
+    max-height: 148mm !important;
+    overflow: hidden;
   }
 }
 """
@@ -2127,9 +2156,11 @@ def salary_payment_voucher_html(line_id):
         f"{_VOUCHER_PRINT_CSS_EXTRA}{_SALARY_VOUCHER_CSS_EXTRA}</style>",
     )
     inner = (
+        f'<div class="salary-half-page-zone">'
         f'<div class="half-page-sheet salary-voucher-sheet">'
         f'<div class="salary-voucher-body">{body}</div>'
         f'<div class="salary-voucher-sigs">{sigs}</div>'
+        f"</div>"
         f"</div>"
         f'<div class="half-page-cut">— cut / fold — bottom half of A4 blank —</div>'
         f'<div class="half-page-blank no-print">Bottom half of A4 left blank for filing</div>'
