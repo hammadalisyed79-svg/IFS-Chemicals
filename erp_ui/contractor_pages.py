@@ -128,21 +128,38 @@ def _tab_contractors():
         st.info("No contract labourers yet. Add one below (pick an existing supplier).")
 
     st.subheader("Add contractor")
+    try:
+        from db_cache import invalidate as _inv_cache
+        _inv_cache("suppliers")
+    except Exception:
+        pass
     suppliers = db.get_suppliers(active_only=True)
     already = {int(r["supplier_id"]) for r in rows}
     avail = [s for s in suppliers if int(s["id"]) not in already]
     if not avail:
-        st.warning("All active suppliers are already set up, or add a supplier under Masters first.")
+        st.warning(
+            "No unused active suppliers left. "
+            "Add a new supplier under **Masters → Suppliers**, then return here "
+            "(or deactivate an existing contract labourer)."
+        )
     else:
         # Outside st.form — sticky tab buttons + forms can miss submits in Streamlit.
         type_keys = list(PAYMENT_TYPES.keys())
-        sup_opts = {f"{s['code']} — {s['name']}": int(s["id"]) for s in avail}
+        st.caption(
+            f"**{len(avail)}** suppliers available (already-linked contractors hidden). "
+            "Type code or name to search."
+        )
         c1, c2 = st.columns(2)
         with c1:
-            sup_lbl = st.selectbox(
+            _, sid, _ = hlp.smart_select(
                 "Contractor (supplier)",
-                list(sup_opts.keys()),
-                key="cl_add_sup",
+                avail,
+                "cl_add_sup",
+                "id",
+                lambda r: f"{r.get('code') or ''} — {r.get('name') or ''}",
+                placeholder="Type supplier code or name…",
+                max_results=max(500, len(avail)),
+                blank_default=True,
             )
         with c2:
             type_key = st.selectbox(
@@ -170,10 +187,11 @@ def _tab_contractors():
         notes = st.text_input("Notes (optional)", key="cl_add_notes")
         if st.button("Save contractor", type="primary", key="cl_add_save"):
             try:
-                sid = int(sup_opts[sup_lbl])
+                if not sid:
+                    raise ValueError("Select a supplier from the search list.")
                 cid = add_contractor(
                     {
-                        "supplier_id": sid,
+                        "supplier_id": int(sid),
                         "payment_type": type_key,
                         "default_rate": 0,
                         "loading_rate": load_rate,

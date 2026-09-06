@@ -1403,7 +1403,8 @@ def get_suppliers(active_only=False, group_id=None):
         with get_connection() as conn:
             return rows_to_list(conn.execute(q, p).fetchall())
 
-    return cached_read(key, _load)
+    # Short TTL so newly added suppliers appear quickly on Contract Labour / pickers
+    return cached_read(key, _load, ttl=15)
 
 
 def get_supplier(supplier_id):

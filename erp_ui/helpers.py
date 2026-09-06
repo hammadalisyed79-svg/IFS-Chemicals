@@ -1299,9 +1299,13 @@ def customer_select(key="cust"):
     return cid
 
 
-def supplier_select(key="sup"):
-    rows = db.get_suppliers()
-    _, sid, _ = smart_select("Supplier", rows, key, "id", lambda r: f"{r['code']} - {r['name']}")
+def supplier_select(key="sup", active_only=True):
+    rows = db.get_suppliers(active_only=active_only)
+    _, sid, _ = smart_select(
+        "Supplier", rows, key, "id",
+        lambda r: f"{r['code']} - {r['name']}",
+        max_results=max(500, len(rows or [])),
+    )
     return sid
 
 
