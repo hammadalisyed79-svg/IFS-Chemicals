@@ -1782,6 +1782,56 @@ def _money_cell(v) -> str:
         return "0.00"
 
 
+_SALARY_VOUCHER_CSS_EXTRA = """
+/* Keep signature block visible inside fixed half-page height */
+.half-page-sheet.salary-voucher-sheet {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.half-page-sheet.salary-voucher-sheet .salary-voucher-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+}
+.half-page-sheet.salary-voucher-sheet .salary-voucher-sigs {
+  flex: 0 0 auto;
+  margin-top: 6px;
+}
+.half-page-sheet.salary-voucher-sheet .salary-voucher-sigs .signatures {
+  margin-top: 4px;
+}
+.half-page-sheet.salary-voucher-sheet .salary-voucher-sigs .sig-line {
+  margin: 18px 0 4px 0;
+  min-height: 18px;
+  border-top: 1px solid #111;
+}
+.half-page-sheet.salary-voucher-sheet .salary-voucher-sigs .sig-prepared-name {
+  min-height: 1em;
+  font-size: 11px;
+}
+.half-page-sheet.salary-voucher-sheet .salary-voucher-sigs .sig-role {
+  font-size: 9px;
+}
+.half-page-sheet.salary-voucher-sheet table.lines th,
+.half-page-sheet.salary-voucher-sheet table.lines td {
+  padding: 2px 4px;
+  font-size: 10px;
+  line-height: 1.15;
+}
+.half-page-sheet.salary-voucher-sheet .summary-box {
+  padding: 4px 6px;
+  margin: 4px 0;
+  font-size: 10px;
+}
+.half-page-sheet.salary-voucher-sheet .meta { font-size: 10px; margin: 4px 0; }
+.half-page-sheet.salary-voucher-sheet .recv-line {
+  margin: 4px 0 0 0;
+  font-size: 11px;
+}
+"""
+
+
 def salary_payment_voucher_html(line_id):
     """Half-page cash/bank salary voucher for employee signature."""
     from db_hr import get_payroll_line_voucher_data
@@ -1816,31 +1866,40 @@ def salary_payment_voucher_html(line_id):
     if absent_days > 0.009:
         unit = "day" if abs(absent_days - 1.0) < 0.001 else "days"
         absent_lbl = f"Absent deduction ({absent_days:.1f} {unit})"
-    rows = [
+
+    def _amt(x) -> float:
+        try:
+            return float(x or 0)
+        except (TypeError, ValueError):
+            return 0.0
+
+    # Skip zero earning/deduction lines so signatures fit on half-page
+    earn_rows = [
         ("Basic", v.get("basic_salary")),
         ("Allowances", v.get("allowances")),
         ("Overtime", v.get("overtime")),
         ("Bonus", v.get("bonus")),
-        ("Gross", v.get("gross_salary")),
+    ]
+    earn_rows = [(lbl, amt) for lbl, amt in earn_rows if abs(_amt(amt)) > 0.009]
+    earn_rows.append(("Gross", v.get("gross_salary")))
+    ded_rows = [
         ("Advance recovery", v.get("advance_recovery")),
         ("Loan recovery", v.get("loan_recovery")),
         ("Other deductions", v.get("other_deductions")),
         (absent_lbl, v.get("absent_deduction")),
-        ("Total deductions", v.get("total_deductions")),
-        ("Net paid", v.get("paid_amount") or v.get("net_salary")),
     ]
+    ded_rows = [(lbl, amt) for lbl, amt in ded_rows if abs(_amt(amt)) > 0.009]
+    ded_rows.append(("Total deductions", v.get("total_deductions")))
+    ded_rows.append(("Net paid", v.get("paid_amount") or v.get("net_salary")))
+    rows = earn_rows + ded_rows
     lines_html = "".join(
         f"<tr><td>{escape(lbl)}</td><td class='num'>{_money_cell(amt)}</td></tr>"
         for lbl, amt in rows
     )
-    bal_rows = [
-        ("Total advance outstanding", v.get("advance_outstanding")),
-        ("Total loan outstanding", v.get("loan_outstanding")),
-        ("Ledger balance", v.get("ledger_balance")),
-    ]
-    bal_html = "".join(
-        f"<tr><td>{escape(lbl)}</td><td class='num'>{_money_cell(amt)}</td></tr>"
-        for lbl, amt in bal_rows
+    bal_html = (
+        f"<tr><td>Advance outstanding</td><td class='num'>{_money_cell(v.get('advance_outstanding'))}</td></tr>"
+        f"<tr><td>Loan outstanding</td><td class='num'>{_money_cell(v.get('loan_outstanding'))}</td></tr>"
+        f"<tr><td>Ledger balance</td><td class='num'>{_money_cell(v.get('ledger_balance'))}</td></tr>"
     )
     att = (
         f"Present {float(v.get('days_present') or 0):.1f} · "
@@ -1863,14 +1922,14 @@ def salary_payment_voucher_html(line_id):
         doc_time=v.get("paid_at") or v.get("paid_date"),
     )
     body += (
-        "<table class='lines' style='width:100%;margin-top:6px'>"
+        "<table class='lines' style='width:100%;margin-top:4px'>"
         "<thead><tr><th>Particulars</th><th class='num'>Amount (Rs.)</th></tr></thead>"
         f"<tbody>{lines_html}</tbody></table>"
-        "<table class='lines' style='width:100%;margin-top:8px'>"
+        "<table class='lines' style='width:100%;margin-top:4px'>"
         "<thead><tr><th>Balances (after this payment)</th>"
         "<th class='num'>Amount (Rs.)</th></tr></thead>"
         f"<tbody>{bal_html}</tbody></table>"
-        f"<p style='margin-top:8px;font-size:0.9rem'>Received Rs. "
+        f"<p class='recv-line'>Received Rs. "
         f"<strong>{_money_cell(v.get('paid_amount') or v.get('net_salary'))}</strong> "
         f"as salary for <strong>{escape(period)}</strong>.</p>"
     )
@@ -1880,10 +1939,14 @@ def salary_payment_voucher_html(line_id):
         extra_roles=(("Received by (Employee)", emp),),
     )
     css = PRINT_CSS_PORTRAIT_HALF.replace(
-        "</style>", f"{_VOUCHER_PRINT_CSS_EXTRA}</style>",
+        "</style>",
+        f"{_VOUCHER_PRINT_CSS_EXTRA}{_SALARY_VOUCHER_CSS_EXTRA}</style>",
     )
     inner = (
-        f'<div class="half-page-sheet">{body}{sigs}</div>'
+        f'<div class="half-page-sheet salary-voucher-sheet">'
+        f'<div class="salary-voucher-body">{body}</div>'
+        f'<div class="salary-voucher-sigs">{sigs}</div>'
+        f"</div>"
         f'<div class="half-page-cut">— cut line — bottom half blank —</div>'
         f'<div class="half-page-blank no-print">Bottom half of A4 left blank</div>'
     )
