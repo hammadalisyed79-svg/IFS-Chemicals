@@ -716,7 +716,8 @@ def _tab_month_preview():
                     exclude_slip_ids=excl,
                 )
                 # Reset slip editor so Include matches current exclusions
-                st.session_state.pop(f"cl_lu_slip_ed_{cid}_{ym}", None)            else:
+                st.session_state.pop(f"cl_lu_slip_ed_{cid}_{ym}", None)
+            else:
                 prior = {}
                 if not is_prod:
                     prior = st.session_state.get(mk) or {}
