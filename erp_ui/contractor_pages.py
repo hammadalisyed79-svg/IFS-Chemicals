@@ -730,6 +730,9 @@ def _tab_month_preview():
                 result = calculate_contractor_month(
                     cid, fd, td, manual_qty=prior,
                 )
+                # Remount worksheet editor so Physical Manual matches refreshed lines
+                st.session_state.pop(f"cl_ws_editor_{cid}_{ym}", None)
+                st.session_state.pop(f"cl_ws_editor_{cid}_{ym}_seed", None)
             st.session_state["cl_prev_result"] = result
             st.session_state["cl_prev_meta"] = (cid, ym)
         except Exception as e:
@@ -1190,31 +1193,42 @@ def _tab_month_preview():
     else:
         st.markdown(
             "**Worksheet** — edit **Physical Manual Added Stock** only; "
-            "Closing and Amount update below."
+            "Closing and Amount update below. "
+            "Enter values and click **Save month record** (avoid clicking elsewhere mid-edit)."
         )
-        prior_manual = st.session_state.get(mk) or {
-            int(ln["product_id"]): float(ln.get("manual_qty") or 0) for ln in lines
-        }
+        editor_key = f"cl_ws_editor_{cid}_{ym}"
+        seed_key = f"{editor_key}_seed"
+        # Stable seed: rebuild only when editor remounts (Load / Save). Passing a
+        # fresh DataFrame every rerun was wiping Physical Manual mid-edit.
+        if seed_key not in st.session_state or editor_key not in st.session_state:
+            prior_manual = dict(st.session_state.get(mk) or {})
+            if not prior_manual:
+                prior_manual = {
+                    int(ln["product_id"]): float(ln.get("manual_qty") or 0)
+                    for ln in lines
+                    if ln.get("product_id")
+                }
+            st.session_state[seed_key] = pd.DataFrame([
+                {
+                    "product_id": int(ln["product_id"]),
+                    "Code": ln.get("product_code"),
+                    "Product": ln.get("product_name"),
+                    "Basis": ln.get("billing_basis_label") or ln.get("billing_basis") or "",
+                    "Sold Qty": float(ln.get("sold_qty") or 0),
+                    "Stock in hand": float(ln.get("stock_qty") or 0),
+                    "Sale return": float(ln.get("sale_return_qty") or 0),
+                    "Physical Manual": float(
+                        prior_manual.get(int(ln["product_id"]), ln.get("manual_qty") or 0)
+                    ),
+                    "Rate": float(ln.get("rate") or 0),
+                }
+                for ln in lines
+            ])
+        edit_df = st.session_state[seed_key]
         basis_by_pid = {
             int(ln["product_id"]): (ln.get("billing_basis") or "closing")
             for ln in lines
         }
-        edit_df = pd.DataFrame([
-            {
-                "product_id": int(ln["product_id"]),
-                "Code": ln.get("product_code"),
-                "Product": ln.get("product_name"),
-                "Basis": ln.get("billing_basis_label") or ln.get("billing_basis") or "",
-                "Sold Qty": float(ln.get("sold_qty") or 0),
-                "Stock in hand": float(ln.get("stock_qty") or 0),
-                "Sale return": float(ln.get("sale_return_qty") or 0),
-                "Physical Manual": float(
-                    prior_manual.get(int(ln["product_id"]), ln.get("manual_qty") or 0)
-                ),
-                "Rate": float(ln.get("rate") or 0),
-            }
-            for ln in lines
-        ])
         edited = st.data_editor(
             edit_df,
             hide_index=True,
@@ -1238,7 +1252,7 @@ def _tab_month_preview():
                 ),
                 "Rate": st.column_config.NumberColumn("Rate", format="%.4f"),
             },
-            key=f"cl_ws_editor_{cid}_{ym}",
+            key=editor_key,
         )
         manual_map = {}
         sum_sold = sum_stock = sum_ret = sum_man = sum_bill = 0.0
@@ -1293,6 +1307,7 @@ def _tab_month_preview():
                 "rate": rate,
                 "amount": amount,
             })
+        # Keep draft manuals for Load/refresh; do not rewrite editor seed here
         st.session_state[mk] = manual_map
         k1, k2, k3, k4, k5 = st.columns(5, gap="small")
         k1.markdown(
@@ -1360,20 +1375,98 @@ def _tab_month_preview():
         unsafe_allow_html=True,
     )
 
-    notes = st.text_input("Save notes (optional)", key=f"cl_month_notes_{cid}_{ym}")
+    notes = st.text_input(
+        "Save notes (optional)",
+        key=f"cl_month_notes_{cid}_{ym}",
+        help="Press Enter in the Physical Manual cell first so the value is kept, then Save.",
+    )
     if st.button("Save month record", type="primary", key=f"cl_month_save_{cid}_{ym}"):
         try:
             excl_save = None
             if is_lu:
                 excl_save = list(st.session_state.get(excl_key) or [])
+            # Prefer manuals from the live editor widget (most reliable)
+            editor_key = f"cl_ws_editor_{cid}_{ym}"
+            if (
+                not is_prod
+                and not is_lu
+                and editor_key in st.session_state
+                and isinstance(st.session_state.get(editor_key), pd.DataFrame)
+            ):
+                ed_state = st.session_state[editor_key]
+                if "product_id" in ed_state.columns and "Physical Manual" in ed_state.columns:
+                    live_map = {}
+                    for _, row in ed_state.iterrows():
+                        live_map[int(row["product_id"])] = _f(row["Physical Manual"])
+                    if live_map:
+                        st.session_state[mk] = live_map
+                        for sl in save_lines:
+                            pid = int(sl["product_id"])
+                            if pid in live_map:
+                                man = live_map[pid]
+                                sold = _f(sl.get("sold_qty"))
+                                stock = _f(sl.get("stock_qty"))
+                                ret = _f(sl.get("sale_return_qty"))
+                                rate = _f(sl.get("rate"))
+                                basis = (
+                                    next(
+                                        (
+                                            (ln.get("billing_basis") or "closing")
+                                            for ln in lines
+                                            if int(ln["product_id"]) == pid
+                                        ),
+                                        "closing",
+                                    )
+                                ).strip().lower()
+                                closing = round(sold - stock - ret + man, 4)
+                                if basis == "sold":
+                                    billable = sold
+                                elif basis == "production":
+                                    billable = next(
+                                        (
+                                            _f(ln.get("production_qty"))
+                                            for ln in lines
+                                            if int(ln["product_id"]) == pid
+                                        ),
+                                        0.0,
+                                    )
+                                else:
+                                    billable = closing
+                                sl["manual_qty"] = man
+                                sl["closing_stock"] = billable
+                                sl["quantity"] = billable
+                                sl["amount"] = round(billable * rate, 2)
+                        gross = sum(_f(sl.get("amount")) for sl in save_lines)
+                        billable_sum = sum(_f(sl.get("quantity")) for sl in save_lines)
             run_id = save_contractor_month_run(
                 cid, ym, save_lines, notes=notes, user_id=hlp.uid(),
                 excluded_slip_ids=excl_save,
             )
+            # Remount editor from saved manuals + refresh month calc
+            if not is_prod and not is_lu:
+                st.session_state[mk] = {
+                    int(sl["product_id"]): float(sl.get("manual_qty") or 0)
+                    for sl in save_lines
+                }
+                st.session_state.pop(editor_key, None)
+                st.session_state.pop(f"{editor_key}_seed", None)
+                try:
+                    refreshed = calculate_contractor_month(
+                        cid, fd, td, manual_qty=st.session_state[mk],
+                    )
+                    st.session_state["cl_prev_result"] = refreshed
+                    st.session_state["cl_prev_meta"] = (cid, ym)
+                except Exception:
+                    pass
             ff.action_done(
                 f"Month **{ym}** saved (record #{run_id}). "
                 f"Gross Rs. {gross:,.2f} · {billable_label} {billable_sum:,.2f}."
-                + (f" · excluded slips {len(excl_save)}" if excl_save else "")
+                + (f" · excluded slips {len(excl_save)}" if excl_save else ""),
+                retain={
+                    "cl_prev_result": st.session_state.get("cl_prev_result"),
+                    "cl_prev_meta": st.session_state.get("cl_prev_meta"),
+                    mk: st.session_state.get(mk),
+                },
             )
         except Exception as e:
             st.error(f"Could not save: {e}")
