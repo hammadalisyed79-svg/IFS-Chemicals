@@ -1906,12 +1906,15 @@ def page_payroll():
                 src_sig = tuple(
                     (
                         int(edit_df.at[i, "line_id"]),
+                        bool(edit_df.at[i, "_paid"]) if "_paid" in edit_df.columns else False,
+                        str(edit_df.at[i, "_voucher"] or "") if "_voucher" in edit_df.columns else "",
                         round(float(edit_df.at[i, "Basic"] or 0), 2),
                         round(float(edit_df.at[i, "Advance"] or 0), 2),
                         round(float(edit_df.at[i, "Loan"] or 0), 2),
                         round(float(edit_df.at[i, "OT Hrs"] or 0), 2),
                         round(float(edit_df.at[i, "Overtime"] or 0), 2),
                         round(float(edit_df.at[i, "Present"] or 0), 1),
+                        round(float(edit_df.at[i, "Net"] or 0), 2),
                     )
                     for i in edit_df.index
                 )
@@ -1933,10 +1936,21 @@ def page_payroll():
                     if live_key not in st.session_state:
                         st.session_state[live_key] = dept_df.copy()
                     else:
-                        # Keep live edits aligned to current line set
+                        # Keep live edits aligned to current line set; always refresh Paid lock cols
                         live = st.session_state[live_key]
                         if set(live["line_id"].astype(int)) != set(dept_df["line_id"].astype(int)):
                             st.session_state[live_key] = dept_df.copy()
+                        else:
+                            fresh = dept_df.set_index("line_id")
+                            live = live.copy()
+                            for lid in live["line_id"].astype(int).tolist():
+                                if lid not in fresh.index:
+                                    continue
+                                live.loc[live["line_id"].astype(int) == lid, "Paid"] = fresh.at[lid, "Paid"]
+                                live.loc[live["line_id"].astype(int) == lid, "_paid"] = fresh.at[lid, "_paid"]
+                                if "_voucher" in live.columns and "_voucher" in fresh.columns:
+                                    live.loc[live["line_id"].astype(int) == lid, "_voucher"] = fresh.at[lid, "_voucher"]
+                            st.session_state[live_key] = live
 
                     working = _payroll_recalc_edit_df(
                         st.session_state[live_key], year=py, month=pm,
@@ -2050,7 +2064,12 @@ def page_payroll():
                                             f"**{res['document_no']}** — "
                                             f"{res['employee']} paid. "
                                             "Voucher ready to print. "
-                                            "Other employees stay on this draft."
+                                            "Other employees stay on this draft.",
+                                            prefixes=(
+                                                f"pr_edit_live_{pid}",
+                                                f"pr_tab_editor_{pid}",
+                                            ),
+                                            also=(f"pr_edit_src_sig_{pid}",),
                                         )
                                     except Exception as e:
                                         st.error(str(e))

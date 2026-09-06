@@ -3016,7 +3016,8 @@ def pay_payroll_line(line_id, user_id, payment_mode="cash", payment_date=None, b
             asset_id = bank_account_id
 
         post_gl(conn, pay_date, HR_AC["salary_payable"], amt, 0, label, "payroll_line_payment", line_id, doc_no, user_id)
-        post_gl_account_id(conn, pay_date, asset_id, 0, amt, label, "payroll_line_payment", entry_id, doc_no, user_id)
+        # Both legs must use payroll line_id so undo reverses cash+payable together
+        post_gl_account_id(conn, pay_date, asset_id, 0, amt, label, "payroll_line_payment", line_id, doc_no, user_id)
 
         conn.execute(
             """UPDATE payroll_lines SET paid_status='paid', paid_amount=?, paid_date=?,
@@ -3164,13 +3165,19 @@ def _payroll_recovery_is_final(status) -> bool:
 
 
 def _provisional_advance_recovery_map(conn, employee_id=None) -> dict[int, float]:
-    """advance_id → amount recovered only on non-final (draft/approved) payroll."""
+    """advance_id → amount recovered only on non-final payroll (and employee not yet paid)."""
     q = """SELECT s.advance_id, COALESCE(SUM(s.amount),0) AS amt
            FROM advance_recovery_schedule s
            JOIN employee_advances a ON a.id=s.advance_id
            JOIN payroll_runs pr ON pr.id=s.payroll_id
            WHERE COALESCE(s.recovered,0)=1
-             AND LOWER(COALESCE(pr.status,'')) NOT IN ('posted','paid')"""
+             AND LOWER(COALESCE(pr.status,'')) NOT IN ('posted','paid')
+             AND NOT EXISTS (
+                 SELECT 1 FROM payroll_lines pl
+                 WHERE pl.payroll_id=s.payroll_id
+                   AND pl.employee_id=a.employee_id
+                   AND COALESCE(pl.paid_status,'')='paid'
+             )"""
     p = []
     if employee_id is not None:
         q += " AND a.employee_id=?"
@@ -3180,13 +3187,19 @@ def _provisional_advance_recovery_map(conn, employee_id=None) -> dict[int, float
 
 
 def _provisional_loan_recovery_map(conn, employee_id=None) -> dict[int, float]:
-    """loan_id → installment amount recovered only on non-final payroll."""
+    """loan_id → installment amount recovered only on non-final unpaid payroll lines."""
     q = """SELECT i.loan_id, COALESCE(SUM(i.amount),0) AS amt
            FROM loan_installments i
            JOIN employee_loans l ON l.id=i.loan_id
            JOIN payroll_runs pr ON pr.id=i.payroll_id
            WHERE COALESCE(i.recovered,0)=1
-             AND LOWER(COALESCE(pr.status,'')) NOT IN ('posted','paid')"""
+             AND LOWER(COALESCE(pr.status,'')) NOT IN ('posted','paid')
+             AND NOT EXISTS (
+                 SELECT 1 FROM payroll_lines pl
+                 WHERE pl.payroll_id=i.payroll_id
+                   AND pl.employee_id=l.employee_id
+                   AND COALESCE(pl.paid_status,'')='paid'
+             )"""
     p = []
     if employee_id is not None:
         q += " AND l.employee_id=?"
@@ -3962,16 +3975,18 @@ def get_employee_ledger(employee_id, from_date=None, to_date=None):
             adv_rec = float(pr.get("advance_recovery") or 0)
             loan_rec = float(pr.get("loan_recovery") or 0)
             net = float(pr.get("net_salary") or 0)
-            # Draft/approved recoveries are provisional — do not credit ledger yet
-            if _payroll_recovery_is_final(pr.get("status")):
+            line_paid = (pr.get("paid_status") or "") in ("paid", "partial")
+            # Draft payroll recoveries/net become final once this employee voucher is paid
+            recovery_final = _payroll_recovery_is_final(pr.get("status")) or line_paid
+            if recovery_final:
                 if adv_rec:
                     raw.append((dt, ref, f"Advance recovery ({period})", 0.0, adv_rec))
                 if loan_rec:
                     raw.append((dt, ref, f"Loan recovery ({period})", 0.0, loan_rec))
-            if net and pr.get("status") in ("posted", "paid", "approved"):
+            if net and (pr.get("status") in ("posted", "paid", "approved") or line_paid):
                 raw.append((dt, ref, f"Net salary ({period})", 0.0, net))
             paid_amt = float(pr.get("paid_amount") or 0)
-            if paid_amt > 0 and (pr.get("paid_status") or "") in ("paid", "partial"):
+            if paid_amt > 0 and line_paid:
                 pay_dt = pr.get("paid_date") or dt
                 doc = pr.get("payment_document_no") or ref
                 mode = (pr.get("payment_mode") or "cash").title()
