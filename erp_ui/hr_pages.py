@@ -579,9 +579,9 @@ def _render_single_employee_edit_pay(
                     uid(),
                     sync_ot=("from_amount" if derive_hrs else None),
                 )
-                # Stay on Single employee pay + same employee; remount fields from DB
+                # Stay on this tab + draft run. Do NOT set pick_key here — the
+                # selectbox is already instantiated on this run (Streamlit error).
                 retain = {
-                    pick_key: int(line["id"]),
                     "hr_pay_tab": "Single employee pay",
                     "pr_sep_run": st.session_state.get("pr_sep_run"),
                 }
