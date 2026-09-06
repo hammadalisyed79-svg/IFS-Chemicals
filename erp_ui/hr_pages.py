@@ -138,6 +138,29 @@ def _payroll_recalc_edit_df(df: pd.DataFrame, year: int | None = None, month: in
     return out
 
 
+def _payroll_overlay_paid_from_db(df: pd.DataFrame, lines_by_id: dict) -> pd.DataFrame:
+    """Force Paid / _paid / _voucher from DB so Streamlit editor cache cannot hide PAID."""
+    if df is None or df.empty or "line_id" not in df.columns:
+        return df
+    out = df.copy()
+    for i in out.index:
+        lid = int(out.at[i, "line_id"])
+        meta = lines_by_id.get(lid) or {}
+        paid = (meta.get("paid_status") or "") == "paid"
+        out.at[i, "Paid"] = "PAID" if paid else ""
+        if "_paid" in out.columns:
+            out.at[i, "_paid"] = paid
+        if "_voucher" in out.columns:
+            out.at[i, "_voucher"] = meta.get("payment_document_no") or ""
+    return out
+
+
+def _payroll_clear_edit_live_state(pid: int) -> None:
+    """Drop Edit Lines live grids / editors so Paid status reloads from DB for every employee."""
+    ff.clear_session_prefix(f"pr_edit_live_{pid}", f"pr_tab_editor_{pid}")
+    ff.clear_keys(f"pr_edit_src_sig_{pid}")
+
+
 def _payroll_edit_df_changed(a: pd.DataFrame, b: pd.DataFrame, cols) -> bool:
     if a is None or b is None or len(a) != len(b):
         return True
@@ -1074,6 +1097,7 @@ def _render_employee_cash_payments(pid, pr):
             ):
                 try:
                     docs = db.pay_payroll(pid, uid(), pmode, str(pay_date), bank_id)
+                    _payroll_clear_edit_live_state(pid)
                     ff.action_done(f"Paid {len(docs)} employee(s). Print vouchers from Paid list.")
                 except Exception as e:
                     st.error(str(e))
@@ -1153,6 +1177,7 @@ def _render_employee_cash_payments(pid, pr):
                                 db.rollback_payroll_line_payment(
                                     lid, uid(), "Admin unlock paid voucher",
                                 )
+                                _payroll_clear_edit_live_state(pid)
                                 st.rerun()
                             except Exception as e:
                                 st.error(str(e))
@@ -1166,6 +1191,7 @@ def _render_employee_cash_payments(pid, pr):
                                 raise ValueError("Select bank account.")
                             res = db.pay_payroll_line(lid, uid(), pmode, str(pay_date), bank_id)
                             st.session_state[print_key] = lid
+                            _payroll_clear_edit_live_state(pid)
                             ff.action_done(
                                 f"**{res['document_no']}** paid — print voucher for signature."
                             )
@@ -1931,29 +1957,31 @@ def page_payroll():
                     dept_df = edit_df[edit_df["Department"] == dept].copy().reset_index(drop=True)
                     safe_dept = "".join(c if c.isalnum() else "_" for c in str(dept))[:40]
                     live_key = f"pr_edit_live_{pid}_{safe_dept}"
-                    editor_key = f"pr_tab_editor_{pid}_{safe_dept}"
+                    line_meta = {
+                        int(l["id"]): l for l in (pr.get("lines") or [])
+                    }
+                    # Remount editor when any paid lock changes so Paid column cannot stay blank
+                    paid_fp = sum(
+                        1 for _, r in dept_df.iterrows() if bool(r.get("_paid"))
+                    )
+                    editor_key = f"pr_tab_editor_{pid}_{safe_dept}_p{paid_fp}"
 
                     if live_key not in st.session_state:
                         st.session_state[live_key] = dept_df.copy()
                     else:
-                        # Keep live edits aligned to current line set; always refresh Paid lock cols
                         live = st.session_state[live_key]
                         if set(live["line_id"].astype(int)) != set(dept_df["line_id"].astype(int)):
                             st.session_state[live_key] = dept_df.copy()
                         else:
-                            fresh = dept_df.set_index("line_id")
-                            live = live.copy()
-                            for lid in live["line_id"].astype(int).tolist():
-                                if lid not in fresh.index:
-                                    continue
-                                live.loc[live["line_id"].astype(int) == lid, "Paid"] = fresh.at[lid, "Paid"]
-                                live.loc[live["line_id"].astype(int) == lid, "_paid"] = fresh.at[lid, "_paid"]
-                                if "_voucher" in live.columns and "_voucher" in fresh.columns:
-                                    live.loc[live["line_id"].astype(int) == lid, "_voucher"] = fresh.at[lid, "_voucher"]
-                            st.session_state[live_key] = live
+                            st.session_state[live_key] = _payroll_overlay_paid_from_db(
+                                live, line_meta,
+                            )
 
-                    working = _payroll_recalc_edit_df(
-                        st.session_state[live_key], year=py, month=pm,
+                    working = _payroll_overlay_paid_from_db(
+                        _payroll_recalc_edit_df(
+                            st.session_state[live_key], year=py, month=pm,
+                        ),
+                        line_meta,
                     )
                     n_emp = len(working)
                     d_gross = float(working["Gross"].sum())
@@ -1962,9 +1990,6 @@ def page_payroll():
                         f"{dept}  ·  {n_emp} staff  ·  Gross {fmt(d_gross)}  ·  Net {fmt(d_net)}"
                     )
                     with st.expander(header, expanded=expand_all or di == 0):
-                        line_meta = {
-                            int(l["id"]): l for l in (pr.get("lines") or [])
-                        }
                         ed_height = min(420, 72 + max(n_emp, 1) * 35)
                         edited_raw = st.data_editor(
                             working,
@@ -1975,7 +2000,10 @@ def page_payroll():
                             height=ed_height,
                             key=editor_key,
                         )
-                        recalc = _payroll_recalc_edit_df(edited_raw, year=py, month=pm)
+                        recalc = _payroll_overlay_paid_from_db(
+                            _payroll_recalc_edit_df(edited_raw, year=py, month=pm),
+                            line_meta,
+                        )
                         editable_changed = _payroll_edit_df_changed(
                             working, edited_raw, _PAYROLL_EDIT_CMP_COLS,
                         )
@@ -2060,16 +2088,12 @@ def page_payroll():
                                             str(pay_date_edit), bank_id_edit,
                                         )
                                         st.session_state[print_edit_key] = int(sel["id"])
+                                        _payroll_clear_edit_live_state(pid)
                                         ff.action_done(
                                             f"**{res['document_no']}** — "
                                             f"{res['employee']} paid. "
                                             "Voucher ready to print. "
                                             "Other employees stay on this draft.",
-                                            prefixes=(
-                                                f"pr_edit_live_{pid}",
-                                                f"pr_tab_editor_{pid}",
-                                            ),
-                                            also=(f"pr_edit_src_sig_{pid}",),
                                         )
                                     except Exception as e:
                                         st.error(str(e))
@@ -2106,6 +2130,7 @@ def page_payroll():
                                                 uid(),
                                                 "Admin unlock from Edit Lines",
                                             )
+                                            _payroll_clear_edit_live_state(pid)
                                             st.rerun()
                                         except Exception as e:
                                             st.error(str(e))
