@@ -2321,8 +2321,9 @@ def page_payroll():
                         "<div class='pr-pay-toolbar-title'>Payment desk</div>"
                         "<div class='pr-pay-toolbar-hint'>"
                         "Save the grid first if you edited amounts. "
-                        "Use <b>Employee-wise salary payment</b> below to post one employee "
-                        "(any department). Already-paid staff are marked — the sheet stays draft for the rest."
+                        "Post one employee under each department below, "
+                        "or use the <b>Single employee pay</b> tab to edit and pay one person. "
+                        "Already-paid staff are marked — the sheet stays draft for the rest."
                         "</div></div>",
                         unsafe_allow_html=True,
                     )
@@ -2359,153 +2360,6 @@ def page_payroll():
                             st.warning("Add a bank account in Chart of Accounts first.")
 
                 print_edit_key = f"pr_edit_print_line_{pid}"
-
-                # --- Employee-wise payment (any department) ---
-                if can_post_row and (pmode_edit == "cash" or bank_id_edit):
-                    emp_pay_map = {}
-                    for l in sorted(
-                        pr.get("lines") or [],
-                        key=lambda x: (
-                            (x.get("department_name") or "").upper(),
-                            (x.get("employee_name") or "").upper(),
-                        ),
-                    ):
-                        lid = int(l["id"])
-                        name = l.get("employee_name") or "—"
-                        code = l.get("emp_code") or ""
-                        dept = (l.get("department_name") or "").strip() or "Unassigned"
-                        net_v = float(l.get("net_salary") or 0)
-                        paid = (l.get("paid_status") or "") == "paid"
-                        if paid:
-                            vch = l.get("payment_document_no") or "—"
-                            label = f"{name} · {code} — {dept} — ALREADY PAID · {vch}"
-                        elif net_v > 0.009:
-                            label = f"{name} · {code} — {dept} — UNPAID — {fmt(net_v)}"
-                        else:
-                            label = f"{name} · {code} — {dept} — NIL NET"
-                        emp_pay_map[label] = l
-
-                    if emp_pay_map:
-                        st.markdown(
-                            "<div class='pr-desk'>"
-                            "<div class='pr-desk-label'>Employee-wise salary payment</div>"
-                            "<div class='pr-desk-meta'>"
-                            "Pick one employee from the whole sheet — post their cash/bank voucher only. "
-                            "To change Advance/Loan/amounts first, open the <b>Single employee pay</b> tab. "
-                            "If already paid, the system will say so."
-                            "</div></div>",
-                            unsafe_allow_html=True,
-                        )
-                        ew1, ew2, ew3 = st.columns([3.4, 1.1, 1.3], gap="small")
-                        emp_pay_label = ew1.selectbox(
-                            "Employee",
-                            list(emp_pay_map.keys()),
-                            key=f"pr_emp_wise_pick_{pid}",
-                        )
-                        emp_pay_line = emp_pay_map[emp_pay_label]
-                        emp_pay_lid = int(emp_pay_line["id"])
-                        emp_pay_paid = (emp_pay_line.get("paid_status") or "") == "paid"
-                        emp_pay_net = float(emp_pay_line.get("net_salary") or 0)
-                        if emp_pay_paid:
-                            ew2.markdown(
-                                "<div class='pr-desk-net' style='color:#b91c1c'>PAID</div>",
-                                unsafe_allow_html=True,
-                            )
-                            st.warning(
-                                f"**Already paid** — "
-                                f"{emp_pay_line.get('employee_name')} "
-                                f"(`{emp_pay_line.get('payment_document_no') or '—'}`, "
-                                f"{str(emp_pay_line.get('paid_date') or '')[:10] or '—'}). "
-                                "Use **Print voucher** below, or ask an admin to unlock."
-                            )
-                            pb1, pb2, pb3 = st.columns([1.2, 1.2, 2])
-                            if pb1.button(
-                                "Print voucher",
-                                key=f"pr_emp_wise_print_{pid}",
-                                use_container_width=True,
-                            ):
-                                st.session_state[print_edit_key] = emp_pay_lid
-                                st.rerun()
-                            if _is_admin():
-                                if pb2.button(
-                                    "Admin unlock",
-                                    key=f"pr_emp_wise_unlock_{pid}",
-                                    use_container_width=True,
-                                ):
-                                    try:
-                                        db.rollback_payroll_line_payment(
-                                            emp_pay_lid,
-                                            uid(),
-                                            "Admin unlock from employee-wise payment",
-                                        )
-                                        _payroll_clear_edit_live_state(pid)
-                                        st.rerun()
-                                    except Exception as e:
-                                        st.error(str(e))
-                            else:
-                                pb2.caption("🔒 Admin only")
-                        elif emp_pay_net <= 0.009:
-                            ew2.markdown(
-                                "<div class='pr-desk-net' style='color:#64748b'>NIL</div>",
-                                unsafe_allow_html=True,
-                            )
-                            st.info(
-                                "Net salary is zero or negative — adjust Advance/Loan first, "
-                                "or mark settled on Pay Desk if no cash is due."
-                            )
-                        else:
-                            ew2.markdown(
-                                f"<div class='pr-desk-net'>{escape(fmt(emp_pay_net))}</div>",
-                                unsafe_allow_html=True,
-                            )
-                            post_lbl = (
-                                "Post cash voucher"
-                                if pmode_edit == "cash"
-                                else "Post bank voucher"
-                            )
-                            if ew3.button(
-                                post_lbl,
-                                type="primary",
-                                key=f"pr_emp_wise_post_{pid}",
-                                use_container_width=True,
-                            ):
-                                try:
-                                    if pmode_edit == "bank" and not bank_id_edit:
-                                        raise ValueError("Select bank account.")
-                                    # Re-check paid from DB in case another user paid
-                                    fresh = next(
-                                        (
-                                            x for x in (db.get_payroll_run(pid) or {}).get("lines") or []
-                                            if int(x["id"]) == emp_pay_lid
-                                        ),
-                                        None,
-                                    )
-                                    if fresh and (fresh.get("paid_status") or "") == "paid":
-                                        raise ValueError(
-                                            f"Already paid "
-                                            f"({fresh.get('payment_document_no') or '—'})."
-                                        )
-                                    res = db.post_and_pay_payroll_line(
-                                        emp_pay_lid,
-                                        uid(),
-                                        pmode_edit,
-                                        str(pay_date_edit),
-                                        bank_id_edit,
-                                    )
-                                    st.session_state[print_edit_key] = emp_pay_lid
-                                    _payroll_clear_edit_live_state(pid)
-                                    ff.action_done(
-                                        f"**{res['document_no']}** — "
-                                        f"{res['employee']} paid. "
-                                        "Voucher ready to print. "
-                                        "Other employees stay unpaid."
-                                    )
-                                except Exception as e:
-                                    err = str(e)
-                                    if "already paid" in err.lower():
-                                        st.warning(err)
-                                    else:
-                                        st.error(err)
 
                 st.markdown(
                     """
