@@ -92,6 +92,13 @@ def apply_hr(conn, db_module):
             "INSERT INTO schema_meta(key,value) VALUES('hr_version','5') "
             "ON CONFLICT(key) DO UPDATE SET value='5'"
         )
+        ver = 5
+    if ver < 6:
+        _apply_hr_v6(conn)
+        conn.execute(
+            "INSERT INTO schema_meta(key,value) VALUES('hr_version','6') "
+            "ON CONFLICT(key) DO UPDATE SET value='6'"
+        )
 
 
 def _apply_hr_v2(conn):
@@ -125,6 +132,13 @@ def _apply_hr_v4(conn):
 def _apply_hr_v5(conn):
     """Salary month on advances — posting date and recovery payroll month can differ."""
     _add_col(conn, "employee_advances", "salary_month", "TEXT")
+
+
+def _apply_hr_v6(conn):
+    """Cash/bank voucher link when salary advance / loan is issued."""
+    for table in ("employee_advances", "employee_loans"):
+        _add_col(conn, table, "payment_mode", "TEXT")
+        _add_col(conn, table, "payment_document_no", "TEXT")
 
 
 def _col_exists(conn, table, col):
@@ -3157,30 +3171,78 @@ def approve_advance(advance_id, user_id, approve=True):
             conn.execute("UPDATE employee_advances SET status='rejected' WHERE id=?", (advance_id,))
 
 
-def issue_advance(advance_id, user_id, payment_mode="cash"):
-    from database import get_connection
-    from db_v3 import post_gl, AC
-    with get_connection() as conn:
-        apply_hr(conn, __import__("database"))
-        adv = conn.execute("SELECT * FROM employee_advances WHERE id=?", (advance_id,)).fetchone()
+def issue_advance(advance_id, user_id, payment_mode="cash", bank_account_id=None):
+    """Issue approved salary advance: GL + cash/bank book voucher.
+
+    GL: Dr Employee Advance, Cr Cash/Bank (posting date).
+    Cash Book: CP/BP payment row so the till/bank book moves.
+    """
+    import database as db
+    from db_v3 import post_gl, post_gl_account_id, AC
+
+    mode = (payment_mode or "cash").lower()
+    if mode not in ("cash", "bank"):
+        raise ValueError("Payment mode must be cash or bank.")
+    if mode == "bank" and not bank_account_id:
+        raise ValueError("Select a bank account for bank payment.")
+
+    with db.get_connection() as conn:
+        apply_hr(conn, db)
+        adv = conn.execute(
+            """SELECT a.*, e.full_name AS employee_name, e.code AS emp_code
+               FROM employee_advances a
+               JOIN employees e ON e.id=a.employee_id
+               WHERE a.id=?""",
+            (advance_id,),
+        ).fetchone()
         if not adv or adv["status"] != "approved":
             raise ValueError("Advance must be approved before issue")
         adv = dict(adv)
-        acct = AC["bank"] if payment_mode == "bank" else AC["cash"]
-        # GL on posting date (request_date); recovery targets salary_month
-        post_gl(conn, adv["request_date"], HR_AC["employee_advance"], adv["amount"], 0,
-                "Advance issue", "employee_advance", advance_id, adv["document_no"], user_id)
-        post_gl(conn, adv["request_date"], acct, 0, adv["amount"],
-                "Advance issue", "employee_advance", advance_id, adv["document_no"], user_id)
+        amt = round(float(adv["amount"] or 0), 2)
+        if amt <= 0:
+            raise ValueError("Advance amount must be greater than zero.")
+        post_date = str(adv["request_date"])[:10]
+        emp_lbl = f"{adv.get('employee_name') or ''} ({adv.get('emp_code') or ''})".strip()
+        label = f"Salary advance {adv['document_no']} — {emp_lbl}"
+        ref = adv["document_no"]
+
+        if mode == "cash":
+            entry_id, doc_no = db._add_cash_payment(
+                conn, post_date, label, ref, amt, user_id,
+                party_type="employee", party_id=adv["employee_id"],
+            )
+            asset_id = conn.execute(
+                "SELECT id FROM chart_of_accounts WHERE code=?", (AC["cash"],)
+            ).fetchone()
+            asset_id = asset_id[0] if asset_id else None
+        else:
+            entry_id, doc_no = db._add_bank_payment(
+                conn, post_date, label, ref, amt, bank_account_id, user_id,
+                party_type="employee", party_id=adv["employee_id"],
+            )
+            asset_id = bank_account_id
+
+        # GL on posting date; recovery targets salary_month
+        post_gl(
+            conn, post_date, HR_AC["employee_advance"], amt, 0,
+            label, "employee_advance", advance_id, doc_no, user_id,
+        )
+        post_gl_account_id(
+            conn, post_date, asset_id, 0, amt,
+            label, "employee_advance", entry_id, doc_no, user_id,
+        )
         conn.execute(
-            "UPDATE employee_advances SET status='issued',issued_by=?,issued_at=? WHERE id=?",
-            (user_id, now(), advance_id),
+            """UPDATE employee_advances
+               SET status='issued', issued_by=?, issued_at=?,
+                   payment_mode=?, payment_document_no=?
+               WHERE id=?""",
+            (user_id, now(), mode, doc_no, advance_id),
         )
         from datetime import timedelta
-        due0 = _salary_month_due_date(adv.get("salary_month"), adv["request_date"])
+        due0 = _salary_month_due_date(adv.get("salary_month"), post_date)
         base = datetime.strptime(due0, "%Y-%m-%d")
         monthly = adv["monthly_recovery"]
-        for i in range(adv["recovery_months"]):
+        for i in range(int(adv["recovery_months"] or 1)):
             if i == 0:
                 due = due0
             else:
@@ -3189,6 +3251,75 @@ def issue_advance(advance_id, user_id, payment_mode="cash"):
                 "INSERT INTO advance_recovery_schedule(advance_id,installment_no,due_date,amount) VALUES(?,?,?,?)",
                 (advance_id, i + 1, due, monthly),
             )
+        return {
+            "document_no": adv["document_no"],
+            "payment_document_no": doc_no,
+            "amount": amt,
+            "payment_mode": mode,
+            "employee": adv.get("employee_name"),
+        }
+
+
+def backfill_advance_cash_voucher(advance_id, user_id=None):
+    """Create missing cash/bank book voucher for an already-issued advance (GL already posted)."""
+    import database as db
+    from db_v3 import AC
+
+    with db.get_connection() as conn:
+        apply_hr(conn, db)
+        adv = conn.execute(
+            """SELECT a.*, e.full_name AS employee_name, e.code AS emp_code
+               FROM employee_advances a
+               JOIN employees e ON e.id=a.employee_id
+               WHERE a.id=?""",
+            (int(advance_id),),
+        ).fetchone()
+        if not adv:
+            raise ValueError("Advance not found.")
+        adv = dict(adv)
+        if (adv.get("status") or "") != "issued":
+            raise ValueError("Only issued advances can be backfilled.")
+        existing = (adv.get("payment_document_no") or "").strip()
+        if existing:
+            row = conn.execute(
+                "SELECT id FROM cash_payments WHERE document_no=? UNION ALL "
+                "SELECT id FROM bank_payments WHERE document_no=?",
+                (existing, existing),
+            ).fetchone()
+            if row:
+                return {"payment_document_no": existing, "created": False}
+        # Avoid duplicate if CP already linked by ADV reference
+        dup = conn.execute(
+            "SELECT document_no FROM cash_payments WHERE reference_no=? LIMIT 1",
+            (adv["document_no"],),
+        ).fetchone()
+        if dup:
+            conn.execute(
+                "UPDATE employee_advances SET payment_mode=?, payment_document_no=? WHERE id=?",
+                ("cash", dup[0], advance_id),
+            )
+            return {"payment_document_no": dup[0], "created": False}
+
+        amt = round(float(adv["amount"] or 0), 2)
+        post_date = str(adv["request_date"])[:10]
+        emp_lbl = f"{adv.get('employee_name') or ''} ({adv.get('emp_code') or ''})".strip()
+        label = f"Salary advance {adv['document_no']} — {emp_lbl}"
+        entry_id, doc_no = db._add_cash_payment(
+            conn, post_date, label, adv["document_no"], amt, user_id,
+            party_type="employee", party_id=adv["employee_id"],
+        )
+        conn.execute(
+            "UPDATE employee_advances SET payment_mode=?, payment_document_no=? WHERE id=?",
+            ("cash", doc_no, advance_id),
+        )
+        # GL already posted on issue — do not post again
+        return {
+            "payment_document_no": doc_no,
+            "entry_id": int(entry_id),
+            "amount": amt,
+            "created": True,
+            "document_no": adv["document_no"],
+        }
 
 
 # ---------- Loans ----------
@@ -3244,31 +3375,83 @@ def approve_loan(loan_id, user_id, approve=True):
             conn.execute("UPDATE employee_loans SET status='rejected' WHERE id=?", (loan_id,))
 
 
-def issue_loan(loan_id, user_id, payment_mode="cash"):
-    from database import get_connection
-    from db_v3 import post_gl, AC
-    with get_connection() as conn:
-        ln = conn.execute("SELECT * FROM employee_loans WHERE id=?", (loan_id,)).fetchone()
+def issue_loan(loan_id, user_id, payment_mode="cash", bank_account_id=None):
+    """Issue approved loan: GL + cash/bank book voucher."""
+    import database as db
+    from db_v3 import post_gl, post_gl_account_id, AC
+
+    mode = (payment_mode or "cash").lower()
+    if mode not in ("cash", "bank"):
+        raise ValueError("Payment mode must be cash or bank.")
+    if mode == "bank" and not bank_account_id:
+        raise ValueError("Select a bank account for bank payment.")
+
+    with db.get_connection() as conn:
+        apply_hr(conn, db)
+        ln = conn.execute(
+            """SELECT l.*, e.full_name AS employee_name, e.code AS emp_code
+               FROM employee_loans l
+               JOIN employees e ON e.id=l.employee_id
+               WHERE l.id=?""",
+            (loan_id,),
+        ).fetchone()
         if not ln or ln["status"] != "approved":
             raise ValueError("Loan must be approved before issue")
         ln = dict(ln)
-        acct = AC["bank"] if payment_mode == "bank" else AC["cash"]
-        post_gl(conn, ln["issue_date"], HR_AC["employee_advance"], ln["amount"], 0,
-                "Loan issue", "employee_loan", loan_id, ln["document_no"], user_id)
-        post_gl(conn, ln["issue_date"], acct, 0, ln["amount"],
-                "Loan issue", "employee_loan", loan_id, ln["document_no"], user_id)
+        amt = round(float(ln["amount"] or 0), 2)
+        if amt <= 0:
+            raise ValueError("Loan amount must be greater than zero.")
+        post_date = str(ln["issue_date"])[:10]
+        emp_lbl = f"{ln.get('employee_name') or ''} ({ln.get('emp_code') or ''})".strip()
+        label = f"Employee loan {ln['document_no']} — {emp_lbl}"
+        ref = ln["document_no"]
+
+        if mode == "cash":
+            entry_id, doc_no = db._add_cash_payment(
+                conn, post_date, label, ref, amt, user_id,
+                party_type="employee", party_id=ln["employee_id"],
+            )
+            asset_id = conn.execute(
+                "SELECT id FROM chart_of_accounts WHERE code=?", (AC["cash"],)
+            ).fetchone()
+            asset_id = asset_id[0] if asset_id else None
+        else:
+            entry_id, doc_no = db._add_bank_payment(
+                conn, post_date, label, ref, amt, bank_account_id, user_id,
+                party_type="employee", party_id=ln["employee_id"],
+            )
+            asset_id = bank_account_id
+
+        post_gl(
+            conn, post_date, HR_AC["employee_advance"], amt, 0,
+            label, "employee_loan", loan_id, doc_no, user_id,
+        )
+        post_gl_account_id(
+            conn, post_date, asset_id, 0, amt,
+            label, "employee_loan", entry_id, doc_no, user_id,
+        )
         conn.execute(
-            "UPDATE employee_loans SET status='issued',issued_by=?,issued_at=? WHERE id=?",
-            (user_id, now(), loan_id),
+            """UPDATE employee_loans
+               SET status='issued', issued_by=?, issued_at=?,
+                   payment_mode=?, payment_document_no=?
+               WHERE id=?""",
+            (user_id, now(), mode, doc_no, loan_id),
         )
         from datetime import timedelta
-        base = datetime.strptime(ln["issue_date"], "%Y-%m-%d")
-        for i in range(ln["installments"]):
+        base = datetime.strptime(post_date, "%Y-%m-%d")
+        for i in range(int(ln["installments"] or 1)):
             due = (base + timedelta(days=30 * (i + 1))).strftime("%Y-%m-%d")
             conn.execute(
                 "INSERT INTO loan_installments(loan_id,installment_no,due_date,amount) VALUES(?,?,?,?)",
                 (loan_id, i + 1, due, ln["monthly_installment"]),
             )
+        return {
+            "document_no": ln["document_no"],
+            "payment_document_no": doc_no,
+            "amount": amt,
+            "payment_mode": mode,
+            "employee": ln.get("employee_name"),
+        }
 
 
 # ---------- Expense claims ----------

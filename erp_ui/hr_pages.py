@@ -2330,6 +2330,7 @@ def _advance_register_rows(employee_id=None):
             "Employee": r.get("employee_name"),
             "Posting date": r.get("request_date"),
             "Salary month": sm_lbl,
+            "Voucher": r.get("payment_document_no") or "—",
             "Amount": float(r.get("amount") or 0),
             "Recovery": "100% salary month" if months <= 1 else f"{months} months",
             "Recovered": float(r.get("recovered_amount") or 0),
@@ -2488,7 +2489,7 @@ def page_advances():
     if tab == "Advance List":
         _render_hr_payment_register(
             kind="advance",
-            show_cols=["Document", "Employee", "Posting date", "Salary month", "Amount", "Recovery",
+            show_cols=["Document", "Employee", "Posting date", "Salary month", "Voucher", "Amount", "Recovery",
                        "Recovered", "Outstanding", "Status", "Reason"],
             filter_prefix="hr_adv",
             page_key="hr_adv_list_pg",
@@ -2634,16 +2635,46 @@ def page_advances():
             st.subheader("Ready to issue")
             if not approved:
                 st.caption("Nothing to issue.")
-            for r in approved:
-                sm = (r.get("salary_month") or "").strip()
-                sm_lbl = sm if sm else "next salary"
-                st.write(
-                    f"**{r['document_no']}** — {r['employee_name']} — {fmt(r['amount'])} "
-                    f"· posting {r.get('request_date')} · salary month **{sm_lbl}**"
+            else:
+                pmode = st.radio(
+                    "Issue payment mode", ["cash", "bank"], horizontal=True,
+                    key="hr_adv_issue_mode",
                 )
-                if st.button("Issue Advance", key=f"adv_i_{r['id']}"):
-                    db.issue_advance(r["id"], uid())
-                    st.rerun()
+                bank_id = None
+                if pmode == "bank":
+                    bank_accts = [
+                        a for a in db.get_accounts()
+                        if (a.get("account_type") or "").lower() in ("bank", "asset")
+                        and str(a.get("code") or "").startswith("11")
+                    ] or [a for a in db.get_accounts() if a.get("is_active")]
+                    bank_opts = {f"{a['code']} - {a['name']}": a["id"] for a in bank_accts}
+                    if bank_opts:
+                        bank_id = bank_opts[st.selectbox(
+                            "Bank account", list(bank_opts.keys()), key="hr_adv_issue_bank",
+                        )]
+                    else:
+                        st.warning("Add a bank account first.")
+                for r in approved:
+                    sm = (r.get("salary_month") or "").strip()
+                    sm_lbl = sm if sm else "next salary"
+                    st.write(
+                        f"**{r['document_no']}** — {r['employee_name']} — {fmt(r['amount'])} "
+                        f"· posting {r.get('request_date')} · salary month **{sm_lbl}**"
+                    )
+                    if st.button("Issue Advance", key=f"adv_i_{r['id']}"):
+                        try:
+                            if pmode == "bank" and not bank_id:
+                                raise ValueError("Select bank account.")
+                            res = db.issue_advance(
+                                r["id"], uid(), payment_mode=pmode, bank_account_id=bank_id,
+                            )
+                            ff.action_done(
+                                f"**{res['document_no']}** issued — "
+                                f"cash book voucher **{res['payment_document_no']}** "
+                                f"({fmt(res['amount'])})."
+                            )
+                        except Exception as e:
+                            st.error(str(e))
 
 
 def page_loans():
