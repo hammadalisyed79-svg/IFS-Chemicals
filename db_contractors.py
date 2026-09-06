@@ -157,6 +157,12 @@ def _ensure_loading_unloading_schema(conn):
         )
         conn.execute("PRAGMA foreign_keys=ON")
 
+    # Persist unselected weighbridge slips for L/U monthly bills
+    run_cols = {r[1] for r in conn.execute("PRAGMA table_info(contract_labour_month_runs)")}
+    if "excluded_slip_ids" not in run_cols:
+        conn.execute(
+            "ALTER TABLE contract_labour_month_runs ADD COLUMN excluded_slip_ids TEXT"
+        )
 
 def _table_exists(conn, name: str) -> bool:
     return bool(
@@ -699,6 +705,7 @@ def calculate_contractor_month(
     manual_qty: dict | None = None,
     loading_rate: float | None = None,
     unloading_rate: float | None = None,
+    exclude_slip_ids: list[int] | set[int] | None = None,
 ) -> dict:
     """Monthly payment worksheet lines (per-SKU billing_basis or loading/unloading kg).
 
@@ -719,6 +726,7 @@ def calculate_contractor_month(
             to_date,
             loading_rate=loading_rate,
             unloading_rate=unloading_rate,
+            exclude_slip_ids=exclude_slip_ids,
         )
 
     products = c.get("products") or []
@@ -855,57 +863,163 @@ def calculate_contractor_month(
     }
 
 
-def weighbridge_kg_for_month(from_date: str, to_date: str) -> dict:
-    """Completed weighbridge net kg split by sale (loading) vs purchase (unloading)."""
-    from database import get_connection
+def _parse_excluded_slip_ids(raw) -> list[int]:
+    """Normalize JSON / CSV / list of excluded weight_slip ids."""
+    import json
+
+    if raw is None or raw == "":
+        return []
+    if isinstance(raw, (list, tuple, set)):
+        out = []
+        for x in raw:
+            try:
+                out.append(int(x))
+            except (TypeError, ValueError):
+                continue
+        return sorted(set(out))
+    if isinstance(raw, str):
+        s = raw.strip()
+        if not s:
+            return []
+        try:
+            parsed = json.loads(s)
+            return _parse_excluded_slip_ids(parsed)
+        except Exception:
+            parts = [p.strip() for p in s.replace(";", ",").split(",") if p.strip()]
+            return _parse_excluded_slip_ids(parts)
+    try:
+        return [int(raw)]
+    except (TypeError, ValueError):
+        return []
+
+
+def _slip_side(party_type, customer_id, supplier_id) -> str | None:
+    """Return 'sale' (loading) or 'purchase' (unloading), or None if unclassified."""
+    pt = (party_type or "").strip().lower()
+    if pt == "customer":
+        return "sale"
+    if pt == "supplier":
+        return "purchase"
+    if customer_id is not None and pt != "supplier":
+        return "sale"
+    if supplier_id is not None and pt != "customer":
+        return "purchase"
+    return None
+
+
+def list_weighbridge_slips_for_month(from_date: str, to_date: str) -> list[dict]:
+    """Completed weighbridge slips for a date range with product / party / vehicle."""
+    from database import get_connection, rows_to_list
 
     fd, td = str(from_date)[:10], str(to_date)[:10]
     with get_connection() as conn:
         if not _table_exists(conn, "weight_slips"):
-            return {
-                "sale_kg": 0.0,
-                "purchase_kg": 0.0,
-                "sale_slip_count": 0,
-                "purchase_slip_count": 0,
-                "from_date": fd,
-                "to_date": td,
+            return []
+        rows = rows_to_list(conn.execute(
+            """SELECT ws.id, ws.document_no, ws.slip_date, ws.party_type,
+                      ws.net_weight, ws.vehicle_no, ws.product_id,
+                      ws.customer_id, ws.supplier_id,
+                      p.code AS product_code, p.name AS product_name,
+                      c.name AS customer_name, s.name AS supplier_name
+               FROM weight_slips ws
+               LEFT JOIN products p ON p.id = ws.product_id
+               LEFT JOIN customers c ON c.id = ws.customer_id
+               LEFT JOIN suppliers s ON s.id = ws.supplier_id
+               WHERE ws.status='completed'
+                 AND ws.slip_date>=? AND ws.slip_date<=?
+               ORDER BY ws.slip_date, ws.id""",
+            (fd, td),
+        ).fetchall())
+    out = []
+    for r in rows:
+        side = _slip_side(r.get("party_type"), r.get("customer_id"), r.get("supplier_id"))
+        if not side:
+            continue
+        party = r.get("customer_name") if side == "sale" else r.get("supplier_name")
+        out.append({
+            "id": int(r["id"]),
+            "document_no": r.get("document_no") or "",
+            "slip_date": str(r.get("slip_date") or "")[:10],
+            "side": side,
+            "side_label": "Loading (sale)" if side == "sale" else "Unloading (purchase)",
+            "product_id": int(r["product_id"]) if r.get("product_id") else None,
+            "product_code": (r.get("product_code") or "").strip() or "(none)",
+            "product_name": (r.get("product_name") or "").strip() or "(no product)",
+            "party_name": (party or "").strip() or "—",
+            "vehicle_no": (r.get("vehicle_no") or "").strip() or "—",
+            "net_weight": round(float(r.get("net_weight") or 0), 4),
+        })
+    return out
+
+
+def weighbridge_kg_for_month(
+    from_date: str,
+    to_date: str,
+    *,
+    exclude_slip_ids: list[int] | set[int] | None = None,
+) -> dict:
+    """Completed weighbridge net kg split by sale (loading) vs purchase (unloading)."""
+    excl = set(_parse_excluded_slip_ids(exclude_slip_ids))
+    slips = list_weighbridge_slips_for_month(from_date, to_date)
+    sale_kg = purch_kg = 0.0
+    sale_n = purch_n = 0
+    sale_excl = purch_excl = 0
+    products: dict[tuple, dict] = {}
+    for s in slips:
+        pid_key = s.get("product_id") or 0
+        pkey = (s["side"], pid_key, s["product_code"], s["product_name"])
+        if pkey not in products:
+            products[pkey] = {
+                "side": s["side"],
+                "side_label": s["side_label"],
+                "product_id": s.get("product_id"),
+                "product_code": s["product_code"],
+                "product_name": s["product_name"],
+                "slip_count": 0,
+                "net_kg": 0.0,
+                "excluded_count": 0,
+                "excluded_kg": 0.0,
+                "slip_ids": [],
             }
-        # Prefer party_type; fall back to customer_id / supplier_id when party_type blank
-        sale = conn.execute(
-            """SELECT COALESCE(SUM(COALESCE(net_weight,0)),0), COUNT(*)
-               FROM weight_slips
-               WHERE status='completed'
-                 AND slip_date>=? AND slip_date<=?
-                 AND (
-                   LOWER(COALESCE(party_type,''))='customer'
-                   OR (
-                     customer_id IS NOT NULL
-                     AND LOWER(COALESCE(party_type,'')) NOT IN ('supplier')
-                   )
-                 )""",
-            (fd, td),
-        ).fetchone()
-        purch = conn.execute(
-            """SELECT COALESCE(SUM(COALESCE(net_weight,0)),0), COUNT(*)
-               FROM weight_slips
-               WHERE status='completed'
-                 AND slip_date>=? AND slip_date<=?
-                 AND (
-                   LOWER(COALESCE(party_type,''))='supplier'
-                   OR (
-                     supplier_id IS NOT NULL
-                     AND LOWER(COALESCE(party_type,'')) NOT IN ('customer')
-                   )
-                 )""",
-            (fd, td),
-        ).fetchone()
+        products[pkey]["slip_count"] += 1
+        products[pkey]["net_kg"] = round(products[pkey]["net_kg"] + s["net_weight"], 4)
+        products[pkey]["slip_ids"].append(s["id"])
+        if s["id"] in excl:
+            products[pkey]["excluded_count"] += 1
+            products[pkey]["excluded_kg"] = round(
+                products[pkey]["excluded_kg"] + s["net_weight"], 4,
+            )
+            if s["side"] == "sale":
+                sale_excl += 1
+            else:
+                purch_excl += 1
+            continue
+        if s["side"] == "sale":
+            sale_kg += s["net_weight"]
+            sale_n += 1
+        else:
+            purch_kg += s["net_weight"]
+            purch_n += 1
+    product_rows = sorted(
+        products.values(),
+        key=lambda r: (0 if r["side"] == "sale" else 1, -float(r["net_kg"]), r["product_code"]),
+    )
+    for pr in product_rows:
+        pr["included_kg"] = round(float(pr["net_kg"]) - float(pr["excluded_kg"]), 4)
+        pr["included_count"] = int(pr["slip_count"]) - int(pr["excluded_count"])
+    fd, td = str(from_date)[:10], str(to_date)[:10]
     return {
-        "sale_kg": round(float(sale[0] or 0), 4),
-        "purchase_kg": round(float(purch[0] or 0), 4),
-        "sale_slip_count": int(sale[1] or 0),
-        "purchase_slip_count": int(purch[1] or 0),
+        "sale_kg": round(sale_kg, 4),
+        "purchase_kg": round(purch_kg, 4),
+        "sale_slip_count": sale_n,
+        "purchase_slip_count": purch_n,
+        "sale_excluded_count": sale_excl,
+        "purchase_excluded_count": purch_excl,
+        "excluded_slip_ids": sorted(excl),
         "from_date": fd,
         "to_date": td,
+        "slips": slips,
+        "products": product_rows,
     }
 
 
@@ -916,6 +1030,7 @@ def calculate_loading_unloading_month(
     *,
     loading_rate: float | None = None,
     unloading_rate: float | None = None,
+    exclude_slip_ids: list[int] | set[int] | None = None,
 ) -> dict:
     """Month bill = sale kg × loading rate + purchase kg × unloading rate."""
     c = get_contractor(contractor_id)
@@ -924,7 +1039,7 @@ def calculate_loading_unloading_month(
     if (c.get("payment_type") or "").strip() != PAYMENT_LOADING_UNLOADING:
         raise ValueError("Contractor is not a Loading & Unloading type.")
 
-    kg = weighbridge_kg_for_month(from_date, to_date)
+    kg = weighbridge_kg_for_month(from_date, to_date, exclude_slip_ids=exclude_slip_ids)
     load_rate = float(
         loading_rate if loading_rate is not None else (c.get("loading_rate") or 0)
     )
@@ -989,11 +1104,14 @@ def calculate_loading_unloading_month(
         "formula": (
             "Loading = Sale net kg × Loading rate; "
             "Unloading = Purchase net kg × Unloading rate "
-            "(completed weighbridge slips)"
+            "(completed weighbridge slips; unchecked slips excluded)"
         ),
         "lines": lines,
         "total": total,
         "weighbridge": kg,
+        "slips": kg.get("slips") or [],
+        "products": kg.get("products") or [],
+        "excluded_slip_ids": list(kg.get("excluded_slip_ids") or []),
         "totals": {
             "sale_kg": sale_kg,
             "purchase_kg": purch_kg,
@@ -1004,6 +1122,8 @@ def calculate_loading_unloading_month(
             "billable_qty": round(sale_kg + purch_kg, 4),
             "gross_amount": total,
             "item_count": 2,
+            "excluded_slip_count": int(kg.get("sale_excluded_count") or 0)
+            + int(kg.get("purchase_excluded_count") or 0),
         },
     }
 
@@ -1044,6 +1164,9 @@ def get_contractor_month_run(contractor_id: int, year_month: str):
             (header["id"],),
         ).fetchall())
         header["lines"] = lines
+        header["excluded_slip_ids"] = _parse_excluded_slip_ids(
+            header.get("excluded_slip_ids")
+        )
         return header
 
 
@@ -1070,8 +1193,10 @@ def save_contractor_month_run(
     *,
     notes: str | None = None,
     user_id=None,
+    excluded_slip_ids: list[int] | set[int] | None = None,
 ) -> int:
     """Upsert monthly worksheet record (one per contractor per month)."""
+    import json
     from database import get_connection, _now
 
     ym = str(year_month)[:7]
@@ -1126,6 +1251,9 @@ def save_contractor_month_run(
             "sort_order": i,
         })
 
+    excl_list = _parse_excluded_slip_ids(excluded_slip_ids)
+    excl_json = json.dumps(excl_list) if excl_list else None
+
     ts = _now()
     with get_connection() as conn:
         apply_contract_labour(conn)
@@ -1144,10 +1272,10 @@ def save_contractor_month_run(
             conn.execute(
                 """UPDATE contract_labour_month_runs
                    SET from_date=?, to_date=?, gross_amount=?, closing_qty=?, notes=?,
-                       modified_by=?, modified_at=?
+                       excluded_slip_ids=?, modified_by=?, modified_at=?
                    WHERE id=?""",
                 (from_date, to_date, round(gross, 2), round(closing_sum, 4),
-                 note_val, user_id, ts, run_id),
+                 note_val, excl_json, user_id, ts, run_id),
             )
             conn.execute(
                 "DELETE FROM contract_labour_month_lines WHERE run_id=?", (run_id,),
@@ -1156,10 +1284,12 @@ def save_contractor_month_run(
             cur = conn.execute(
                 """INSERT INTO contract_labour_month_runs(
                        contractor_id, year_month, from_date, to_date,
-                       gross_amount, closing_qty, notes, created_by, created_at
-                   ) VALUES (?,?,?,?,?,?,?,?,?)""",
+                       gross_amount, closing_qty, notes, excluded_slip_ids,
+                       created_by, created_at
+                   ) VALUES (?,?,?,?,?,?,?,?,?,?)""",
                 (int(contractor_id), ym, from_date, to_date,
-                 round(gross, 2), round(closing_sum, 4), note_val, user_id, ts),
+                 round(gross, 2), round(closing_sum, 4), note_val, excl_json,
+                 user_id, ts),
             )
             run_id = int(cur.lastrowid)
         for ln in clean:
@@ -1180,7 +1310,10 @@ def save_contractor_month_run(
         log_event(
             "contract_labour_month_runs", run_id, "save", user_id=user_id,
             module="Contract Labour",
-            summary=f"Month worksheet saved {ym} gross={round(gross, 2)}",
+            summary=(
+                f"Month worksheet saved {ym} gross={round(gross, 2)}"
+                + (f" excluded_slips={len(excl_list)}" if excl_list else "")
+            ),
         )
     except Exception:
         pass

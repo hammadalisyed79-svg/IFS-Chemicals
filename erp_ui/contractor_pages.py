@@ -630,7 +630,7 @@ def _tab_month_preview():
             "**Loading & Unloading** — monthly worksheet from completed weighbridge slips. "
             "**Loading** = sale (outward) net kg × loading rate · "
             "**Unloading** = purchase (inward) net kg × unloading rate. "
-            "You can override rates for this month before save."
+            "Uncheck products or individual slips (e.g. tankers) to exclude them from billed kg."
         )
     elif is_prod:
         st.caption(
@@ -658,6 +658,7 @@ def _tab_month_preview():
         }
 
     rate_key = f"cl_lu_rates_{cid}_{ym}"
+    excl_key = f"cl_lu_excl_{cid}_{ym}"
     if is_lu and rate_key not in st.session_state:
         if saved and saved.get("lines"):
             lr = ur = None
@@ -676,6 +677,10 @@ def _tab_month_preview():
                 "loading": float(cur_c.get("loading_rate") or 0),
                 "unloading": float(cur_c.get("unloading_rate") or 0),
             }
+    if is_lu and excl_key not in st.session_state:
+        st.session_state[excl_key] = list(
+            (saved or {}).get("excluded_slip_ids") or []
+        )
 
     if is_lu:
         rr1, rr2 = st.columns(2)
@@ -703,12 +708,15 @@ def _tab_month_preview():
         try:
             if is_lu:
                 rates = st.session_state.get(rate_key) or {}
+                excl = list(st.session_state.get(excl_key) or [])
                 result = calculate_contractor_month(
                     cid, fd, td,
                     loading_rate=float(rates.get("loading") or 0),
                     unloading_rate=float(rates.get("unloading") or 0),
+                    exclude_slip_ids=excl,
                 )
-            else:
+                # Reset slip editor so Include matches current exclusions
+                st.session_state.pop(f"cl_lu_slip_ed_{cid}_{ym}", None)            else:
                 prior = {}
                 if not is_prod:
                     prior = st.session_state.get(mk) or {}
@@ -800,48 +808,228 @@ def _tab_month_preview():
     if is_lu:
         st.markdown(
             "**Worksheet** — weighbridge completed slips. "
-            + (result.get("formula") or "Sale kg × loading + Purchase kg × unloading.")
+            "Uncheck slips that should not be billed (e.g. tankers). "
+            "Use the product summary + filter to find them quickly."
         )
-        # Re-apply current rate inputs to lines for live amount
         rates = st.session_state.get(rate_key) or {}
         load_rate = float(rates.get("loading") or 0)
         unload_rate = float(rates.get("unloading") or 0)
-        out_rows = []
-        sale_kg = purch_kg = 0.0
-        for ln in lines:
-            code = (ln.get("product_code") or "").upper()
-            kg = _f(ln.get("quantity") if ln.get("quantity") is not None else ln.get("closing_stock"))
-            if code == LINE_CODE_LOADING:
-                rate = load_rate
-                sale_kg = kg
-            elif code == LINE_CODE_UNLOADING:
-                rate = unload_rate
-                purch_kg = kg
-            else:
-                rate = _f(ln.get("rate"))
-            amount = round(kg * rate, 2)
-            gross += amount
-            slips = int(ln.get("slip_count") or 0)
-            out_rows.append({
-                "Line": ln.get("product_name") or code,
-                "Slips": slips,
-                "Net kg": kg,
-                "Rate Rs/kg": rate,
-                "Amount": amount,
+        slips = list(result.get("slips") or [])
+        products = list(result.get("products") or [])
+        if not slips:
+            st.warning("Click **Load / refresh month** to load product and slip detail.")
+        excl = set(int(x) for x in (st.session_state.get(excl_key) or []))
+
+        slip_filter = st.text_input(
+            "Filter (product / vehicle / party / slip no)",
+            key=f"cl_lu_slip_filter_{cid}_{ym}",
+            placeholder="e.g. LPG, SILICATE, tanker plate…",
+        ).strip().lower()
+
+        qa1, qa2, qa3, qa4 = st.columns(4)
+        if qa1.button("Include all", key=f"cl_lu_incl_all_{cid}_{ym}"):
+            excl = set()
+            st.session_state.pop(f"cl_lu_slip_ed_{cid}_{ym}", None)
+        if qa2.button("Exclude no-product", key=f"cl_lu_excl_none_{cid}_{ym}"):
+            excl.update(
+                int(s["id"]) for s in slips
+                if (s.get("product_code") or "(none)") == "(none)"
+            )
+            st.session_state.pop(f"cl_lu_slip_ed_{cid}_{ym}", None)
+        if qa3.button("Exclude filtered", key=f"cl_lu_excl_filt_{cid}_{ym}"):
+            if slip_filter:
+                for s in slips:
+                    blob = " ".join([
+                        str(s.get("document_no") or ""),
+                        str(s.get("product_code") or ""),
+                        str(s.get("product_name") or ""),
+                        str(s.get("party_name") or ""),
+                        str(s.get("vehicle_no") or ""),
+                    ]).lower()
+                    if slip_filter in blob:
+                        excl.add(int(s["id"]))
+                st.session_state.pop(f"cl_lu_slip_ed_{cid}_{ym}", None)
+        if qa4.button("Include filtered", key=f"cl_lu_incl_filt_{cid}_{ym}"):
+            if slip_filter:
+                for s in slips:
+                    blob = " ".join([
+                        str(s.get("document_no") or ""),
+                        str(s.get("product_code") or ""),
+                        str(s.get("product_name") or ""),
+                        str(s.get("party_name") or ""),
+                        str(s.get("vehicle_no") or ""),
+                    ]).lower()
+                    if slip_filter in blob:
+                        excl.discard(int(s["id"]))
+                st.session_state.pop(f"cl_lu_slip_ed_{cid}_{ym}", None)
+
+        # --- Product summary (read-only; use filter / slip Include to exclude) ---
+        st.markdown("#### Products this month")
+        if products:
+            prod_view = []
+            for pr in products:
+                ids = [int(x) for x in (pr.get("slip_ids") or [])]
+                ex_kg = sum(
+                    float(s.get("net_weight") or 0)
+                    for s in slips
+                    if int(s["id"]) in ids and int(s["id"]) in excl
+                )
+                tot = float(pr.get("net_kg") or 0)
+                inc = round(tot - ex_kg, 4)
+                ex_n = sum(1 for sid in ids if sid in excl)
+                prod_view.append({
+                    "Side": pr.get("side_label") or pr.get("side"),
+                    "Code": pr.get("product_code"),
+                    "Product": pr.get("product_name"),
+                    "Slips": int(pr.get("slip_count") or 0),
+                    "Included": int(pr.get("slip_count") or 0) - ex_n,
+                    "Total kg": tot,
+                    "Included kg": inc,
+                    "Excluded kg": round(ex_kg, 4),
+                })
+            hlp.render_dataframe_html_table(pd.DataFrame(prod_view))
+            st.caption(
+                "To drop a product (e.g. tanker LPG): type its code in the filter → "
+                "**Exclude filtered**. Or uncheck individual slips below."
+            )
+        else:
+            st.caption("No completed weighbridge slips in this month.")
+
+        # --- Individual slips ---
+        st.markdown("#### Weighbridge slips")
+        slip_rows = []
+        for s in slips:
+            blob = " ".join([
+                str(s.get("document_no") or ""),
+                str(s.get("product_code") or ""),
+                str(s.get("product_name") or ""),
+                str(s.get("party_name") or ""),
+                str(s.get("vehicle_no") or ""),
+            ]).lower()
+            if slip_filter and slip_filter not in blob:
+                continue
+            slip_rows.append({
+                "Include": int(s["id"]) not in excl,
+                "Side": s.get("side_label") or s.get("side"),
+                "Date": s.get("slip_date"),
+                "Slip": s.get("document_no"),
+                "Code": s.get("product_code"),
+                "Product": s.get("product_name"),
+                "Party": s.get("party_name"),
+                "Vehicle": s.get("vehicle_no"),
+                "Net kg": float(s.get("net_weight") or 0),
+                "_id": int(s["id"]),
             })
-            save_lines.append({
+        if slip_rows:
+            slip_df = pd.DataFrame(slip_rows)
+            edited_slips = st.data_editor(
+                slip_df,
+                hide_index=True,
+                use_container_width=True,
+                num_rows="fixed",
+                height=min(480, 48 + 35 * min(len(slip_df), 12)),
+                disabled=[
+                    "Side", "Date", "Slip", "Code", "Product", "Party", "Vehicle",
+                    "Net kg", "_id",
+                ],
+                column_config={
+                    "Include": st.column_config.CheckboxColumn(
+                        "Include", help="Uncheck to exclude from billed kg", default=True,
+                    ),
+                    "Side": st.column_config.TextColumn("Side", width="medium"),
+                    "Date": st.column_config.TextColumn("Date", width="small"),
+                    "Slip": st.column_config.TextColumn("Slip", width="medium"),
+                    "Code": st.column_config.TextColumn("Code", width="small"),
+                    "Product": st.column_config.TextColumn("Product", width="large"),
+                    "Party": st.column_config.TextColumn("Party", width="medium"),
+                    "Vehicle": st.column_config.TextColumn("Vehicle", width="small"),
+                    "Net kg": st.column_config.NumberColumn("Net kg", format="%.2f"),
+                    "_id": None,
+                },
+                key=f"cl_lu_slip_ed_{cid}_{ym}",
+            )
+            visible_ids = set(int(r["_id"]) for _, r in edited_slips.iterrows())
+            for _, row in edited_slips.iterrows():
+                sid = int(row["_id"])
+                if bool(row.get("Include")):
+                    excl.discard(sid)
+                else:
+                    excl.add(sid)
+            # Preserve exclusions for slips hidden by the filter
+            prev = set(int(x) for x in (st.session_state.get(excl_key) or []))
+            for s in slips:
+                sid = int(s["id"])
+                if sid not in visible_ids and sid in prev:
+                    excl.add(sid)
+        elif slips:
+            st.caption("No slips match the filter.")
+        else:
+            st.caption("No slips to list.")
+
+        st.session_state[excl_key] = sorted(excl)
+
+        # Recalculate billed kg from inclusions
+        sale_kg = purch_kg = 0.0
+        sale_n = purch_n = 0
+        for s in slips:
+            if int(s["id"]) in excl:
+                continue
+            kg_v = float(s.get("net_weight") or 0)
+            if s.get("side") == "sale":
+                sale_kg += kg_v
+                sale_n += 1
+            else:
+                purch_kg += kg_v
+                purch_n += 1
+        sale_kg = round(sale_kg, 4)
+        purch_kg = round(purch_kg, 4)
+        load_amt = round(sale_kg * load_rate, 2)
+        unload_amt = round(purch_kg * unload_rate, 2)
+        gross = round(load_amt + unload_amt, 2)
+        out_rows = [
+            {
+                "Line": "Loading (sale / outward kg)",
+                "Slips": sale_n,
+                "Net kg": sale_kg,
+                "Rate Rs/kg": load_rate,
+                "Amount": load_amt,
+            },
+            {
+                "Line": "Unloading (purchase / inward kg)",
+                "Slips": purch_n,
+                "Net kg": purch_kg,
+                "Rate Rs/kg": unload_rate,
+                "Amount": unload_amt,
+            },
+        ]
+        save_lines = [
+            {
                 "product_id": None,
-                "product_code": code,
-                "product_name": ln.get("product_name"),
-                "sold_qty": kg,
+                "product_code": LINE_CODE_LOADING,
+                "product_name": "Loading (sale / outward kg)",
+                "sold_qty": sale_kg,
                 "stock_qty": 0,
                 "sale_return_qty": 0,
                 "manual_qty": 0,
-                "closing_stock": kg,
-                "quantity": kg,
-                "rate": rate,
-                "amount": amount,
-            })
+                "closing_stock": sale_kg,
+                "quantity": sale_kg,
+                "rate": load_rate,
+                "amount": load_amt,
+            },
+            {
+                "product_id": None,
+                "product_code": LINE_CODE_UNLOADING,
+                "product_name": "Unloading (purchase / inward kg)",
+                "sold_qty": purch_kg,
+                "stock_qty": 0,
+                "sale_return_qty": 0,
+                "manual_qty": 0,
+                "closing_stock": purch_kg,
+                "quantity": purch_kg,
+                "rate": unload_rate,
+                "amount": unload_amt,
+            },
+        ]
         display_rows = out_rows
         k1, k2, k3, k4, k5 = st.columns(5, gap="small")
         k1.markdown(
@@ -879,10 +1067,9 @@ def _tab_month_preview():
         }
         show = pd.concat([out_df, pd.DataFrame([footer])], ignore_index=True)
         hlp.render_dataframe_html_table(show)
-        wb = result.get("weighbridge") or {}
         st.caption(
-            f"Slips: sale **{int(wb.get('sale_slip_count') or 0)}** · "
-            f"purchase **{int(wb.get('purchase_slip_count') or 0)}** "
+            f"Included slips: sale **{sale_n}** · purchase **{purch_n}** · "
+            f"excluded **{len(excl)}** "
             f"(completed, {fd} → {td})."
         )
         billable_label = "Total kg"
@@ -893,6 +1080,7 @@ def _tab_month_preview():
             "Purchase kg": round(purch_kg, 2),
             "Loading rate": load_rate,
             "Unloading rate": unload_rate,
+            "Excluded slips": len(excl),
             "Gross Amount": round(gross, 2),
         }
 
@@ -1174,12 +1362,17 @@ def _tab_month_preview():
     notes = st.text_input("Save notes (optional)", key=f"cl_month_notes_{cid}_{ym}")
     if st.button("Save month record", type="primary", key=f"cl_month_save_{cid}_{ym}"):
         try:
+            excl_save = None
+            if is_lu:
+                excl_save = list(st.session_state.get(excl_key) or [])
             run_id = save_contractor_month_run(
                 cid, ym, save_lines, notes=notes, user_id=hlp.uid(),
+                excluded_slip_ids=excl_save,
             )
             ff.action_done(
                 f"Month **{ym}** saved (record #{run_id}). "
                 f"Gross Rs. {gross:,.2f} · {billable_label} {billable_sum:,.2f}."
+                + (f" · excluded slips {len(excl_save)}" if excl_save else "")
             )
         except Exception as e:
             st.error(f"Could not save: {e}")
