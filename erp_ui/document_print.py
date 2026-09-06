@@ -2176,6 +2176,7 @@ def salary_payment_voucher_html(line_id):
         f'<div class="salary-voucher-body">{body}</div>'
         f'<div class="salary-voucher-gap" aria-hidden="true"></div>'
         f'<div class="salary-voucher-sigs">{sigs}</div>'
+        f'<div class="salary-voucher-below" aria-hidden="true"></div>'
         f"</div>"
         f"</div>"
         f'<div class="half-page-cut">— cut / fold — bottom half of A4 blank —</div>'
@@ -2187,6 +2188,72 @@ def salary_payment_voucher_html(line_id):
 <body class="voucher-dual-body">{inner}
 <p class="no-print"><button class="print-btn" onclick="doPrint()">Print salary voucher (half-page portrait)</button></p>
 </body></html>"""
+
+def cash_advance_voucher_html(advance_id):
+    """Half-page cash advance issue slip for rider/driver signature."""
+    adv = db.get_cash_advance(int(advance_id))
+    if not adv:
+        return ""
+    doc_no = adv.get("document_no") or ""
+    person = (adv.get("person_name") or "").strip() or "—"
+    purpose = (adv.get("purpose") or "").strip() or "—"
+    mode = (adv.get("payment_mode") or "cash").strip().title()
+    amt = float(adv.get("amount") or 0)
+    ref = (adv.get("reference_no") or "").strip() or "—"
+    acct = " — ".join(
+        p for p in (
+            str(adv.get("advance_account_code") or "").strip(),
+            str(adv.get("advance_account_name") or "").strip(),
+        ) if p
+    ) or "100193 — ADVANCE PAYMENT OTHERS"
+    prep = resolve_preparer_name(adv.get("created_by"))
+    extra = {
+        "Mode": mode,
+        "Reference": ref,
+        "Control account": acct,
+        "Status": (adv.get("status") or "").title() or "—",
+    }
+    if prep:
+        extra["Prepared By"] = prep
+    body = _doc_header(
+        "Cash Advance Voucher",
+        doc_no,
+        adv.get("issue_date"),
+        "Paid To",
+        person,
+        extra,
+        party_on_new_line=True,
+        doc_time=adv.get("created_at"),
+    )
+    body += (
+        '<div class="salary-net-box" style="margin:6px 0">'
+        '<div class="voucher-amt-label">Advance amount</div>'
+        f'<div class="voucher-amt-value">Rs. {_money_cell(amt)}</div>'
+        f'<div class="voucher-amt-words"><b>In words:</b> {escape(amount_in_words(amt))}</div>'
+        "</div>"
+        f'<p style="margin:4px 0;font-size:10px"><b>Purpose:</b> {escape(purpose)}</p>'
+        f'<p class="recv-line" style="margin:6px 0 0;font-size:10px;text-align:center;'
+        f'border-top:1px dotted #666;padding-top:4px">'
+        f'Received <strong>Rs. {_money_cell(amt)}</strong> as cash advance '
+        f'(shadow float — settle bills later).</p>'
+    )
+    css = PRINT_CSS_PORTRAIT_HALF.replace(
+        "</style>",
+        f"{_VOUCHER_PRINT_CSS_EXTRA}"
+        ".salary-net-box{border:1.5px solid #111;padding:4px 8px;text-align:center}"
+        ".salary-net-box .voucher-amt-label{font-size:8px;text-transform:uppercase;letter-spacing:.05em;color:#333}"
+        ".salary-net-box .voucher-amt-value{font-size:15px;font-weight:700;margin:0;line-height:1.2}"
+        ".salary-net-box .voucher-amt-words{font-size:8px;line-height:1.2;margin-top:2px}"
+        "</style>",
+    )
+    inner = _payment_voucher_half_inner(body, prep, person)
+    return f"""<!DOCTYPE html><html><head><meta charset="utf-8">
+<title>Cash Advance {escape(str(doc_no))}</title>
+{css}<script>function doPrint(){{window.print();}}</script></head>
+<body>{inner}
+<p class="no-print"><button class="print-btn" onclick="doPrint()">Print cash advance (half-page)</button></p>
+</body></html>"""
+
 
 def production_batch_html(prod_id):
     rows = [r for r in db.get_production_orders() if r["id"] == prod_id]
@@ -2220,6 +2287,7 @@ PRINTERS = {
     "Receipt Voucher": receipt_voucher_html,
     "Payment Voucher": payment_voucher_html,
     "Salary Payment Voucher": salary_payment_voucher_html,
+    "Cash Advance Voucher": cash_advance_voucher_html,
     "Finance Voucher": finance_voucher_html,
     "Party Transfer": party_transfer_voucher_html,
     "Customer Receipt": lambda i, s=None: finance_voucher_html(s, i) if s else receipt_voucher_html(i),
@@ -2275,6 +2343,7 @@ def document_print_toolbar(doc_type, doc_id, key_prefix="doc", vch_source=None, 
         elif doc_type in (
             "Finance Voucher", "Receipt Voucher", "Payment Voucher",
             "Customer Receipt", "Supplier Payment", "Expense Payment",
+            "Cash Advance Voucher", "Salary Payment Voucher",
         ):
             preview_h = 520
         else:

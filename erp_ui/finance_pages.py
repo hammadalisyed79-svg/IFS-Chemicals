@@ -2295,6 +2295,19 @@ def _cash_advance_register(key_prefix):
         f"**{adv['document_no']}** · {adv.get('person_name')} · "
         f"issued {fmt_money(adv.get('amount'))} · outstanding **{fmt_money(adv.get('outstanding_amount'))}**"
     )
+    pb1, pb2 = st.columns([1.2, 2.8])
+    if pb1.button("Print for signature", key=f"{key_prefix}_print_btn", use_container_width=True):
+        st.session_state[f"{key_prefix}_print_id"] = int(adv["id"])
+        st.rerun()
+    if st.session_state.get(f"{key_prefix}_print_id") == int(adv["id"]):
+        document_print_toolbar(
+            "Cash Advance Voucher",
+            int(adv["id"]),
+            key_prefix=f"{key_prefix}_reg_print",
+        )
+        if pb2.button("Hide print", key=f"{key_prefix}_hide_print"):
+            st.session_state.pop(f"{key_prefix}_print_id", None)
+            st.rerun()
     settlements = adv.get("settlements") or []
     if not settlements:
         st.caption("No settlements yet.")
@@ -2325,6 +2338,25 @@ def _cash_advance_register(key_prefix):
 def _cash_advance_issue_form(key_prefix):
     fid = key_prefix
     wk = lambda n: ff.widget_key(fid, n)
+
+    print_info = st.session_state.get("last_ca_print")
+    if print_info and print_info.get("id"):
+        st.success(
+            f"Issued **{print_info.get('document_no')}** to "
+            f"**{print_info.get('person_name')}** — "
+            f"{fmt_money(print_info.get('amount'))}. "
+            "Print below for signature."
+        )
+        document_print_toolbar(
+            "Cash Advance Voucher",
+            int(print_info["id"]),
+            key_prefix=f"{key_prefix}_issue_print",
+        )
+        if st.button("Clear print preview", key=f"{key_prefix}_clear_print"):
+            st.session_state.pop("last_ca_print", None)
+            st.rerun()
+        st.divider()
+
     with form_compact(f"{key_prefix}_issue"):
         c1, c2, c3 = st.columns([1.2, 1.6, 1.4])
         idate = c1.date_input("Issue date *", value=date.today(), key=wk("date"))
@@ -2374,7 +2406,8 @@ def _cash_advance_issue_form(key_prefix):
                 fid,
                 f"Issued **{res['document_no']}** to **{res['person_name']}** — "
                 f"{fmt_money(res['amount'])} (shadow — not in Cash Book). "
-                f"Settle bills later from the **Settle Bills** tab.",
+                "Print voucher for signature, then settle bills later.",
+                retain={"last_ca_print": res},
             )
         except Exception as e:
             st.error(str(e))
