@@ -87,17 +87,21 @@ _HOME_LAYOUT_KEY = "erp_home_layout"
 def _home_layout() -> dict:
     raw = st.session_state.get(_HOME_LAYOUT_KEY)
     if not isinstance(raw, dict):
-        raw = {
-            "show_business_pulse": True,
-            "show_quick_actions": True,
-            "show_my_work": True,
-        }
+        raw = {}
         st.session_state[_HOME_LAYOUT_KEY] = raw
+    # Defaults (merge so older sessions pick up new keys)
+    for key, default in (
+        ("show_business_pulse", True),
+        ("show_books_health", True),
+        ("show_quick_actions", True),
+        ("show_my_work", True),
+    ):
+        raw.setdefault(key, default)
     return raw
 
 
 def home_section_visible(section: str) -> bool:
-    """section: business_pulse | quick_actions | my_work"""
+    """section: business_pulse | books_health | quick_actions | my_work"""
     layout = _home_layout()
     return bool(layout.get(f"show_{section}", True))
 
@@ -109,32 +113,39 @@ def set_home_section_visible(section: str, visible: bool) -> None:
 
 
 def render_home_layout_controls() -> None:
-    """Toggle Business Pulse / Quick Actions / My Work on the desktop home."""
+    """Toggle Business Pulse / Books Health / Quick Actions / My Work on home."""
     layout = _home_layout()
     with st.expander("Home layout — show / hide sections", expanded=False):
-        c1, c2, c3 = st.columns(3)
+        c1, c2, c3, c4 = st.columns(4)
         pulse = c1.checkbox(
             "Business Pulse",
             value=bool(layout.get("show_business_pulse", True)),
             key="home_layout_pulse",
         )
-        qa = c2.checkbox(
+        health = c2.checkbox(
+            "Books Health",
+            value=bool(layout.get("show_books_health", True)),
+            key="home_layout_books_health",
+        )
+        qa = c3.checkbox(
             "Quick Actions",
             value=bool(layout.get("show_quick_actions", True)),
             key="home_layout_qa",
         )
-        mw = c3.checkbox(
+        mw = c4.checkbox(
             "My Work",
             value=bool(layout.get("show_my_work", True)),
             key="home_layout_mywork",
         )
         changed = (
             pulse != bool(layout.get("show_business_pulse", True))
+            or health != bool(layout.get("show_books_health", True))
             or qa != bool(layout.get("show_quick_actions", True))
             or mw != bool(layout.get("show_my_work", True))
         )
         if changed:
             set_home_section_visible("business_pulse", pulse)
+            set_home_section_visible("books_health", health)
             set_home_section_visible("quick_actions", qa)
             set_home_section_visible("my_work", mw)
             st.rerun()
