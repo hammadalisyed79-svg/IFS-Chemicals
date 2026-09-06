@@ -1820,6 +1820,17 @@ def salary_payment_voucher_html(line_id):
         ("Advance recovery", v.get("advance_recovery")),
         ("Loan recovery", v.get("loan_recovery")),
         ("Other deductions", v.get("other_deductions")),
+        (
+            (
+                f"Absent deduction ({float(v.get('days_absent') or 0):.1f} day"
+                f"{'s' if float(v.get('days_absent') or 0) != 1 else ''})"
+            )
+            if float(v.get("absent_deduction") or 0) > 0.009
+            or float(v.get("days_absent") or 0) > 0.009
+            else "Absent deduction"
+        ),
+        v.get("absent_deduction"),
+        ),
         ("Total deductions", v.get("total_deductions")),
         ("Net paid", v.get("paid_amount") or v.get("net_salary")),
     ]
