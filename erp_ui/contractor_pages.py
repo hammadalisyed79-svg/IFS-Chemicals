@@ -372,10 +372,17 @@ def _tab_products():
     already = set(int(x) for x in (st.session_state.get(sk) or draft_ids or []))
     new_matches = [r for r in matched if int(r["id"]) not in already]
     b3.metric("Matches / new", f"{len(matched)} / {len(new_matches)}")
-    add_label = (
-        f"Add new {prefix or '…'}* ({len(new_matches)})"
-        if prefix else "Add new …* (0)"
-    )
+    if len(new_matches) == 1:
+        one = new_matches[0]
+        code = str(one.get("code") or prefix or "").strip()
+        name = str(one.get("name") or "").strip()
+        if len(name) > 42:
+            name = name[:39].rstrip() + "…"
+        add_label = f"Add {code} — {name}" if name else f"Add {code}"
+    elif prefix:
+        add_label = f"Add new {prefix}* ({len(new_matches)})"
+    else:
+        add_label = "Add new …* (0)"
     if b4.button(
         add_label,
         type="primary",
