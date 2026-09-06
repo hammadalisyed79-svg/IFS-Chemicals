@@ -11,6 +11,9 @@ from application import data_gateway as db
 from db_contractors import (
     BILLING_BASES,
     BULK_PREFIX_HINTS,
+    LINE_CODE_LOADING,
+    LINE_CODE_UNLOADING,
+    PAYMENT_LOADING_UNLOADING,
     PAYMENT_PRODUCTION_QTY,
     PAYMENT_TYPES,
     add_contractor,
@@ -79,7 +82,7 @@ def page_contract_labour():
     peek = st.session_state.get("cl_page_tab") or "Contractors"
     hlp.std_page_header(
         "Contract Labour",
-        subtitle="Payment types · Product assignment · Monthly worksheet",
+        subtitle="Payment types · Product assignment · Loading/unloading kg · Monthly worksheet",
         status="register" if peek == "Contractors" else None,
         status_kind="shell",
     )
@@ -98,23 +101,28 @@ def page_contract_labour():
 
 def _tab_contractors():
     st.caption(
-        "**Two payment types:** "
-        "① Production quantity — completed production qty × **rate per SKU** "
-        "(each product has its own rate). "
+        "**Payment types:** "
+        "① Production quantity — completed production qty × **rate per SKU**. "
         "② SKU / cartons × **rate per SKU**. "
-        "Assign products and set rates on the **Products** tab (bulk add by code, e.g. DW, DT1, DT2, DT3)."
+        "③ **Loading & unloading** — sale kg × loading rate + purchase kg × unloading rate "
+        "(weighbridge). Assign SKUs on **Products** for ①/②; set kg rates here for ③."
     )
     rows = list_contractors(active_only=False)
     if rows:
         view = []
         for r in rows:
-            view.append({
+            pt = r.get("payment_type")
+            row = {
                 "Code": r.get("supplier_code"),
                 "Contractor": r.get("supplier_name"),
-                "Payment type": PAYMENT_TYPES.get(r.get("payment_type"), r.get("payment_type")),
+                "Payment type": PAYMENT_TYPES.get(pt, pt),
                 "Products": int(r.get("product_count") or 0),
                 "Active": "Yes" if r.get("is_active") else "No",
-            })
+            }
+            if pt == PAYMENT_LOADING_UNLOADING:
+                row["Loading rate"] = float(r.get("loading_rate") or 0)
+                row["Unloading rate"] = float(r.get("unloading_rate") or 0)
+            view.append(row)
         hlp.render_dataframe_html_table(pd.DataFrame(view))
     else:
         st.info("No contract labourers yet. Add one below (pick an existing supplier).")
@@ -143,8 +151,23 @@ def _tab_contractors():
                 format_func=lambda k: PAYMENT_TYPES.get(k, k),
                 key="cl_add_type",
             )
+        load_rate = unload_rate = 0.0
+        if type_key == PAYMENT_LOADING_UNLOADING:
+            r1, r2 = st.columns(2)
+            load_rate = r1.number_input(
+                "Loading rate (Rs/kg — sales)",
+                min_value=0.0, value=0.0, step=0.01, format="%.4f",
+                key="cl_add_load_rate",
+            )
+            unload_rate = r2.number_input(
+                "Unloading rate (Rs/kg — purchases)",
+                min_value=0.0, value=0.0, step=0.01, format="%.4f",
+                key="cl_add_unload_rate",
+            )
+            st.caption("Monthly bill uses completed weighbridge net kg. No SKU list needed.")
+        else:
+            st.caption("Rates are set **per SKU** on the Products tab — not a single fixed rate.")
         notes = st.text_input("Notes (optional)", key="cl_add_notes")
-        st.caption("Rates are set **per SKU** on the Products tab — not a single fixed rate.")
         if st.button("Save contractor", type="primary", key="cl_add_save"):
             try:
                 sid = int(sup_opts[sup_lbl])
@@ -153,6 +176,8 @@ def _tab_contractors():
                         "supplier_id": sid,
                         "payment_type": type_key,
                         "default_rate": 0,
+                        "loading_rate": load_rate,
+                        "unloading_rate": unload_rate,
                         "notes": notes,
                     },
                     hlp.uid(),
@@ -163,10 +188,17 @@ def _tab_contractors():
                 st.session_state.pop(_draft_key(cid), None)
                 st.session_state.pop(_rates_key(cid), None)
                 st.session_state.pop("cl_add_notes", None)
-                ff.action_done(
-                    f"Contractor **{saved.get('supplier_code')} — {saved.get('supplier_name')}** saved. "
-                    "Open the **Products** tab to assign SKUs and rates."
-                )
+                if type_key == PAYMENT_LOADING_UNLOADING:
+                    msg = (
+                        f"Contractor **{saved.get('supplier_code')} — {saved.get('supplier_name')}** saved. "
+                        "Open **Monthly Worksheet** to bill sale/purchase kg."
+                    )
+                else:
+                    msg = (
+                        f"Contractor **{saved.get('supplier_code')} — {saved.get('supplier_name')}** saved. "
+                        "Open the **Products** tab to assign SKUs and rates."
+                    )
+                ff.action_done(msg)
             except Exception as e:
                 st.error(f"Could not save contractor: {e}")
 
@@ -189,6 +221,20 @@ def _tab_contractors():
             format_func=lambda k: PAYMENT_TYPES.get(k, k),
             key=f"cl_edit_type_{cid}",
         )
+        load_rate = float(cur.get("loading_rate") or 0)
+        unload_rate = float(cur.get("unloading_rate") or 0)
+        if type_key == PAYMENT_LOADING_UNLOADING:
+            r1, r2 = st.columns(2)
+            load_rate = r1.number_input(
+                "Loading rate (Rs/kg — sales)",
+                min_value=0.0, value=load_rate, step=0.01, format="%.4f",
+                key=f"cl_edit_load_{cid}",
+            )
+            unload_rate = r2.number_input(
+                "Unloading rate (Rs/kg — purchases)",
+                min_value=0.0, value=unload_rate, step=0.01, format="%.4f",
+                key=f"cl_edit_unload_{cid}",
+            )
         notes = st.text_input("Notes", value=cur.get("notes") or "", key=f"cl_edit_notes_{cid}")
         active = st.checkbox("Active", value=bool(cur.get("is_active", 1)), key=f"cl_edit_active_{cid}")
         if st.button("Save changes", type="primary", key=f"cl_edit_save_{cid}"):
@@ -198,6 +244,8 @@ def _tab_contractors():
                     {
                         "payment_type": type_key,
                         "default_rate": float(cur.get("default_rate") or 0),
+                        "loading_rate": load_rate,
+                        "unloading_rate": unload_rate,
                         "notes": notes,
                         "is_active": int(active),
                     },
@@ -252,6 +300,18 @@ def _tab_products():
     cur = get_contractor(cid)
     if not cur:
         st.warning("Contractor not found.")
+        return
+
+    if (cur.get("payment_type") or "") == PAYMENT_LOADING_UNLOADING:
+        st.info(
+            f"**{cur.get('supplier_name')}** is a **Loading & Unloading** contractor. "
+            "Rates are set on the **Contractors** tab (Rs/kg). "
+            "No SKU assignment — use **Monthly Worksheet** for sale/purchase kg billing."
+        )
+        st.caption(
+            f"Loading rate: **{float(cur.get('loading_rate') or 0):.4f}** Rs/kg · "
+            f"Unloading rate: **{float(cur.get('unloading_rate') or 0):.4f}** Rs/kg"
+        )
         return
 
     _seed_draft(cid)
@@ -545,8 +605,16 @@ def _tab_month_preview():
     ym = f"{int(year):04d}-{int(month):02d}"
     cur_c = get_contractor(cid) or {}
     is_prod = (cur_c.get("payment_type") or "") == PAYMENT_PRODUCTION_QTY
+    is_lu = (cur_c.get("payment_type") or "") == PAYMENT_LOADING_UNLOADING
 
-    if is_prod:
+    if is_lu:
+        st.caption(
+            "**Loading & Unloading** — monthly worksheet from completed weighbridge slips. "
+            "**Loading** = sale (outward) net kg × loading rate · "
+            "**Unloading** = purchase (inward) net kg × unloading rate. "
+            "You can override rates for this month before save."
+        )
+    elif is_prod:
         st.caption(
             "**Production-quantity contractor** — monthly worksheet. "
             "Finished goods: **Production × Rate**. "
@@ -564,26 +632,77 @@ def _tab_month_preview():
 
     saved = get_contractor_month_run(cid, ym)
     mk = f"cl_manual_{cid}_{ym}"
-    if mk not in st.session_state and saved and not is_prod:
+    if mk not in st.session_state and saved and not is_prod and not is_lu:
         st.session_state[mk] = {
             int(ln["product_id"]): float(ln.get("manual_qty") or 0)
             for ln in (saved.get("lines") or [])
+            if ln.get("product_id")
         }
+
+    rate_key = f"cl_lu_rates_{cid}_{ym}"
+    if is_lu and rate_key not in st.session_state:
+        if saved and saved.get("lines"):
+            lr = ur = None
+            for ln in saved["lines"]:
+                code = (ln.get("product_code") or "").upper()
+                if code == LINE_CODE_LOADING:
+                    lr = float(ln.get("rate") or 0)
+                elif code == LINE_CODE_UNLOADING:
+                    ur = float(ln.get("rate") or 0)
+            st.session_state[rate_key] = {
+                "loading": lr if lr is not None else float(cur_c.get("loading_rate") or 0),
+                "unloading": ur if ur is not None else float(cur_c.get("unloading_rate") or 0),
+            }
+        else:
+            st.session_state[rate_key] = {
+                "loading": float(cur_c.get("loading_rate") or 0),
+                "unloading": float(cur_c.get("unloading_rate") or 0),
+            }
+
+    if is_lu:
+        rr1, rr2 = st.columns(2)
+        rates = st.session_state.get(rate_key) or {}
+        new_load = rr1.number_input(
+            "Loading rate this month (Rs/kg)",
+            min_value=0.0,
+            value=float(rates.get("loading") or 0),
+            step=0.01,
+            format="%.4f",
+            key=f"cl_lu_load_in_{cid}_{ym}",
+        )
+        new_unload = rr2.number_input(
+            "Unloading rate this month (Rs/kg)",
+            min_value=0.0,
+            value=float(rates.get("unloading") or 0),
+            step=0.01,
+            format="%.4f",
+            key=f"cl_lu_unload_in_{cid}_{ym}",
+        )
+        st.session_state[rate_key] = {"loading": new_load, "unloading": new_unload}
 
     b1, b2 = st.columns([1, 1])
     if b1.button("Load / refresh month", type="primary", key="cl_prev_go"):
         try:
-            prior = {}
-            if not is_prod:
-                prior = st.session_state.get(mk) or {}
-                if not prior and saved:
-                    prior = {
-                        int(ln["product_id"]): float(ln.get("manual_qty") or 0)
-                        for ln in (saved.get("lines") or [])
-                    }
-            result = calculate_contractor_month(
-                cid, fd, td, manual_qty=prior,
-            )
+            if is_lu:
+                rates = st.session_state.get(rate_key) or {}
+                result = calculate_contractor_month(
+                    cid, fd, td,
+                    loading_rate=float(rates.get("loading") or 0),
+                    unloading_rate=float(rates.get("unloading") or 0),
+                )
+            else:
+                prior = {}
+                if not is_prod:
+                    prior = st.session_state.get(mk) or {}
+                    if not prior and saved:
+                        prior = {
+                            int(ln["product_id"]): float(ln.get("manual_qty") or 0)
+                            for ln in (saved.get("lines") or [])
+                            if ln.get("product_id")
+                        }
+                result = calculate_contractor_month(
+                    cid, fd, td, manual_qty=prior,
+                )
             st.session_state["cl_prev_result"] = result
             st.session_state["cl_prev_meta"] = (cid, ym)
         except Exception as e:
@@ -604,10 +723,14 @@ def _tab_month_preview():
     result = st.session_state.get("cl_prev_result")
     meta = st.session_state.get("cl_prev_meta")
     if not result or not meta or meta[0] != cid:
-        st.info(
-            "Choose **Year / Month**, then **Load / refresh month**"
-            + ("." if is_prod else ", enter Physical Manual where needed, then **Save month record**.")
-        )
+        tip = "Choose **Year / Month**, then **Load / refresh month**"
+        if is_lu:
+            tip += "."
+        elif is_prod:
+            tip += "."
+        else:
+            tip += ", enter Physical Manual where needed, then **Save month record**."
+        st.info(tip)
         hist = list_contractor_month_runs(cid, limit=12)
         if hist:
             st.markdown("**Recent saved months**")
@@ -627,9 +750,10 @@ def _tab_month_preview():
 
     # Prefer loaded result payment type
     is_prod = bool(result.get("is_production_qty"))
+    is_lu = bool(result.get("is_loading_unloading"))
     c = result["contractor"]
     lines = result.get("lines") or []
-    if not lines:
+    if not lines and not is_lu:
         st.info("No products assigned — set them on the **Products** tab.")
         return
 
@@ -655,7 +779,106 @@ def _tab_month_preview():
     save_lines = []
     gross = 0.0
 
-    if is_prod:
+    if is_lu:
+        st.markdown(
+            "**Worksheet** — weighbridge completed slips. "
+            + (result.get("formula") or "Sale kg × loading + Purchase kg × unloading.")
+        )
+        # Re-apply current rate inputs to lines for live amount
+        rates = st.session_state.get(rate_key) or {}
+        load_rate = float(rates.get("loading") or 0)
+        unload_rate = float(rates.get("unloading") or 0)
+        out_rows = []
+        sale_kg = purch_kg = 0.0
+        for ln in lines:
+            code = (ln.get("product_code") or "").upper()
+            kg = _f(ln.get("quantity") if ln.get("quantity") is not None else ln.get("closing_stock"))
+            if code == LINE_CODE_LOADING:
+                rate = load_rate
+                sale_kg = kg
+            elif code == LINE_CODE_UNLOADING:
+                rate = unload_rate
+                purch_kg = kg
+            else:
+                rate = _f(ln.get("rate"))
+            amount = round(kg * rate, 2)
+            gross += amount
+            slips = int(ln.get("slip_count") or 0)
+            out_rows.append({
+                "Line": ln.get("product_name") or code,
+                "Slips": slips,
+                "Net kg": kg,
+                "Rate Rs/kg": rate,
+                "Amount": amount,
+            })
+            save_lines.append({
+                "product_id": None,
+                "product_code": code,
+                "product_name": ln.get("product_name"),
+                "sold_qty": kg,
+                "stock_qty": 0,
+                "sale_return_qty": 0,
+                "manual_qty": 0,
+                "closing_stock": kg,
+                "quantity": kg,
+                "rate": rate,
+                "amount": amount,
+            })
+        display_rows = out_rows
+        k1, k2, k3, k4, k5 = st.columns(5, gap="small")
+        k1.markdown(
+            f"<div class='txn-kpi-card'><p class='txn-kpi'>Sale kg</p>"
+            f"<p class='txn-kpi-val' style='font-size:1.05rem'>{sale_kg:,.2f}</p></div>",
+            unsafe_allow_html=True,
+        )
+        k2.markdown(
+            f"<div class='txn-kpi-card'><p class='txn-kpi'>Purchase kg</p>"
+            f"<p class='txn-kpi-val' style='font-size:1.05rem'>{purch_kg:,.2f}</p></div>",
+            unsafe_allow_html=True,
+        )
+        k3.markdown(
+            f"<div class='txn-kpi-card'><p class='txn-kpi'>Loading rate</p>"
+            f"<p class='txn-kpi-val' style='font-size:1.05rem'>{load_rate:.4f}</p></div>",
+            unsafe_allow_html=True,
+        )
+        k4.markdown(
+            f"<div class='txn-kpi-card'><p class='txn-kpi'>Unloading rate</p>"
+            f"<p class='txn-kpi-val' style='font-size:1.05rem'>{unload_rate:.4f}</p></div>",
+            unsafe_allow_html=True,
+        )
+        k5.markdown(
+            f"<div class='txn-kpi-card'><p class='txn-kpi'>Gross Amount</p>"
+            f"<p class='txn-kpi-val' style='font-size:1.05rem'>Rs. {gross:,.2f}</p></div>",
+            unsafe_allow_html=True,
+        )
+        out_df = pd.DataFrame(display_rows)
+        footer = {
+            "Line": "GROSS TOTAL",
+            "Slips": "",
+            "Net kg": round(sale_kg + purch_kg, 2),
+            "Rate Rs/kg": "",
+            "Amount": round(gross, 2),
+        }
+        show = pd.concat([out_df, pd.DataFrame([footer])], ignore_index=True)
+        hlp.render_dataframe_html_table(show)
+        wb = result.get("weighbridge") or {}
+        st.caption(
+            f"Slips: sale **{int(wb.get('sale_slip_count') or 0)}** · "
+            f"purchase **{int(wb.get('purchase_slip_count') or 0)}** "
+            f"(completed, {fd} → {td})."
+        )
+        billable_label = "Total kg"
+        billable_sum = sale_kg + purch_kg
+        summary = {
+            "Month": ym,
+            "Sale kg": round(sale_kg, 2),
+            "Purchase kg": round(purch_kg, 2),
+            "Loading rate": load_rate,
+            "Unloading rate": unload_rate,
+            "Gross Amount": round(gross, 2),
+        }
+
+    elif is_prod:
         has_sold = bool(result.get("has_sold_basis"))
         has_close = bool(result.get("has_closing_basis"))
         st.markdown(

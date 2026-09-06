@@ -4,11 +4,16 @@ from __future__ import annotations
 
 PAYMENT_PRODUCTION_QTY = "production_qty"
 PAYMENT_SKU_CARTON = "sku_carton"
+PAYMENT_LOADING_UNLOADING = "loading_unloading"
 
 PAYMENT_TYPES = {
     PAYMENT_PRODUCTION_QTY: "Production quantity (qty x rate per SKU)",
     PAYMENT_SKU_CARTON: "SKU / cartons x rate per SKU",
+    PAYMENT_LOADING_UNLOADING: "Loading & unloading (sale/purchase kg × rate)",
 }
+
+LINE_CODE_LOADING = "LOADING"
+LINE_CODE_UNLOADING = "UNLOADING"
 
 # Per-SKU billing on monthly worksheet
 BILLING_PRODUCTION = "production"
@@ -67,6 +72,92 @@ def _ensure_billing_basis_column(conn):
         )
 
 
+def _ensure_loading_unloading_schema(conn):
+    """Rates columns + allow loading_unloading payment_type + nullable month-line product_id."""
+    cols = {r[1] for r in conn.execute("PRAGMA table_info(contract_labourers)")}
+    if "loading_rate" not in cols:
+        conn.execute(
+            "ALTER TABLE contract_labourers ADD COLUMN loading_rate REAL DEFAULT 0"
+        )
+    if "unloading_rate" not in cols:
+        conn.execute(
+            "ALTER TABLE contract_labourers ADD COLUMN unloading_rate REAL DEFAULT 0"
+        )
+
+    create_sql = conn.execute(
+        "SELECT sql FROM sqlite_master WHERE type='table' AND name='contract_labourers'"
+    ).fetchone()
+    create_sql = (create_sql[0] or "") if create_sql else ""
+    if create_sql and "loading_unloading" not in create_sql:
+        conn.execute("PRAGMA foreign_keys=OFF")
+        conn.executescript(
+            """
+            CREATE TABLE contract_labourers__lu (
+                id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                supplier_id     INTEGER NOT NULL UNIQUE REFERENCES suppliers(id),
+                payment_type    TEXT NOT NULL,
+                default_rate    REAL DEFAULT 0,
+                loading_rate    REAL DEFAULT 0,
+                unloading_rate  REAL DEFAULT 0,
+                notes           TEXT,
+                is_active       INTEGER DEFAULT 1,
+                created_by      INTEGER REFERENCES users(id),
+                created_at      TEXT DEFAULT CURRENT_TIMESTAMP,
+                modified_by     INTEGER REFERENCES users(id),
+                modified_at     TEXT
+            );
+            INSERT INTO contract_labourers__lu(
+                id, supplier_id, payment_type, default_rate, loading_rate, unloading_rate,
+                notes, is_active, created_by, created_at, modified_by, modified_at
+            )
+            SELECT id, supplier_id, payment_type, default_rate,
+                   COALESCE(loading_rate, 0), COALESCE(unloading_rate, 0),
+                   notes, is_active, created_by, created_at, modified_by, modified_at
+            FROM contract_labourers;
+            DROP TABLE contract_labourers;
+            ALTER TABLE contract_labourers__lu RENAME TO contract_labourers;
+            CREATE INDEX IF NOT EXISTS idx_cl_supplier ON contract_labourers(supplier_id);
+            CREATE INDEX IF NOT EXISTS idx_cl_type ON contract_labourers(payment_type);
+            """
+        )
+        conn.execute("PRAGMA foreign_keys=ON")
+
+    # Month lines: allow NULL product_id for Loading / Unloading synthetic rows
+    ml_cols = {r[1]: r for r in conn.execute("PRAGMA table_info(contract_labour_month_lines)")}
+    prod_col = ml_cols.get("product_id")
+    if prod_col is not None and int(prod_col[3] or 0) == 1:  # notnull
+        conn.execute("PRAGMA foreign_keys=OFF")
+        conn.executescript(
+            """
+            CREATE TABLE contract_labour_month_lines__lu (
+                id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                run_id          INTEGER NOT NULL
+                    REFERENCES contract_labour_month_runs(id) ON DELETE CASCADE,
+                product_id      INTEGER REFERENCES products(id),
+                product_code    TEXT,
+                product_name    TEXT,
+                sold_qty        REAL DEFAULT 0,
+                stock_qty       REAL DEFAULT 0,
+                sale_return_qty REAL DEFAULT 0,
+                manual_qty      REAL DEFAULT 0,
+                closing_stock   REAL DEFAULT 0,
+                rate            REAL DEFAULT 0,
+                amount          REAL DEFAULT 0,
+                sort_order      INTEGER DEFAULT 0
+            );
+            INSERT INTO contract_labour_month_lines__lu
+            SELECT id, run_id, product_id, product_code, product_name,
+                   sold_qty, stock_qty, sale_return_qty, manual_qty,
+                   closing_stock, rate, amount, sort_order
+            FROM contract_labour_month_lines;
+            DROP TABLE contract_labour_month_lines;
+            ALTER TABLE contract_labour_month_lines__lu RENAME TO contract_labour_month_lines;
+            CREATE INDEX IF NOT EXISTS idx_cl_month_lines ON contract_labour_month_lines(run_id);
+            """
+        )
+        conn.execute("PRAGMA foreign_keys=ON")
+
+
 def _table_exists(conn, name: str) -> bool:
     return bool(
         conn.execute(
@@ -82,9 +173,10 @@ def apply_contract_labour(conn, db_module=None):
         CREATE TABLE IF NOT EXISTS contract_labourers (
             id              INTEGER PRIMARY KEY AUTOINCREMENT,
             supplier_id     INTEGER NOT NULL UNIQUE REFERENCES suppliers(id),
-            payment_type    TEXT NOT NULL
-                CHECK(payment_type IN ('production_qty','sku_carton')),
+            payment_type    TEXT NOT NULL,
             default_rate    REAL DEFAULT 0,
+            loading_rate    REAL DEFAULT 0,
+            unloading_rate  REAL DEFAULT 0,
             notes           TEXT,
             is_active       INTEGER DEFAULT 1,
             created_by      INTEGER REFERENCES users(id),
@@ -119,7 +211,7 @@ def apply_contract_labour(conn, db_module=None):
             id              INTEGER PRIMARY KEY AUTOINCREMENT,
             run_id          INTEGER NOT NULL
                 REFERENCES contract_labour_month_runs(id) ON DELETE CASCADE,
-            product_id      INTEGER NOT NULL REFERENCES products(id),
+            product_id      INTEGER REFERENCES products(id),
             product_code    TEXT,
             product_name    TEXT,
             sold_qty        REAL DEFAULT 0,
@@ -140,6 +232,7 @@ def apply_contract_labour(conn, db_module=None):
         """
     )
     _ensure_billing_basis_column(conn)
+    _ensure_loading_unloading_schema(conn)
 
 
 def list_contractors(active_only: bool = True, payment_type: str | None = None):
@@ -205,11 +298,14 @@ def add_contractor(data: dict, user_id=None) -> int:
             raise ValueError("This supplier is already set up as a contract labourer.")
         cur = conn.execute(
             """INSERT INTO contract_labourers(
-                   supplier_id, payment_type, default_rate, notes, is_active, created_by, created_at
-               ) VALUES(?,?,?,?,1,?,?)""",
+                   supplier_id, payment_type, default_rate, loading_rate, unloading_rate,
+                   notes, is_active, created_by, created_at
+               ) VALUES(?,?,?,?,?,?,1,?,?)""",
             (
                 supplier_id, payment_type,
                 float(data.get("default_rate") or 0),
+                float(data.get("loading_rate") or 0),
+                float(data.get("unloading_rate") or 0),
                 (data.get("notes") or "").strip() or None,
                 user_id, _now(),
             ),
@@ -241,11 +337,14 @@ def update_contractor(contractor_id: int, data: dict, user_id=None):
         if not row:
             raise ValueError("Contractor not found.")
         conn.execute(
-            """UPDATE contract_labourers SET payment_type=?, default_rate=?, notes=?,
+            """UPDATE contract_labourers SET payment_type=?, default_rate=?,
+                   loading_rate=?, unloading_rate=?, notes=?,
                    is_active=?, modified_by=?, modified_at=? WHERE id=?""",
             (
                 payment_type,
                 float(data.get("default_rate") or 0),
+                float(data.get("loading_rate") or 0),
+                float(data.get("unloading_rate") or 0),
                 (data.get("notes") or "").strip() or None,
                 int(data.get("is_active", 1)),
                 user_id, _now(), contractor_id,
@@ -598,20 +697,32 @@ def calculate_contractor_month(
     to_date: str,
     *,
     manual_qty: dict | None = None,
+    loading_rate: float | None = None,
+    unloading_rate: float | None = None,
 ) -> dict:
-    """Monthly payment worksheet lines (per-SKU billing_basis).
+    """Monthly payment worksheet lines (per-SKU billing_basis or loading/unloading kg).
 
     Bases:
       production — completed production qty × rate
       sold       — sale qty × rate (default for SF* base powder)
       closing    — (Sold − Opening − Sale return + Physical Manual) × rate
+      loading_unloading — sale kg × loading rate + purchase kg × unloading rate
     """
     c = get_contractor(contractor_id)
     if not c:
         raise ValueError("Contractor not found.")
+    pay_type = (c.get("payment_type") or PAYMENT_SKU_CARTON).strip()
+    if pay_type == PAYMENT_LOADING_UNLOADING:
+        return calculate_loading_unloading_month(
+            contractor_id,
+            from_date,
+            to_date,
+            loading_rate=loading_rate,
+            unloading_rate=unloading_rate,
+        )
+
     products = c.get("products") or []
     pids = [int(p["product_id"]) for p in products]
-    pay_type = (c.get("payment_type") or PAYMENT_SKU_CARTON).strip()
     is_prod = pay_type == PAYMENT_PRODUCTION_QTY
 
     bases = {}
@@ -722,6 +833,7 @@ def calculate_contractor_month(
         "payment_type": pay_type,
         "payment_type_label": PAYMENT_TYPES.get(pay_type, pay_type),
         "is_production_qty": is_prod,
+        "is_loading_unloading": False,
         "has_sold_basis": needs_sold,
         "has_closing_basis": needs_closing,
         "has_production_basis": needs_prod,
@@ -739,6 +851,159 @@ def calculate_contractor_month(
             "billable_qty": round(total_billable, 4),
             "gross_amount": round(total, 2),
             "item_count": len(lines),
+        },
+    }
+
+
+def weighbridge_kg_for_month(from_date: str, to_date: str) -> dict:
+    """Completed weighbridge net kg split by sale (loading) vs purchase (unloading)."""
+    from database import get_connection
+
+    fd, td = str(from_date)[:10], str(to_date)[:10]
+    with get_connection() as conn:
+        if not _table_exists(conn, "weight_slips"):
+            return {
+                "sale_kg": 0.0,
+                "purchase_kg": 0.0,
+                "sale_slip_count": 0,
+                "purchase_slip_count": 0,
+                "from_date": fd,
+                "to_date": td,
+            }
+        # Prefer party_type; fall back to customer_id / supplier_id when party_type blank
+        sale = conn.execute(
+            """SELECT COALESCE(SUM(COALESCE(net_weight,0)),0), COUNT(*)
+               FROM weight_slips
+               WHERE status='completed'
+                 AND slip_date>=? AND slip_date<=?
+                 AND (
+                   LOWER(COALESCE(party_type,''))='customer'
+                   OR (
+                     customer_id IS NOT NULL
+                     AND LOWER(COALESCE(party_type,'')) NOT IN ('supplier')
+                   )
+                 )""",
+            (fd, td),
+        ).fetchone()
+        purch = conn.execute(
+            """SELECT COALESCE(SUM(COALESCE(net_weight,0)),0), COUNT(*)
+               FROM weight_slips
+               WHERE status='completed'
+                 AND slip_date>=? AND slip_date<=?
+                 AND (
+                   LOWER(COALESCE(party_type,''))='supplier'
+                   OR (
+                     supplier_id IS NOT NULL
+                     AND LOWER(COALESCE(party_type,'')) NOT IN ('customer')
+                   )
+                 )""",
+            (fd, td),
+        ).fetchone()
+    return {
+        "sale_kg": round(float(sale[0] or 0), 4),
+        "purchase_kg": round(float(purch[0] or 0), 4),
+        "sale_slip_count": int(sale[1] or 0),
+        "purchase_slip_count": int(purch[1] or 0),
+        "from_date": fd,
+        "to_date": td,
+    }
+
+
+def calculate_loading_unloading_month(
+    contractor_id: int,
+    from_date: str,
+    to_date: str,
+    *,
+    loading_rate: float | None = None,
+    unloading_rate: float | None = None,
+) -> dict:
+    """Month bill = sale kg × loading rate + purchase kg × unloading rate."""
+    c = get_contractor(contractor_id)
+    if not c:
+        raise ValueError("Contractor not found.")
+    if (c.get("payment_type") or "").strip() != PAYMENT_LOADING_UNLOADING:
+        raise ValueError("Contractor is not a Loading & Unloading type.")
+
+    kg = weighbridge_kg_for_month(from_date, to_date)
+    load_rate = float(
+        loading_rate if loading_rate is not None else (c.get("loading_rate") or 0)
+    )
+    unload_rate = float(
+        unloading_rate if unloading_rate is not None else (c.get("unloading_rate") or 0)
+    )
+    sale_kg = float(kg["sale_kg"])
+    purch_kg = float(kg["purchase_kg"])
+    load_amt = round(sale_kg * load_rate, 2)
+    unload_amt = round(purch_kg * unload_rate, 2)
+    total = round(load_amt + unload_amt, 2)
+    lines = [
+        {
+            "product_id": None,
+            "product_code": LINE_CODE_LOADING,
+            "product_name": "Loading (sale / outward kg)",
+            "billing_basis": "loading",
+            "billing_basis_label": "Sale kg × loading rate",
+            "sold_qty": sale_kg,
+            "stock_qty": 0.0,
+            "sale_return_qty": 0.0,
+            "manual_qty": 0.0,
+            "closing_stock": sale_kg,
+            "production_qty": 0.0,
+            "quantity": sale_kg,
+            "rate": load_rate,
+            "amount": load_amt,
+            "slip_count": int(kg["sale_slip_count"]),
+        },
+        {
+            "product_id": None,
+            "product_code": LINE_CODE_UNLOADING,
+            "product_name": "Unloading (purchase / inward kg)",
+            "billing_basis": "unloading",
+            "billing_basis_label": "Purchase kg × unloading rate",
+            "sold_qty": purch_kg,
+            "stock_qty": 0.0,
+            "sale_return_qty": 0.0,
+            "manual_qty": 0.0,
+            "closing_stock": purch_kg,
+            "production_qty": 0.0,
+            "quantity": purch_kg,
+            "rate": unload_rate,
+            "amount": unload_amt,
+            "slip_count": int(kg["purchase_slip_count"]),
+        },
+    ]
+    ym = str(from_date)[:7]
+    return {
+        "contractor": c,
+        "year_month": ym,
+        "from_date": from_date,
+        "to_date": to_date,
+        "payment_type": PAYMENT_LOADING_UNLOADING,
+        "payment_type_label": PAYMENT_TYPES[PAYMENT_LOADING_UNLOADING],
+        "is_production_qty": False,
+        "is_loading_unloading": True,
+        "has_sold_basis": False,
+        "has_closing_basis": False,
+        "has_production_basis": False,
+        "hybrid_billing": False,
+        "formula": (
+            "Loading = Sale net kg × Loading rate; "
+            "Unloading = Purchase net kg × Unloading rate "
+            "(completed weighbridge slips)"
+        ),
+        "lines": lines,
+        "total": total,
+        "weighbridge": kg,
+        "totals": {
+            "sale_kg": sale_kg,
+            "purchase_kg": purch_kg,
+            "sale_slip_count": int(kg["sale_slip_count"]),
+            "purchase_slip_count": int(kg["purchase_slip_count"]),
+            "loading_amount": load_amt,
+            "unloading_amount": unload_amt,
+            "billable_qty": round(sale_kg + purch_kg, 4),
+            "gross_amount": total,
+            "item_count": 2,
         },
     }
 
@@ -819,11 +1084,14 @@ def save_contractor_month_run(
     closing_sum = 0.0
     clean = []
     for i, ln in enumerate(lines or []):
+        code = (ln.get("product_code") or "").strip().upper()
+        is_lu = code in (LINE_CODE_LOADING, LINE_CODE_UNLOADING)
         try:
-            pid = int(ln.get("product_id") or 0)
+            pid_raw = ln.get("product_id")
+            pid = int(pid_raw) if pid_raw not in (None, "") else 0
         except (TypeError, ValueError):
-            continue
-        if not pid:
+            pid = 0
+        if not pid and not is_lu:
             continue
         sold = round(float(ln.get("sold_qty") or 0), 4)
         stock = round(float(ln.get("stock_qty") or 0), 4)
@@ -845,8 +1113,8 @@ def save_contractor_month_run(
         gross += amount
         closing_sum += closing
         clean.append({
-            "product_id": pid,
-            "product_code": ln.get("product_code"),
+            "product_id": pid if pid else None,
+            "product_code": ln.get("product_code") or (code if is_lu else None),
             "product_name": ln.get("product_name"),
             "sold_qty": sold,
             "stock_qty": stock,
