@@ -2842,46 +2842,95 @@ def page_loans():
             )
 
         today = date.today()
-        with st.form("loan_req"):
-            r1, r2, r3 = st.columns([1.2, 1.1, 1.2], gap="medium")
-            with r1:
-                amt = money_input("Loan amount", value=0.0, min_value=0.0, key="hr_loan_amt")
-            with r2:
-                post_date = st.date_input(
-                    "Posting date",
-                    value=today,
-                    help="Date cash / bank is given (GL posting date).",
-                    key="hr_loan_post_date",
-                )
-            with r3:
+        import math
+
+        plan = st.radio(
+            "Installment plan",
+            ["By number of months", "By fixed monthly amount"],
+            horizontal=True,
+            key="hr_loan_plan",
+            help="Months: split loan equally. Amount: e.g. Rs 10,000 every payroll until cleared.",
+        )
+        r1, r2, r3 = st.columns([1.2, 1.1, 1.2], gap="medium")
+        with r1:
+            amt = money_input("Loan amount", value=0.0, min_value=0.0, key="hr_loan_amt")
+        with r2:
+            post_date = st.date_input(
+                "Posting date",
+                value=today,
+                help="Date cash / bank is given (GL posting date).",
+                key="hr_loan_post_date",
+            )
+        with r3:
+            if plan.startswith("By number"):
                 inst = st.number_input(
                     "Installments (months)",
-                    min_value=2, max_value=60, value=12, step=1,
+                    min_value=1, max_value=60, value=12, step=1,
                     key="hr_loan_inst",
                 )
-            monthly_preview = round(float(amt or 0) / max(int(inst), 1), 2) if float(amt or 0) > 0 else 0.0
-            st.caption(
-                f"Approx. monthly recovery **{fmt(monthly_preview)}** "
-                f"over **{int(inst)}** payroll months (from posting **{post_date}**)."
-            )
-            reason = st.text_area("Reason", height=80, key="hr_loan_reason")
-            if st.form_submit_button("Submit", type="primary"):
-                try:
-                    if float(amt or 0) <= 0:
-                        raise ValueError("Enter an amount greater than zero.")
-                    db.save_loan({
-                        "employee_id": eid,
-                        "amount": amt,
-                        "installments": int(inst),
-                        "issue_date": str(post_date),
-                        "reason": reason,
-                    }, uid())
-                    ff.action_done(
-                        f"Loan request submitted — posting **{post_date}**, "
-                        f"**{int(inst)}** installments. Approve & issue next."
-                    )
-                except Exception as e:
-                    st.error(str(e))
+                monthly_amt = (
+                    round(float(amt or 0) / max(int(inst), 1), 2)
+                    if float(amt or 0) > 0 else 0.0
+                )
+                last_amt = monthly_amt
+            else:
+                monthly_amt = money_input(
+                    "Monthly recovery",
+                    value=0.0,
+                    min_value=0.0,
+                    key="hr_loan_monthly",
+                    help="Fixed amount recovered each payroll (e.g. 10000).",
+                )
+                if float(amt or 0) > 0 and float(monthly_amt or 0) > 0:
+                    inst = max(1, int(math.ceil(float(amt) / float(monthly_amt) - 1e-9)))
+                    last_amt = round(float(amt) - float(monthly_amt) * (inst - 1), 2)
+                else:
+                    inst = 0
+                    last_amt = 0.0
+
+        if float(amt or 0) > 0 and int(inst or 0) > 0 and float(monthly_amt or 0) > 0:
+            if abs(float(last_amt) - float(monthly_amt)) < 0.02:
+                st.caption(
+                    f"Recovery **{fmt(monthly_amt)}** / month × **{int(inst)}** payrolls "
+                    f"(from posting **{post_date}**)."
+                )
+            else:
+                st.caption(
+                    f"**{int(inst)}** payrolls: **{fmt(monthly_amt)}** / month, "
+                    f"last installment **{fmt(last_amt)}** (from posting **{post_date}**)."
+                )
+        else:
+            st.caption("Enter loan amount and installment plan to see recovery schedule.")
+
+        reason = st.text_area("Reason", height=80, key="hr_loan_reason")
+        if st.button("Submit", type="primary", key="hr_loan_submit"):
+            try:
+                if float(amt or 0) <= 0:
+                    raise ValueError("Enter an amount greater than zero.")
+                payload = {
+                    "employee_id": eid,
+                    "amount": amt,
+                    "issue_date": str(post_date),
+                    "reason": reason,
+                }
+                if plan.startswith("By number"):
+                    payload["installment_mode"] = "months"
+                    payload["installments"] = int(inst)
+                else:
+                    if float(monthly_amt or 0) <= 0:
+                        raise ValueError("Enter a monthly recovery amount greater than zero.")
+                    if float(monthly_amt) > float(amt):
+                        raise ValueError("Monthly recovery cannot exceed the loan amount.")
+                    payload["installment_mode"] = "amount"
+                    payload["monthly_installment"] = float(monthly_amt)
+                db.save_loan(payload, uid())
+                ff.action_done(
+                    f"Loan request submitted — posting **{post_date}**, "
+                    f"**{fmt(monthly_amt)}**/mo × **{int(inst)}** installments. "
+                    "Approve & issue next."
+                )
+            except Exception as e:
+                st.error(str(e))
     elif tab == "Approve / Issue":
         pending = db.get_loans(status="pending") or []
         approved = db.get_loans(status="approved") or []

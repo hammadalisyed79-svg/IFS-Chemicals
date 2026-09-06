@@ -3510,16 +3510,35 @@ def backfill_advance_cash_voucher(advance_id, user_id=None):
 
 # ---------- Loans ----------
 def save_loan(data, user_id=None):
+    """Create pending loan. Installments by months or fixed monthly amount."""
+    import math
     from database import get_connection, ensure_document_no
+
+    amt = round(float(data.get("amount") or 0), 2)
+    if amt <= 0:
+        raise ValueError("Loan amount must be greater than zero.")
+
+    mode = (data.get("installment_mode") or "months").strip().lower()
+    if mode in ("amount", "monthly", "fixed"):
+        monthly = round(float(data.get("monthly_installment") or 0), 2)
+        if monthly <= 0:
+            raise ValueError("Enter a monthly recovery amount greater than zero.")
+        if monthly > amt:
+            raise ValueError("Monthly recovery cannot exceed the loan amount.")
+        inst = max(1, int(math.ceil(amt / monthly - 1e-9)))
+        # Keep user-entered monthly; last installment absorbs remainder on issue
+    else:
+        inst = max(1, int(data.get("installments") or 12))
+        monthly = round(amt / inst, 2)
+
     with get_connection() as conn:
-        inst = max(1, int(data.get("installments", 12)))
-        monthly = round(data["amount"] / inst, 2)
+        apply_hr(conn, __import__("database"))
         cur = conn.execute(
             """INSERT INTO employee_loans(document_no,employee_id,issue_date,amount,installments,
                monthly_installment,outstanding_amount,reason,status,created_by)
                VALUES(?,?,?,?,?,?,?,?,?,?)""",
             (ensure_document_no("LON", data.get("document_no"), conn), data["employee_id"], data["issue_date"],
-             data["amount"], inst, monthly, data["amount"], data.get("reason"), "pending", user_id),
+             amt, inst, monthly, amt, data.get("reason"), "pending", user_id),
         )
         return cur.lastrowid
 
@@ -3635,11 +3654,21 @@ def issue_loan(loan_id, user_id, payment_mode="cash", bank_account_id=None):
         )
         from datetime import timedelta
         base = datetime.strptime(post_date, "%Y-%m-%d")
-        for i in range(int(ln["installments"] or 1)):
+        n_inst = max(1, int(ln["installments"] or 1))
+        monthly = round(float(ln["monthly_installment"] or 0), 2)
+        remaining = amt
+        for i in range(n_inst):
             due = (base + timedelta(days=30 * (i + 1))).strftime("%Y-%m-%d")
+            if i == n_inst - 1:
+                part = round(remaining, 2)
+            else:
+                part = round(min(monthly, remaining), 2)
+                remaining = round(remaining - part, 2)
+            if part <= 0:
+                break
             conn.execute(
                 "INSERT INTO loan_installments(loan_id,installment_no,due_date,amount) VALUES(?,?,?,?)",
-                (loan_id, i + 1, due, ln["monthly_installment"]),
+                (loan_id, i + 1, due, part),
             )
         return {
             "document_no": ln["document_no"],
