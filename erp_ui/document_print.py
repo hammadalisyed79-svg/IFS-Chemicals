@@ -1811,6 +1811,11 @@ def salary_payment_voucher_html(line_id):
     dept = v.get("department_name") or "—"
     payroll_no = v.get("payroll_no") or "—"
 
+    absent_days = float(v.get("days_absent") or 0)
+    absent_lbl = "Absent deduction"
+    if absent_days > 0.009:
+        unit = "day" if abs(absent_days - 1.0) < 0.001 else "days"
+        absent_lbl = f"Absent deduction ({absent_days:.1f} {unit})"
     rows = [
         ("Basic", v.get("basic_salary")),
         ("Allowances", v.get("allowances")),
@@ -1820,17 +1825,7 @@ def salary_payment_voucher_html(line_id):
         ("Advance recovery", v.get("advance_recovery")),
         ("Loan recovery", v.get("loan_recovery")),
         ("Other deductions", v.get("other_deductions")),
-        (
-            (
-                f"Absent deduction ({float(v.get('days_absent') or 0):.1f} day"
-                f"{'s' if float(v.get('days_absent') or 0) != 1 else ''})"
-            )
-            if float(v.get("absent_deduction") or 0) > 0.009
-            or float(v.get("days_absent") or 0) > 0.009
-            else "Absent deduction"
-        ),
-        v.get("absent_deduction"),
-        ),
+        (absent_lbl, v.get("absent_deduction")),
         ("Total deductions", v.get("total_deductions")),
         ("Net paid", v.get("paid_amount") or v.get("net_salary")),
     ]
