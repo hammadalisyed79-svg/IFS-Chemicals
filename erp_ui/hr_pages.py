@@ -1967,8 +1967,52 @@ def page_payroll():
                 st.warning(
                     f"Payroll already exists for **{_payroll_period_label(month, year)}**: "
                     f"**{existing['document_no']}** ({(existing.get('status') or '').upper()}). "
-                    "Rollback below to delete it, then generate again."
+                    "Use **Add missing active employees** for new joiners, or rollback below to regenerate."
                 )
+                miss_info = None
+                try:
+                    miss_info = db.list_missing_active_employees_for_payroll(existing["id"])
+                except Exception:
+                    miss_info = None
+                miss_n = len((miss_info or {}).get("missing") or [])
+                if (existing.get("status") or "").lower() == "draft" and db.user_can_hr(
+                    st.session_state.user, "add"
+                ):
+                    if miss_n:
+                        names = ", ".join(
+                            f"{m.get('code')} {m.get('full_name')}"
+                            for m in (miss_info.get("missing") or [])[:8]
+                        )
+                        more = f" (+{miss_n - 8} more)" if miss_n > 8 else ""
+                        st.info(
+                            f"**{miss_n}** active employee(s) not on this run yet: {names}{more}."
+                        )
+                        if st.button(
+                            f"Add missing active employees ({miss_n})",
+                            type="primary",
+                            key="pay_gen_add_missing",
+                        ):
+                            try:
+                                res = db.add_missing_employees_to_payroll(
+                                    existing["id"], uid()
+                                )
+                                sample = ", ".join(
+                                    f"{e.get('code')} {e.get('name')}"
+                                    for e in (res.get("employees") or [])[:6]
+                                )
+                                more_a = (
+                                    f" (+{res['added'] - 6} more)"
+                                    if res.get("added", 0) > 6 else ""
+                                )
+                                ff.action_done(
+                                    f"Added **{res.get('added', 0)}** employee(s) to "
+                                    f"**{res.get('document_no')}**: {sample}{more_a}. "
+                                    "Open **Edit Lines** or **Single employee pay**."
+                                )
+                            except Exception as e:
+                                st.error(str(e))
+                    else:
+                        st.caption("All active employees are already on this payroll run.")
                 can_rb_gen = (
                     db.user_can_hr(st.session_state.user, "delete")
                     or db.user_can_hr(st.session_state.user, "add")
@@ -2239,7 +2283,7 @@ def page_payroll():
                 )
 
                 if pr.get("status") == "draft":
-                    b1, b2, b3 = st.columns(3)
+                    b1, b2, b3, b4 = st.columns(4)
                     if b1.button(
                         "Recalc OT from hours",
                         key=f"pr_ot_from_hrs_{pid}",
@@ -2289,6 +2333,36 @@ def page_payroll():
                             ff.action_done(f"Filled OT hours for **{n}** line(s) from overtime amounts.")
                         except Exception as e:
                             st.error(str(e))
+                    miss_n = 0
+                    try:
+                        miss_n = len(
+                            (db.list_missing_active_employees_for_payroll(pid).get("missing") or [])
+                        )
+                    except Exception:
+                        miss_n = 0
+                    if b4.button(
+                        f"Add missing employees ({miss_n})",
+                        key=f"pr_add_missing_{pid}",
+                        help="Append active employees who joined after this payroll was generated. "
+                             "Draft only; existing lines unchanged.",
+                        use_container_width=True,
+                        disabled=miss_n == 0,
+                    ):
+                        try:
+                            res = db.add_missing_employees_to_payroll(pid, uid())
+                            sample = ", ".join(
+                                f"{e.get('code')} {e.get('name')}"
+                                for e in (res.get("employees") or [])[:6]
+                            )
+                            more_a = (
+                                f" (+{res['added'] - 6} more)"
+                                if res.get("added", 0) > 6 else ""
+                            )
+                            ff.action_done(
+                                f"Added **{res.get('added', 0)}** employee(s): {sample}{more_a}."
+                            )
+                        except Exception as e:
+                            st.error(str(e))
                     if st.button(
                         "Reset Loan/Advance to monthly installments",
                         key=f"pr_refresh_loan_adv_{pid}",
@@ -2307,7 +2381,8 @@ def page_payroll():
                     st.caption(
                         "**Loan / Advance columns = this month's deduction only** (installment), "
                         "not the full outstanding. Full balance lives under **HR → Employee Loans**. "
-                        "At the counter you can still lower the amount before Pay & voucher."
+                        "At the counter you can still lower the amount before Pay & voucher. "
+                        "**Add missing employees** pulls new Active joiners into this draft."
                     )
                 edit_rows = [_payroll_edit_row(l) for l in pr["lines"]]
                 edit_df = pd.DataFrame(edit_rows)

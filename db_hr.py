@@ -120,7 +120,7 @@ def apply_hr(conn, db_module):
             "ON CONFLICT(key) DO UPDATE SET value='7'"
         )
         ver = 7
-    # Idempotent: Cash & HR role + shabab assignment
+    # Idempotent: ensure Cash & HR role exists (do not re-assign users)
     try:
         aid = conn.execute("SELECT id FROM users WHERE username='admin'").fetchone()
         ensure_cash_hr_role(conn, aid[0] if aid else None)
@@ -1009,6 +1009,118 @@ def generate_payroll(month, year, user_id=None):
             (total_gross, total_ded, total_net, pid),
         )
         return pid
+
+
+def list_missing_active_employees_for_payroll(payroll_id):
+    """Active employees not yet on this payroll run (joiners after generate)."""
+    from database import get_connection, rows_to_list
+
+    with get_connection() as conn:
+        run = conn.execute(
+            "SELECT id, status, payroll_month, payroll_year, document_no FROM payroll_runs WHERE id=?",
+            (payroll_id,),
+        ).fetchone()
+        if not run:
+            raise ValueError("Payroll run not found")
+        rows = conn.execute(
+            """
+            SELECT e.id, e.code, e.full_name, e.department
+            FROM employees e
+            WHERE e.is_active=1
+              AND LOWER(COALESCE(e.employment_status,'active'))='active'
+              AND e.id NOT IN (
+                    SELECT employee_id FROM payroll_lines WHERE payroll_id=?
+              )
+            ORDER BY e.full_name
+            """,
+            (payroll_id,),
+        ).fetchall()
+        return {
+            "payroll_id": int(run["id"]),
+            "document_no": run["document_no"],
+            "status": (run["status"] or "").lower(),
+            "payroll_month": int(run["payroll_month"] or 0),
+            "payroll_year": int(run["payroll_year"] or 0),
+            "missing": rows_to_list(rows),
+        }
+
+
+def add_missing_employees_to_payroll(payroll_id, user_id=None):
+    """Append active employees missing from a draft payroll (new joiners).
+
+    Calculates each line from salary structure + attendance like generate.
+    Does not change existing lines or paid employees.
+    """
+    from database import get_connection
+
+    with get_connection() as conn:
+        run = conn.execute(
+            "SELECT id, status, payroll_month, payroll_year, document_no FROM payroll_runs WHERE id=?",
+            (payroll_id,),
+        ).fetchone()
+        if not run:
+            raise ValueError("Payroll run not found")
+        status = (run["status"] or "").lower()
+        if status != "draft":
+            raise ValueError(
+                f"Can only add employees to a draft payroll "
+                f"(current status: {(run['status'] or '').upper()}). "
+                "Unapprove on Process / Pay first if needed."
+            )
+        month = int(run["payroll_month"])
+        year = int(run["payroll_year"])
+        missing = conn.execute(
+            """
+            SELECT e.id, e.code, e.full_name
+            FROM employees e
+            WHERE e.is_active=1
+              AND LOWER(COALESCE(e.employment_status,'active'))='active'
+              AND e.id NOT IN (
+                    SELECT employee_id FROM payroll_lines WHERE payroll_id=?
+              )
+            ORDER BY e.full_name
+            """,
+            (payroll_id,),
+        ).fetchall()
+        if not missing:
+            return {
+                "added": 0,
+                "employees": [],
+                "document_no": run["document_no"],
+                "payroll_id": int(payroll_id),
+            }
+
+        added = []
+        for emp in missing:
+            eid = int(emp["id"])
+            line = _calc_payroll_line(conn, eid, month, year, payroll_id)
+            conn.execute(
+                """INSERT INTO payroll_lines(payroll_id,employee_id,basic_salary,allowances,overtime,bonus,
+                   gross_salary,tax_deduction,eobi,social_security,advance_recovery,loan_recovery,other_deductions,
+                   absent_deduction,total_deductions,net_salary,days_present,days_absent,overtime_hrs)
+                   VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                (payroll_id, eid, line["basic_salary"], line["allowances"], line["overtime"], line["bonus"],
+                 line["gross_salary"], line["tax_deduction"], line["eobi"], line["social_security"],
+                 line["advance_recovery"], line["loan_recovery"], line["other_deductions"],
+                 line.get("absent_deduction", 0),
+                 line["total_deductions"], line["net_salary"], line["days_present"],
+                 line["days_absent"], line["overtime_hrs"]),
+            )
+            added.append({
+                "employee_id": eid,
+                "code": emp["code"],
+                "name": emp["full_name"],
+                "net_salary": line["net_salary"],
+                "days_present": line["days_present"],
+                "days_absent": line["days_absent"],
+            })
+        _refresh_payroll_run_totals(conn, payroll_id)
+        return {
+            "added": len(added),
+            "employees": added,
+            "document_no": run["document_no"],
+            "payroll_id": int(payroll_id),
+        }
 
 
 def _period_bounds(month, year):
