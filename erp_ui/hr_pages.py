@@ -1785,7 +1785,8 @@ def page_payroll():
                     st.markdown("##### Post one employee (cash voucher)")
                     st.caption(
                         "Save the grid first if you changed amounts. "
-                        "Then **Post & voucher** on that row — other staff stay on this draft."
+                        "**Post** on the right of each row pays that employee only "
+                        "(cash voucher) — other staff stay on this draft."
                     )
                     pc1, pc2, pc3 = st.columns([1.2, 1.2, 2])
                     pay_date_edit = pc1.date_input(
@@ -1877,15 +1878,27 @@ def page_payroll():
                         f"{dept}  ·  {n_emp} staff  ·  Gross {fmt(d_gross)}  ·  Net {fmt(d_net)}"
                     )
                     with st.expander(header, expanded=expand_all or di == 0):
-                        edited_raw = st.data_editor(
-                            working,
-                            column_config=col_cfg,
-                            hide_index=True,
-                            use_container_width=True,
-                            num_rows="fixed",
-                            height=min(520, 72 + max(n_emp, 1) * 35),
-                            key=editor_key,
+                        line_meta = {
+                            int(l["id"]): l for l in (pr.get("lines") or [])
+                        }
+                        show_post_col = can_post_row and (
+                            pmode_edit == "cash" or bank_id_edit
                         )
+                        if show_post_col:
+                            grid_col, act_col = st.columns([5.2, 1.35], gap="small")
+                        else:
+                            grid_col, act_col = st.container(), None
+
+                        with grid_col:
+                            edited_raw = st.data_editor(
+                                working,
+                                column_config=col_cfg,
+                                hide_index=True,
+                                use_container_width=True,
+                                num_rows="fixed",
+                                height=min(520, 72 + max(n_emp, 1) * 35),
+                                key=editor_key,
+                            )
                         recalc = _payroll_recalc_edit_df(edited_raw, year=py, month=pm)
                         editable_changed = _payroll_edit_df_changed(
                             working, edited_raw, _PAYROLL_EDIT_CMP_COLS,
@@ -1901,64 +1914,83 @@ def page_payroll():
                                 del st.session_state[editor_key]
                             need_live_rerun = True
 
-                        # Per-row Post & voucher (saved DB amounts — save grid first if edited)
-                        if can_post_row and (pmode_edit == "cash" or bank_id_edit):
-                            line_meta = {
-                                int(l["id"]): l for l in (pr.get("lines") or [])
-                            }
-                            st.markdown("**Post & voucher** (this department)")
-                            for _, r in recalc.iterrows():
-                                lid = int(r["line_id"])
-                                meta = line_meta.get(lid) or {}
-                                is_paid = (
-                                    bool(r.get("_paid"))
-                                    or (meta.get("paid_status") or "") == "paid"
+                        # Post & voucher opposite each grid row (right column)
+                        if show_post_col and act_col is not None:
+                            with act_col:
+                                st.markdown(
+                                    "<div style='font-size:0.72rem;font-weight:600;"
+                                    "text-transform:uppercase;letter-spacing:0.04em;"
+                                    "color:#64748b;margin:0 0 6px 0;padding-top:4px'>"
+                                    "Action</div>",
+                                    unsafe_allow_html=True,
                                 )
-                                net_v = float(meta.get("net_salary") or r.get("Net") or 0)
-                                name = r.get("Employee") or meta.get("employee_name") or "—"
-                                code = r.get("Code") or meta.get("emp_code") or ""
-                                r1, r2, r3, r4 = st.columns([3.2, 1.2, 1.3, 1.1])
-                                if is_paid:
-                                    doc = meta.get("payment_document_no") or r.get("_voucher") or "—"
-                                    r1.markdown(
-                                        f"✅ **{name}** `{code}` · Net {fmt(net_v)} · `{doc}`"
+                                # Align with data_editor header row (~28px)
+                                st.markdown(
+                                    "<div style='height:28px'></div>",
+                                    unsafe_allow_html=True,
+                                )
+                                for _, r in recalc.iterrows():
+                                    lid = int(r["line_id"])
+                                    meta = line_meta.get(lid) or {}
+                                    is_paid = (
+                                        bool(r.get("_paid"))
+                                        or (meta.get("paid_status") or "") == "paid"
                                     )
-                                    if r2.button("Print", key=f"pr_edit_pv_{lid}"):
-                                        st.session_state[print_edit_key] = lid
-                                        st.rerun()
-                                    if r3.button("Undo", key=f"pr_edit_unpay_{lid}"):
-                                        try:
-                                            db.rollback_payroll_line_payment(
-                                                lid, uid(), "Undo from Edit Lines",
-                                            )
-                                            st.rerun()
-                                        except Exception as e:
-                                            st.error(str(e))
-                                elif net_v > 0.009:
-                                    r1.markdown(f"**{name}** `{code}` · Net **{fmt(net_v)}**")
-                                    btn_lbl = (
-                                        "Post & voucher"
-                                        if pmode_edit == "cash"
-                                        else "Post bank & voucher"
+                                    net_v = float(
+                                        meta.get("net_salary") or r.get("Net") or 0
                                     )
-                                    if r3.button(btn_lbl, type="primary", key=f"pr_edit_post_{lid}"):
-                                        try:
-                                            if pmode_edit == "bank" and not bank_id_edit:
-                                                raise ValueError("Select bank account.")
-                                            res = db.post_and_pay_payroll_line(
-                                                lid, uid(), pmode_edit,
-                                                str(pay_date_edit), bank_id_edit,
-                                            )
+                                    if is_paid:
+                                        b1, b2 = st.columns(2)
+                                        if b1.button(
+                                            "Print",
+                                            key=f"pr_edit_pv_{lid}",
+                                            use_container_width=True,
+                                        ):
                                             st.session_state[print_edit_key] = lid
-                                            ff.action_done(
-                                                f"**{res['document_no']}** — "
-                                                f"{res['employee']} paid. Print for signature. "
-                                                "Other employees stay on this draft."
-                                            )
-                                        except Exception as e:
-                                            st.error(str(e))
-                                else:
-                                    r1.caption(f"{name} `{code}` · Net nil — nothing to post")
+                                            st.rerun()
+                                        if b2.button(
+                                            "Undo",
+                                            key=f"pr_edit_unpay_{lid}",
+                                            use_container_width=True,
+                                        ):
+                                            try:
+                                                db.rollback_payroll_line_payment(
+                                                    lid, uid(), "Undo from Edit Lines",
+                                                )
+                                                st.rerun()
+                                            except Exception as e:
+                                                st.error(str(e))
+                                    elif net_v > 0.009:
+                                        btn_lbl = (
+                                            "Post"
+                                            if pmode_edit == "cash"
+                                            else "Post bank"
+                                        )
+                                        if st.button(
+                                            btn_lbl,
+                                            type="primary",
+                                            key=f"pr_edit_post_{lid}",
+                                            use_container_width=True,
+                                            help="Post & voucher for this employee only",
+                                        ):
+                                            try:
+                                                if pmode_edit == "bank" and not bank_id_edit:
+                                                    raise ValueError("Select bank account.")
+                                                res = db.post_and_pay_payroll_line(
+                                                    lid, uid(), pmode_edit,
+                                                    str(pay_date_edit), bank_id_edit,
+                                                )
+                                                st.session_state[print_edit_key] = lid
+                                                ff.action_done(
+                                                    f"**{res['document_no']}** — "
+                                                    f"{res['employee']} paid. "
+                                                    "Print for signature. "
+                                                    "Other employees stay on this draft."
+                                                )
+                                            except Exception as e:
+                                                st.error(str(e))
+                                    else:
+                                        st.caption("—")
 
                 if need_live_rerun:
                     st.rerun()
