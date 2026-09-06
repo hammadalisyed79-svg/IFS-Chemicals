@@ -272,6 +272,21 @@ def user_can_hr(user, action="view"):
     return user_can(user, "HR", action)
 
 
+def user_is_admin(user) -> bool:
+    return bool(user) and str(user.get("role") or "").strip().lower() == "admin"
+
+
+def _require_admin_user_id(conn, user_id, *, action="perform this action"):
+    """Raise unless users.role is admin."""
+    if not user_id:
+        raise ValueError(f"Admin login required to {action}.")
+    row = conn.execute("SELECT role FROM users WHERE id=?", (int(user_id),)).fetchone()
+    if not row or str(row[0] or "").strip().lower() != "admin":
+        raise ValueError(
+            f"Paid salary vouchers are locked. Only an admin can {action}."
+        )
+
+
 # ---------- Designations ----------
 def get_designations(active_only=True, search=None):
     from database import get_connection, rows_to_list
@@ -1739,6 +1754,11 @@ def update_payroll_line(line_id, data, user_id=None, sync_ot=None):
         row = dict(row)
         if row["payroll_status"] != "draft":
             raise ValueError("Only draft payroll can be edited.")
+        if (row.get("paid_status") or "") == "paid":
+            raise ValueError(
+                "This employee is already paid — voucher is locked. "
+                "Only an admin can undo payment before editing."
+            )
         merged = dict(row)
         for k in editable:
             if k in data:
@@ -2039,7 +2059,8 @@ def update_payroll_lines_bulk(updates, user_id=None, sync_ot=None):
                 raise ValueError("Only draft payroll can be edited.")
             if (row.get("paid_status") or "") == "paid":
                 raise ValueError(
-                    f"Line #{line_id} is already paid — undo that payment before editing."
+                    f"Line #{line_id} is already paid — voucher is locked. "
+                    "Only an admin can undo payment before editing."
                 )
             if _payroll_line_accrual_exists(conn, int(line_id)):
                 raise ValueError(
@@ -3098,13 +3119,16 @@ def pay_payroll(payroll_id, user_id, payment_mode="cash", payment_date=None, ban
 
 
 def rollback_payroll_line_payment(line_id, user_id, reason=""):
+    """Undo a paid salary voucher — admin only (cash/bank + GL reverse)."""
     reason = (reason or "").strip()
     if not reason:
         raise ValueError("Reason is required.")
     from database import get_connection
     with get_connection() as conn:
+        apply_hr(conn, __import__("database"))
+        _require_admin_user_id(conn, user_id, action="undo a paid salary voucher")
         row = conn.execute(
-            """SELECT pl.payroll_id, pr.status
+            """SELECT pl.payroll_id, pr.status, pl.paid_status, pl.payment_document_no
                FROM payroll_lines pl
                JOIN payroll_runs pr ON pr.id=pl.payroll_id
                WHERE pl.id=?""",
@@ -3114,12 +3138,18 @@ def rollback_payroll_line_payment(line_id, user_id, reason=""):
             raise ValueError("Payroll line not found.")
         if (row[1] or "") == "closed":
             raise ValueError("Payroll month is closed — reopen before undoing a payment.")
+        if (row[2] or "") != "paid":
+            raise ValueError("This line is not marked paid.")
         payroll_id = row[0]
         _undo_payroll_line_payment(conn, line_id)
         _refresh_payroll_paid_status(conn, payroll_id, user_id)
         conn.execute(
             "UPDATE payroll_runs SET notes=COALESCE(notes,'') || ? WHERE id=?",
-            (f"\nLine payment rollback ({now()}): {reason}", payroll_id),
+            (
+                f"\nAdmin unlocked paid voucher {row[3] or line_id} "
+                f"({now()}): {reason}",
+                payroll_id,
+            ),
         )
 
 

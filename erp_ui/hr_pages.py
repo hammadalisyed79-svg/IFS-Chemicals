@@ -13,6 +13,11 @@ def uid():
     return u["id"] if u else None
 
 
+def _is_admin() -> bool:
+    u = st.session_state.get("user") or {}
+    return str(u.get("role") or "").strip().lower() == "admin"
+
+
 def fmt(v):
     return f"Rs. {float(v or 0):,.2f}"
 
@@ -909,6 +914,10 @@ def _render_employee_cash_payments(pid, pr):
     closed = status == "closed"
 
     st.markdown("### Pay Desk — counter")
+    st.caption(
+        "Once **Post cash/bank voucher** marks an employee **PAID**, the line is locked. "
+        "Only an **admin** can unlock / undo that payment."
+    )
     if closed:
         st.success(
             f"Month **closed**"
@@ -1138,12 +1147,17 @@ def _render_employee_cash_payments(pid, pr):
                     if a2.button("Print voucher", key=f"pr_pv_{lid}"):
                         st.session_state[print_key] = lid
                         st.rerun()
-                    if a3.button("Undo payment", key=f"pr_unpay_{lid}"):
-                        try:
-                            db.rollback_payroll_line_payment(lid, uid(), "Undo payment")
-                            st.rerun()
-                        except Exception as e:
-                            st.error(str(e))
+                    if _is_admin():
+                        if a3.button("Admin unlock / undo", key=f"pr_unpay_{lid}"):
+                            try:
+                                db.rollback_payroll_line_payment(
+                                    lid, uid(), "Admin unlock paid voucher",
+                                )
+                                st.rerun()
+                            except Exception as e:
+                                st.error(str(e))
+                    else:
+                        a3.caption("🔒 Locked")
                 elif net > 0.009:
                     label = "Pay & voucher" if pmode == "cash" else "Pay bank & voucher"
                     if a3.button(label, type="primary", key=f"pr_pay_{lid}"):
@@ -2044,9 +2058,12 @@ def page_payroll():
                                 st.caption("All staff in this department are paid (or net is zero).")
 
                             if paid_opts:
-                                p1, p2, p3 = st.columns([3.2, 1.1, 1.1], gap="small")
+                                if _is_admin():
+                                    p1, p2, p3 = st.columns([3.2, 1.1, 1.1], gap="small")
+                                else:
+                                    p1, p2, p3 = st.columns([3.2, 1.1, 1.1], gap="small")
                                 paid_pick = p1.selectbox(
-                                    "Paid employee",
+                                    "Paid employee (locked)",
                                     list(paid_opts.keys()),
                                     key=f"pr_desk_paid_{pid}_{safe_dept}",
                                 )
@@ -2057,20 +2074,24 @@ def page_payroll():
                                 ):
                                     st.session_state[print_edit_key] = int(paid_opts[paid_pick])
                                     st.rerun()
-                                if p3.button(
-                                    "Undo payment",
-                                    key=f"pr_desk_undo_{pid}_{safe_dept}",
-                                    use_container_width=True,
-                                ):
-                                    try:
-                                        db.rollback_payroll_line_payment(
-                                            int(paid_opts[paid_pick]),
-                                            uid(),
-                                            "Undo from Edit Lines",
-                                        )
-                                        st.rerun()
-                                    except Exception as e:
-                                        st.error(str(e))
+                                if _is_admin():
+                                    if p3.button(
+                                        "Admin unlock",
+                                        key=f"pr_desk_undo_{pid}_{safe_dept}",
+                                        use_container_width=True,
+                                        help="Admin only — reverse cash/bank voucher and reopen line for edit.",
+                                    ):
+                                        try:
+                                            db.rollback_payroll_line_payment(
+                                                int(paid_opts[paid_pick]),
+                                                uid(),
+                                                "Admin unlock from Edit Lines",
+                                            )
+                                            st.rerun()
+                                        except Exception as e:
+                                            st.error(str(e))
+                                else:
+                                    p3.caption("🔒 Admin only")
 
                 if need_live_rerun:
                     st.rerun()
