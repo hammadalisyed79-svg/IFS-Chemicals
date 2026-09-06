@@ -579,12 +579,9 @@ def _render_single_employee_edit_pay(
                     uid(),
                     sync_ot=("from_amount" if derive_hrs else None),
                 )
-                # Stay on this tab + draft run. Do NOT set pick_key here — the
-                # selectbox is already instantiated on this run (Streamlit error).
-                retain = {
-                    "hr_pay_tab": "Single employee pay",
-                    "pr_sep_run": st.session_state.get("pr_sep_run"),
-                }
+                # Remount form fields from DB. Do not retain widget keys
+                # (hr_pay_tab / pr_sep_run / pick) — already set and Streamlit
+                # forbids writing them after the widgets exist on this run.
                 form_prefixes = (
                     f"pr_sep_basic_{pid}",
                     f"pr_sep_allw_{pid}",
@@ -628,7 +625,6 @@ def _render_single_employee_edit_pay(
                         f"{res['employee']} saved & paid. "
                         "Still on this pay desk — voucher ready below.",
                         prefixes=form_prefixes,
-                        retain=retain,
                     )
                 else:
                     _payroll_clear_edit_live_state(pid)
@@ -636,7 +632,6 @@ def _render_single_employee_edit_pay(
                         "Payroll line updated — still on this employee. "
                         "Adjust more or use **Save & post voucher** when ready.",
                         prefixes=form_prefixes,
-                        retain=retain,
                     )
             except Exception as e:
                 err = str(e)
