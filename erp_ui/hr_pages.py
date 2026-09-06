@@ -2353,7 +2353,8 @@ def _loan_register_rows(employee_id=None):
         rows.append({
             "Document": r.get("document_no"),
             "Employee": r.get("employee_name"),
-            "Date": r.get("issue_date"),
+            "Posting date": r.get("issue_date"),
+            "Voucher": r.get("payment_document_no") or "—",
             "Amount": float(r.get("amount") or 0),
             "Installments": inst,
             "Monthly": float(r.get("monthly_installment") or 0),
@@ -2737,23 +2738,30 @@ def page_advances():
 
 
 def page_loans():
-    """Employee loans only — recovered in payroll installments."""
+    """Employee loans — same process as Advance: request → approve → issue (cash/bank) → print."""
     require_hr("view")
+    from html import escape
+    from erp_ui.document_print import document_print_toolbar
+
     peek = st.session_state.get("hr_loan_tab") or "Loan List"
+    # Migrate old tab label if still in session
+    if peek == "New Loan":
+        peek = "New Request"
+        st.session_state["hr_loan_tab"] = peek
     std_page_header(
         "Employee Loans",
         status="register" if peek == "Loan List" else None,
         status_kind="shell" if peek == "Loan List" else "invoice",
     )
     st.caption(
-        "**Employee Loan** — recovered from salary in **monthly installments**. "
+        "**Employee Loan** — cash/bank on posting date, recovered from salary in **monthly installments**. "
         "For one-time salary advances use **HR → Advance**."
     )
-    tab = sticky_page_tabs(["Loan List", "New Loan", "Approve / Issue"], "hr_loan_tab")
+    tab = sticky_page_tabs(["Loan List", "New Request", "Approve / Issue"], "hr_loan_tab")
     if tab == "Loan List":
         _render_hr_payment_register(
             kind="loan",
-            show_cols=["Document", "Employee", "Date", "Amount", "Installments", "Monthly",
+            show_cols=["Document", "Employee", "Posting date", "Voucher", "Amount", "Installments", "Monthly",
                        "Recovered", "Outstanding", "Status", "Reason"],
             filter_prefix="hr_loan",
             page_key="hr_loan_list_pg",
@@ -2765,7 +2773,7 @@ def page_loans():
             outstanding_fn=db.report_outstanding_loans,
             outstanding_heading="Outstanding Loans",
         )
-    elif tab == "New Loan":
+    elif tab == "New Request":
         emps = _emp_opts()
         if not emps:
             st.info("No active employees.")
@@ -2773,30 +2781,110 @@ def page_loans():
         if not db.user_can_hr(st.session_state.user, "add"):
             st.warning("You do not have permission to create loans.")
             return
-        st.caption("Each payroll recovers one installment until the loan is cleared.")
+
+        st.markdown(
+            "<div style='margin:0 0 12px 0;padding:10px 14px;background:#eff6ff;"
+            "border:1px solid #bfdbfe;border-radius:8px;color:#1e3a8a;font-size:0.88rem'>"
+            "Cash / bank is given on <b>posting date</b> (GL + cash book). "
+            "Each payroll recovers one installment until the loan is cleared."
+            "</div>",
+            unsafe_allow_html=True,
+        )
+
+        emp_lbl = st.selectbox("Employee", list(emps.keys()), key="hr_loan_emp")
+        eid = emps[emp_lbl]
+        ctx = None
+        try:
+            ctx = db.get_employee_advance_context(eid)
+        except Exception:
+            ctx = None
+        if ctx:
+            k1, k2, k3, k4 = st.columns(4, gap="small")
+            k1.markdown(
+                f"<div class='txn-kpi-card'><p class='txn-kpi'>Basic salary</p>"
+                f"<p class='txn-kpi-val' style='font-size:1.05rem'>{escape(fmt(ctx['basic_salary']))}</p></div>",
+                unsafe_allow_html=True,
+            )
+            k2.markdown(
+                f"<div class='txn-kpi-card'><p class='txn-kpi'>Ledger balance</p>"
+                f"<p class='txn-kpi-val' style='font-size:1.05rem'>{escape(fmt(ctx['ledger_balance']))}</p></div>",
+                unsafe_allow_html=True,
+            )
+            k3.markdown(
+                f"<div class='txn-kpi-card'><p class='txn-kpi'>Advance outstanding</p>"
+                f"<p class='txn-kpi-val' style='font-size:1.05rem'>{escape(fmt(ctx['advance_outstanding']))}</p></div>",
+                unsafe_allow_html=True,
+            )
+            k4.markdown(
+                f"<div class='txn-kpi-card'><p class='txn-kpi'>Loan outstanding</p>"
+                f"<p class='txn-kpi-val' style='font-size:1.05rem'>{escape(fmt(ctx['loan_outstanding']))}</p></div>",
+                unsafe_allow_html=True,
+            )
+            st.caption(
+                "Ledger balance: positive = employee owes company; negative = company owes employee."
+            )
+
+        today = date.today()
         with st.form("loan_req"):
-            emp = st.selectbox("Employee", list(emps.keys()))
-            amt = money_input("Loan Amount", value=0.0, min_value=0.0, key="hr_loan_amt")
-            inst = st.number_input("Installments (months)", 2, 60, 12)
-            issue_date = st.date_input("Request Date", value=date.today())
-            reason = st.text_input("Reason")
-            if st.form_submit_button("Submit"):
+            r1, r2, r3 = st.columns([1.2, 1.1, 1.2], gap="medium")
+            with r1:
+                amt = money_input("Loan amount", value=0.0, min_value=0.0, key="hr_loan_amt")
+            with r2:
+                post_date = st.date_input(
+                    "Posting date",
+                    value=today,
+                    help="Date cash / bank is given (GL posting date).",
+                    key="hr_loan_post_date",
+                )
+            with r3:
+                inst = st.number_input(
+                    "Installments (months)",
+                    min_value=2, max_value=60, value=12, step=1,
+                    key="hr_loan_inst",
+                )
+            monthly_preview = round(float(amt or 0) / max(int(inst), 1), 2) if float(amt or 0) > 0 else 0.0
+            st.caption(
+                f"Approx. monthly recovery **{fmt(monthly_preview)}** "
+                f"over **{int(inst)}** payroll months (from posting **{post_date}**)."
+            )
+            reason = st.text_area("Reason", height=80, key="hr_loan_reason")
+            if st.form_submit_button("Submit", type="primary"):
                 try:
                     if float(amt or 0) <= 0:
                         raise ValueError("Enter an amount greater than zero.")
                     db.save_loan({
-                        "employee_id": emps[emp],
+                        "employee_id": eid,
                         "amount": amt,
                         "installments": int(inst),
-                        "issue_date": str(issue_date),
+                        "issue_date": str(post_date),
                         "reason": reason,
                     }, uid())
-                    ff.action_done("Loan request submitted — approve & issue next.")
+                    ff.action_done(
+                        f"Loan request submitted — posting **{post_date}**, "
+                        f"**{int(inst)}** installments. Approve & issue next."
+                    )
                 except Exception as e:
                     st.error(str(e))
     elif tab == "Approve / Issue":
         pending = db.get_loans(status="pending") or []
         approved = db.get_loans(status="approved") or []
+
+        print_info = st.session_state.get("last_loan_print")
+        if print_info and print_info.get("id"):
+            st.success(
+                f"Voucher **{print_info.get('document_no')}** ready — print for signature."
+            )
+            document_print_toolbar(
+                "Payment Voucher",
+                int(print_info["id"]),
+                key_prefix="hr_loan_issue_print",
+                vch_source=print_info.get("vch_source"),
+            )
+            if st.button("Clear print preview", key="hr_loan_print_clear"):
+                st.session_state.pop("last_loan_print", None)
+                st.rerun()
+            st.divider()
+
         if db.user_can_hr(st.session_state.user, "approve"):
             st.subheader("Pending approval")
             if not pending:
@@ -2804,7 +2892,9 @@ def page_loans():
             for r in pending:
                 st.write(
                     f"**{r['document_no']}** — {r['employee_name']} — {fmt(r['amount'])} "
-                    f"({int(r.get('installments') or 1)} installments)"
+                    f"· posting {r.get('issue_date')} · "
+                    f"{int(r.get('installments') or 1)} installments "
+                    f"({fmt(r.get('monthly_installment'))}/mo)"
                 )
                 c1, c2 = st.columns(2)
                 if c1.button("Approve", key=f"ln_a_{r['id']}"):
@@ -2817,14 +2907,85 @@ def page_loans():
             st.subheader("Ready to issue")
             if not approved:
                 st.caption("Nothing to issue.")
-            for r in approved:
-                st.write(
-                    f"**{r['document_no']}** — {r['employee_name']} — {fmt(r['amount'])} "
-                    f"({int(r.get('installments') or 1)} installments)"
+            else:
+                pmode = st.radio(
+                    "Issue payment mode", ["cash", "bank"], horizontal=True,
+                    key="hr_loan_issue_mode",
                 )
-                if st.button("Issue Loan", key=f"ln_i_{r['id']}"):
-                    db.issue_loan(r["id"], uid())
-                    st.rerun()
+                bank_id = None
+                if pmode == "bank":
+                    bank_accts = [
+                        a for a in db.get_accounts()
+                        if (a.get("account_type") or "").lower() in ("bank", "asset")
+                        and str(a.get("code") or "").startswith("11")
+                    ] or [a for a in db.get_accounts() if a.get("is_active")]
+                    bank_opts = {f"{a['code']} - {a['name']}": a["id"] for a in bank_accts}
+                    if bank_opts:
+                        bank_id = bank_opts[st.selectbox(
+                            "Bank account", list(bank_opts.keys()), key="hr_loan_issue_bank",
+                        )]
+                    else:
+                        st.warning("Add a bank account first.")
+                for r in approved:
+                    st.write(
+                        f"**{r['document_no']}** — {r['employee_name']} — {fmt(r['amount'])} "
+                        f"· posting {r.get('issue_date')} · "
+                        f"{int(r.get('installments') or 1)} installments "
+                        f"({fmt(r.get('monthly_installment'))}/mo)"
+                    )
+                    if st.button("Issue Loan", key=f"ln_i_{r['id']}"):
+                        try:
+                            if pmode == "bank" and not bank_id:
+                                raise ValueError("Select bank account.")
+                            res = db.issue_loan(
+                                r["id"], uid(), payment_mode=pmode, bank_account_id=bank_id,
+                            )
+                            retain = None
+                            if res.get("payment_id"):
+                                retain = {
+                                    "last_loan_print": {
+                                        "id": res["payment_id"],
+                                        "vch_source": res.get("vch_source"),
+                                        "document_no": res.get("payment_document_no"),
+                                        "loan_no": res.get("document_no"),
+                                    }
+                                }
+                            ff.action_done(
+                                f"**{res['document_no']}** issued — "
+                                f"cash book voucher **{res['payment_document_no']}** "
+                                f"({fmt(res['amount'])}). Print voucher above.",
+                                retain=retain,
+                            )
+                        except Exception as e:
+                            st.error(str(e))
+
+            issued = [
+                r for r in (db.get_loans(status="issued") or [])
+                if (r.get("payment_document_no") or "").strip()
+            ][:20]
+            if issued:
+                st.subheader("Reprint issued vouchers")
+                pick = {
+                    f"{r['document_no']} · {r.get('payment_document_no')} · "
+                    f"{r['employee_name']} · {fmt(r['amount'])}": r
+                    for r in issued
+                }
+                sel = st.selectbox(
+                    "Issued loan", list(pick.keys()), key="hr_loan_reprint_sel",
+                )
+                if st.button("Print voucher", key="hr_loan_reprint_btn", type="primary"):
+                    row = pick[sel]
+                    vch = db.resolve_cash_bank_voucher(row.get("payment_document_no"))
+                    if not vch:
+                        st.error("Cash/bank voucher not found for this loan.")
+                    else:
+                        st.session_state["last_loan_print"] = {
+                            "id": vch["id"],
+                            "vch_source": vch["vch_source"],
+                            "document_no": vch["document_no"],
+                            "loan_no": row.get("document_no"),
+                        }
+                        st.rerun()
 
 
 def page_expense_claims():

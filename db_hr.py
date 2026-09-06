@@ -3362,6 +3362,7 @@ def get_loans(status=None, employee_id=None):
         q += " AND l.employee_id=?"; p.append(employee_id)
     q += " ORDER BY l.issue_date DESC"
     with get_connection() as conn:
+        apply_hr(conn, __import__("database"))
         rows = rows_to_list(conn.execute(q, p).fetchall())
     for r in rows:
         code = (r.get("employee_code") or "").strip()
