@@ -1783,23 +1783,41 @@ def _money_cell(v) -> str:
 
 
 _SALARY_VOUCHER_CSS_EXTRA = """
-/* A4 portrait — pack voucher tightly in top half; no gap above signatures */
-.half-page-sheet.salary-voucher-sheet {
-  display: flex;
-  flex-direction: column;
-  justify-content: flex-start;
-  align-content: flex-start;
-  height: auto !important;
-  min-height: 0 !important;
+/* Exact top half of A4 (148mm): body at top, flexible gap, signatures at cut line */
+.salary-half-page-zone {
+  width: 100%;
+  max-width: 210mm;
+  margin: 0 auto;
+  height: 148mm !important;
+  min-height: 148mm !important;
   max-height: 148mm !important;
   overflow: hidden;
-  padding: 5px 7px !important;
   box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+}
+.half-page-sheet.salary-voucher-sheet {
+  display: flex !important;
+  flex-direction: column;
+  justify-content: flex-start;
+  flex: 1 1 auto;
+  height: 100% !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  overflow: hidden;
+  padding: 5px 7px 4px 7px !important;
+  box-sizing: border-box;
+  border: 1px solid #ccc;
 }
 .half-page-sheet.salary-voucher-sheet .salary-voucher-body {
   flex: 0 0 auto;
   min-height: 0;
-  overflow: visible;
+  overflow: hidden;
+}
+/* Absorbs leftover space so signatures sit on the half-page fold */
+.half-page-sheet.salary-voucher-sheet .salary-voucher-gap {
+  flex: 1 1 auto;
+  min-height: 6mm;
 }
 .half-page-sheet.salary-voucher-sheet .header {
   padding-bottom: 2px !important;
@@ -1931,12 +1949,13 @@ _SALARY_VOUCHER_CSS_EXTRA = """
   border-top: 1px dotted #666;
   padding-top: 2px;
 }
-/* Signatures sit immediately under body — no flex gap */
 .half-page-sheet.salary-voucher-sheet .salary-voucher-sigs {
   flex: 0 0 auto;
-  margin-top: 4px !important;
+  margin-top: 0 !important;
+  margin-bottom: 0 !important;
   border-top: 1px solid #111;
   padding-top: 3px;
+  padding-bottom: 1px;
 }
 .half-page-sheet.salary-voucher-sheet .salary-voucher-sigs .signatures {
   margin-top: 0 !important;
@@ -1948,7 +1967,7 @@ _SALARY_VOUCHER_CSS_EXTRA = """
   min-width: 0;
 }
 .half-page-sheet.salary-voucher-sheet .salary-voucher-sigs .sig-space {
-  height: 16px;
+  height: 18px;
 }
 .half-page-sheet.salary-voucher-sheet .salary-voucher-sigs .sig-line {
   margin: 0 0 2px 0 !important;
@@ -1967,36 +1986,26 @@ _SALARY_VOUCHER_CSS_EXTRA = """
   min-height: 0.95em;
   line-height: 1.1;
 }
-/* Keep cut line flush under the packed voucher */
 body.voucher-dual-body .half-page-cut {
-  margin-top: 4px !important;
-}
-/* Reserve exact top half of A4; voucher packs at top of that zone */
-.salary-half-page-zone {
-  width: 100%;
-  max-width: 210mm;
-  margin: 0 auto;
-  height: auto;
-  max-height: 148mm;
-  overflow: hidden;
-  box-sizing: border-box;
+  margin-top: 2px !important;
 }
 @media print {
-  .half-page-sheet.salary-voucher-sheet {
-    height: auto !important;
-    min-height: 0 !important;
+  .salary-half-page-zone {
+    height: 148mm !important;
+    min-height: 148mm !important;
     max-height: 148mm !important;
     page-break-inside: avoid;
     page-break-after: avoid;
   }
-  .salary-half-page-zone {
-    height: 148mm !important;
-    max-height: 148mm !important;
-    overflow: hidden;
+  .half-page-sheet.salary-voucher-sheet {
+    border: none !important;
+    height: 100% !important;
+    max-height: none !important;
+    page-break-inside: avoid;
   }
+  .half-page-cut { margin-top: 0 !important; }
 }
 """
-
 
 def _salary_sig_block_html(prepared_name: str, employee_name: str) -> str:
     """Half-page salary signatures: blank ink space, line, role, printed name."""
@@ -2159,6 +2168,7 @@ def salary_payment_voucher_html(line_id):
         f'<div class="salary-half-page-zone">'
         f'<div class="half-page-sheet salary-voucher-sheet">'
         f'<div class="salary-voucher-body">{body}</div>'
+        f'<div class="salary-voucher-gap" aria-hidden="true"></div>'
         f'<div class="salary-voucher-sigs">{sigs}</div>'
         f"</div>"
         f"</div>"
