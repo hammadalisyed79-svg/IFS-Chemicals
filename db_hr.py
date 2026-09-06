@@ -3228,13 +3228,16 @@ def issue_advance(advance_id, user_id, payment_mode="cash", bank_account_id=None
             asset_id = bank_account_id
 
         # GL on posting date; recovery targets salary_month
+        # Both legs use advance_id; voucher_id links cash/bank payment row
         post_gl(
             conn, post_date, HR_AC["employee_advance"], amt, 0,
             label, "employee_advance", advance_id, doc_no, user_id,
+            voucher_id=entry_id,
         )
         post_gl_account_id(
             conn, post_date, asset_id, 0, amt,
-            label, "employee_advance", entry_id, doc_no, user_id,
+            label, "employee_advance", advance_id, doc_no, user_id,
+            voucher_id=entry_id,
         )
         conn.execute(
             """UPDATE employee_advances
@@ -3443,10 +3446,12 @@ def issue_loan(loan_id, user_id, payment_mode="cash", bank_account_id=None):
         post_gl(
             conn, post_date, HR_AC["employee_advance"], amt, 0,
             label, "employee_loan", loan_id, doc_no, user_id,
+            voucher_id=entry_id,
         )
         post_gl_account_id(
             conn, post_date, asset_id, 0, amt,
-            label, "employee_loan", entry_id, doc_no, user_id,
+            label, "employee_loan", loan_id, doc_no, user_id,
+            voucher_id=entry_id,
         )
         conn.execute(
             """UPDATE employee_loans
