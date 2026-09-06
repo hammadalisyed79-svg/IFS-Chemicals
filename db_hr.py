@@ -3203,7 +3203,7 @@ def issue_advance(advance_id, user_id, payment_mode="cash", bank_account_id=None
             raise ValueError("Advance amount must be greater than zero.")
         post_date = str(adv["request_date"])[:10]
         emp_lbl = f"{adv.get('employee_name') or ''} ({adv.get('emp_code') or ''})".strip()
-        label = f"Salary advance {adv['document_no']} — {emp_lbl}"
+        label = f"Salary advance {adv['document_no']} - {emp_lbl}"
         ref = adv["document_no"]
 
         if mode == "cash":
@@ -3303,7 +3303,7 @@ def backfill_advance_cash_voucher(advance_id, user_id=None):
         amt = round(float(adv["amount"] or 0), 2)
         post_date = str(adv["request_date"])[:10]
         emp_lbl = f"{adv.get('employee_name') or ''} ({adv.get('emp_code') or ''})".strip()
-        label = f"Salary advance {adv['document_no']} — {emp_lbl}"
+        label = f"Salary advance {adv['document_no']} - {emp_lbl}"
         entry_id, doc_no = db._add_cash_payment(
             conn, post_date, label, adv["document_no"], amt, user_id,
             party_type="employee", party_id=adv["employee_id"],
@@ -3403,7 +3403,7 @@ def issue_loan(loan_id, user_id, payment_mode="cash", bank_account_id=None):
             raise ValueError("Loan amount must be greater than zero.")
         post_date = str(ln["issue_date"])[:10]
         emp_lbl = f"{ln.get('employee_name') or ''} ({ln.get('emp_code') or ''})".strip()
-        label = f"Employee loan {ln['document_no']} — {emp_lbl}"
+        label = f"Employee loan {ln['document_no']} - {emp_lbl}"
         ref = ln["document_no"]
 
         if mode == "cash":
