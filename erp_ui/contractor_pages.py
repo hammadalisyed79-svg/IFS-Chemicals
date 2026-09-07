@@ -1709,8 +1709,9 @@ def _tab_month_preview():
                 cid, ym, save_lines, notes=note_val, user_id=hlp.uid(),
                 excluded_slip_ids=excl_save,
             )
-            st.session_state[notes_key] = note_val or ""
             # Remount editor from saved manuals + refresh month calc
+            # Do NOT write notes_key here — Streamlit forbids mutating a widget's
+            # session_state key after the text_input with that key was rendered.
             if not is_prod and not is_lu:
                 st.session_state[mk] = {
                     int(sl["product_id"]): float(sl.get("manual_qty") or 0)
@@ -1735,7 +1736,6 @@ def _tab_month_preview():
                     "cl_prev_result": st.session_state.get("cl_prev_result"),
                     "cl_prev_meta": st.session_state.get("cl_prev_meta"),
                     mk: st.session_state.get(mk),
-                    notes_key: note_val or "",
                 },
             )
         except Exception as e:
