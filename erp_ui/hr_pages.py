@@ -407,6 +407,81 @@ def _render_single_employee_edit_pay(
         f"Loan recovery {fmt(line.get('loan_recovery'))}."
     )
 
+    # Mid-month resign / final settlement
+    leave_raw = str(line.get("leaving_date") or "").strip()[:10]
+    leave_default = None
+    if leave_raw:
+        try:
+            leave_default = date.fromisoformat(leave_raw)
+        except ValueError:
+            leave_default = None
+    period_end = date(py, pm, mdays) if py and pm else date.today()
+    period_start = date(py, pm, 1) if py and pm else date.today()
+    is_partial = bool(leave_default and leave_default < period_end)
+    lw1, lw2, lw3 = st.columns([1.4, 1.2, 1.4])
+    leaving_pick = lw1.date_input(
+        "Last working day (resign / final pay)",
+        value=leave_default or date.today(),
+        min_value=period_start,
+        max_value=period_end,
+        key=f"pr_sep_leaving_{pid}_{sel_id}",
+        help="Set when the employee leaves mid-month. Salary becomes Basic ÷ days × Present (paid leave included).",
+    )
+    mark_left = lw2.checkbox(
+        "Mark employment as left",
+        value=(str(line.get("employment_status") or "").lower() in ("left", "resigned", "terminated")),
+        key=f"pr_sep_mark_left_{pid}_{sel_id}",
+    )
+    if lw3.button("Apply final settlement", key=f"pr_sep_apply_leave_{pid}_{sel_id}", use_container_width=True):
+        try:
+            payload = {
+                "leaving_date": str(leaving_pick),
+            }
+            if mark_left:
+                payload["employment_status"] = "left"
+                payload["is_active"] = 0
+            # Preserve required identity fields for update_employee_hr
+            emp = db.get_employee_hr(eid) or {}
+            db.update_employee_hr(eid, {
+                "code": emp.get("code") or line.get("emp_code"),
+                "full_name": emp.get("full_name") or line.get("employee_name"),
+                "father_name": emp.get("father_name"),
+                "cnic": emp.get("cnic"),
+                "date_of_birth": emp.get("date_of_birth"),
+                "gender": emp.get("gender"),
+                "marital_status": emp.get("marital_status"),
+                "phone": emp.get("phone"),
+                "mobile": emp.get("mobile"),
+                "email": emp.get("email"),
+                "address": emp.get("address"),
+                "department_id": emp.get("department_id"),
+                "designation_id": emp.get("designation_id"),
+                "manager_id": emp.get("manager_id"),
+                "joining_date": emp.get("joining_date"),
+                "confirmation_date": emp.get("confirmation_date"),
+                "leaving_date": str(leaving_pick),
+                "employment_status": payload.get("employment_status", emp.get("employment_status") or "active"),
+                "basic_salary": emp.get("basic_salary") or line.get("basic_salary") or 0,
+                "bank_account": emp.get("bank_account"),
+                "department_name": emp.get("department_name") or line.get("department_name"),
+                "designation_name": emp.get("designation_name"),
+                "is_active": payload.get("is_active", emp.get("is_active", 1)),
+            }, uid())
+            db.refresh_payroll_attendance_days(pid, user_id=uid())
+            _payroll_clear_edit_live_state(pid)
+            ff.action_done(
+                f"Final settlement applied through **{leaving_pick}**. "
+                "Present/absent and net salary refreshed from attendance."
+            )
+        except Exception as e:
+            st.error(str(e))
+    if is_partial or leave_default:
+        st.info(
+            f"Final pay through **{leave_raw or leaving_pick}**: "
+            "Basic is pro-rated as Basic ÷ month days × (Present + paid leave). "
+            "Future weekly offs after the last working day are not counted."
+        )
+
     if line_paid:
         st.warning(
             f"**Already paid** — voucher `{line.get('payment_document_no') or '—'}` "
@@ -550,12 +625,29 @@ def _render_single_employee_edit_pay(
             + float(overtime or 0) + float(bonus or 0),
             2,
         )
+        leave_raw_now = str(line.get("leaving_date") or "").strip()[:10]
+        partial_now = False
+        if leave_raw_now and py and pm:
+            try:
+                partial_now = date.fromisoformat(leave_raw_now) < date(py, pm, mdays)
+            except ValueError:
+                partial_now = False
         try:
-            leave_ded_prev = float(
-                db.calc_absent_deduction(
-                    float(basic or 0), py, pm, float(days_absent or 0),
-                ) or 0
-            )
+            if partial_now and hasattr(db, "calc_earned_basic"):
+                earned = float(
+                    db.calc_earned_basic(float(basic or 0), py, pm, float(days_present or 0)) or 0
+                )
+                preview_gross = round(
+                    earned + float(allowances or 0) + float(overtime or 0) + float(bonus or 0),
+                    2,
+                )
+                leave_ded_prev = 0.0
+            else:
+                leave_ded_prev = float(
+                    db.calc_absent_deduction(
+                        float(basic or 0), py, pm, float(days_absent or 0),
+                    ) or 0
+                )
         except Exception:
             leave_ded_prev = float(line.get("absent_deduction") or 0)
         preview_ded = round(
@@ -1068,6 +1160,26 @@ def page_hr_employees():
                     status_opts,
                     index=status_idx,
                 )
+                leave_raw = str(emp.get("leaving_date") or "").strip()[:10]
+                leave_val = None
+                if leave_raw:
+                    try:
+                        leave_val = date.fromisoformat(leave_raw)
+                    except ValueError:
+                        leave_val = None
+                set_leaving = st.checkbox(
+                    "Set leaving / last working day",
+                    value=bool(leave_val),
+                    key="hr_emp_edit_set_leaving",
+                    help="Required for mid-month final salary (Basic ÷ days × Present).",
+                )
+                leaving = None
+                if set_leaving:
+                    leaving = st.date_input(
+                        "Leaving / last working day",
+                        value=leave_val or date.today(),
+                        key="hr_emp_edit_leaving",
+                    )
                 basic = money_input("Basic Salary", value=float(emp.get("basic_salary") or 0), min_value=0.0, key="hr_emp_edit_basic")
                 bank = st.text_input("Bank Account", value=emp.get("bank_account") or "")
                 active = st.checkbox(
@@ -1075,11 +1187,17 @@ def page_hr_employees():
                     value=bool(emp.get("is_active", 1)),
                 )
                 if st.form_submit_button("Update"):
+                    leave_out = str(leaving) if set_leaving and leaving else None
+                    if status in ("left", "resigned", "terminated") and leave_out:
+                        active = False
                     db.update_employee_hr(eid, {
                         "code": code, "full_name": name, "father_name": father, "cnic": cnic,
                         "mobile": mobile, "email": email, "address": address,
                         "department_id": depts.get(dept), "designation_id": desigs.get(desig),
                         "employment_status": status, "basic_salary": basic, "bank_account": bank,
+                        "leaving_date": leave_out,
+                        "joining_date": emp.get("joining_date"),
+                        "confirmation_date": emp.get("confirmation_date"),
                         "department_name": dept.split(" - ", 1)[-1] if dept else None,
                         "designation_name": desig.split(" - ", 1)[-1] if desig else None,
                         "is_active": int(active),
