@@ -890,7 +890,7 @@ def _tab_month_preview():
         )
 
         with st.expander(
-            f"Permanent product excludes · {n_perm} code{'s' if n_perm != 1 else ''}",
+            f"Always hide products (every month) · {n_perm} blocked",
             expanded=n_perm > 0,
         ):
             st.markdown(
@@ -900,15 +900,16 @@ def _tab_month_preview():
                             border:1px solid #e2e8f0;border-radius:8px;border-left:4px solid #1d4ed8">
                   <div style="flex:1;min-width:220px">
                     <div style="font-size:0.72rem;text-transform:uppercase;letter-spacing:0.04em;
-                                color:#64748b;font-weight:700;margin-bottom:2px">Policy</div>
+                                color:#64748b;font-weight:700;margin-bottom:2px">Permanent block list</div>
                     <div style="font-size:0.9rem;color:#0f172a;line-height:1.4">
-                      Listed codes are <b>hidden and not billed</b> every month for this contractor,
-                      including future months, until removed.
+                      Use this for products that should <b>never be billed</b> for this contractor
+                      (e.g. tanker LPG, packing film). Applies to <b>this month and all future months</b>
+                      until you unblock them. This is different from skipping individual slips below.
                     </div>
                   </div>
                   <div style="min-width:100px">
                     <div style="font-size:0.72rem;text-transform:uppercase;letter-spacing:0.04em;
-                                color:#64748b;font-weight:700;margin-bottom:2px">Active excludes</div>
+                                color:#64748b;font-weight:700;margin-bottom:2px">Blocked codes</div>
                     <div style="font-size:1.35rem;font-weight:800;color:#0f172a;line-height:1.1">
                 """
                 + f"{n_perm}"
@@ -934,22 +935,27 @@ def _tab_month_preview():
                     unsafe_allow_html=True,
                 )
             else:
-                st.caption("No permanent excludes yet — add tanker LPG, packing film, or (no product) below.")
+                st.caption(
+                    "No products blocked yet — use the tab below for tanker LPG, packing film, or (no product)."
+                )
 
-            tab_add, tab_remove = st.tabs(["Add exclude", "Remove exclude"])
+            tab_add, tab_remove = st.tabs([
+                "Always hide a product",
+                "Stop hiding a product",
+            ])
             with tab_add:
                 add_opts = {
                     f"{a['product_code']} — {a['product_name']}": a for a in addable
                 }
                 a1, a2 = st.columns([2.4, 1])
                 pick_add = a1.selectbox(
-                    "From this month’s slips",
+                    "Pick from this month’s products",
                     ["— Select product —"] + list(add_opts.keys()),
                     key=f"cl_lu_perm_add_{cid}_{ym}",
                 )
                 a2.markdown("<div style='height:1.55rem'></div>", unsafe_allow_html=True)
                 if a2.button(
-                    "Add selected",
+                    "Always hide",
                     type="primary",
                     key=f"cl_lu_perm_add_btn_{cid}_{ym}",
                     use_container_width=True,
@@ -966,21 +972,21 @@ def _tab_month_preview():
                         )
                         _lu_reload_after_perm_change()
                         ff.action_done(
-                            f"**{item['product_code']}** added to permanent excludes."
+                            f"**{item['product_code']}** will stay hidden every month."
                         )
                     except Exception as e:
                         st.error(str(e))
 
                 b1, b2, b3 = st.columns([2.0, 1.0, 1.2])
                 man_code = b1.text_input(
-                    "Or type a product code",
+                    "Or type a product code to always hide",
                     key=f"cl_lu_perm_manual_{cid}_{ym}",
                     placeholder="e.g. LPG · RM0001 · NONE",
                 )
                 b2.markdown("<div style='height:1.55rem'></div>", unsafe_allow_html=True)
                 b3.markdown("<div style='height:1.55rem'></div>", unsafe_allow_html=True)
                 if b2.button(
-                    "Add code",
+                    "Always hide code",
                     key=f"cl_lu_perm_manual_btn_{cid}_{ym}",
                     use_container_width=True,
                 ):
@@ -990,30 +996,30 @@ def _tab_month_preview():
                         add_lu_excluded_product(cid, man_code, user_id=hlp.uid())
                         _lu_reload_after_perm_change()
                         ff.action_done(
-                            f"**{normalize_lu_exclude_code(man_code)}** added to permanent excludes."
+                            f"**{normalize_lu_exclude_code(man_code)}** will stay hidden every month."
                         )
                     except Exception as e:
                         st.error(str(e))
                 none_disabled = "(NONE)" in perm_codes
                 if b3.button(
-                    "Exclude (no product)",
+                    "Always hide (no product)",
                     key=f"cl_lu_perm_none_{cid}_{ym}",
                     use_container_width=True,
                     disabled=none_disabled,
-                    help="Slips with no product linked",
+                    help="Slips with no product linked — permanently for this contractor",
                 ):
                     try:
                         add_lu_excluded_product(
                             cid, "(NONE)", product_name="(no product)", user_id=hlp.uid(),
                         )
                         _lu_reload_after_perm_change()
-                        ff.action_done("**(NONE)** permanently excluded.")
+                        ff.action_done("**(NONE)** will stay hidden every month.")
                     except Exception as e:
                         st.error(str(e))
 
             with tab_remove:
                 if not perm_rows:
-                    st.caption("Nothing to remove.")
+                    st.caption("Nothing blocked — nothing to restore.")
                 else:
                     rem_opts = {
                         f"{r.get('product_code')} — {r.get('product_name') or ''}": r.get(
@@ -1023,13 +1029,13 @@ def _tab_month_preview():
                     }
                     r1, r2 = st.columns([2.4, 1])
                     rem_pick = r1.selectbox(
-                        "Code to restore on worksheet",
+                        "Blocked product to show again",
                         ["— Select code —"] + list(rem_opts.keys()),
                         key=f"cl_lu_perm_rem_{cid}_{ym}",
                     )
                     r2.markdown("<div style='height:1.55rem'></div>", unsafe_allow_html=True)
                     if r2.button(
-                        "Remove",
+                        "Stop hiding",
                         key=f"cl_lu_perm_rem_btn_{cid}_{ym}",
                         use_container_width=True,
                         disabled=rem_pick.startswith("—"),
@@ -1039,7 +1045,7 @@ def _tab_month_preview():
                             remove_lu_excluded_product(cid, code)
                             _lu_reload_after_perm_change()
                             ff.action_done(
-                                f"**{code}** removed — slips will show again after reload."
+                                f"**{code}** unblocked — slips will show again after reload."
                             )
                         except Exception as e:
                             st.error(str(e))
@@ -1077,8 +1083,15 @@ def _tab_month_preview():
         excl = set(int(x) for x in (st.session_state.get(excl_key) or []))
         draft_excl = set(int(x) for x in (st.session_state.get(draft_key) or []))
 
+        st.markdown("#### This month only — which slips to bill")
+        st.caption(
+            "These buttons and checkboxes affect **only this month’s worksheet**. "
+            "They do not permanently block a product. For forever hide, use "
+            "**Always hide products** above."
+        )
+
         slip_filter = st.text_input(
-            "Filter (product / vehicle / party / slip no)",
+            "Filter slips (product / vehicle / party / slip no)",
             key=f"cl_lu_slip_filter_{cid}_{ym}",
             placeholder="e.g. LPG, SILICATE, tanker plate…",
         ).strip().lower()
@@ -1097,13 +1110,21 @@ def _tab_month_preview():
             _lu_remount_slip_editor()
 
         qa1, qa2, qa3, qa4 = st.columns(4)
-        if qa1.button("Include all", key=f"cl_lu_incl_all_{cid}_{ym}"):
+        if qa1.button(
+            "Bill all slips",
+            key=f"cl_lu_incl_all_{cid}_{ym}",
+            help="This month only — clear all slip skips",
+        ):
             draft_excl = set()
             excl = set()
             st.session_state[draft_key] = []
             st.session_state[excl_key] = []
             _lu_remount_slip_editor()
-        if qa2.button("Exclude no-product", key=f"cl_lu_excl_none_{cid}_{ym}"):
+        if qa2.button(
+            "Skip no-product slips",
+            key=f"cl_lu_excl_none_{cid}_{ym}",
+            help="This month only — uncheck slips with no product",
+        ):
             add = {
                 int(s["id"]) for s in slips
                 if (s.get("product_code") or "(none)") == "(none)"
@@ -1113,7 +1134,11 @@ def _tab_month_preview():
             st.session_state[draft_key] = sorted(draft_excl)
             st.session_state[excl_key] = sorted(excl)
             _lu_remount_slip_editor()
-        if qa3.button("Exclude filtered", key=f"cl_lu_excl_filt_{cid}_{ym}"):
+        if qa3.button(
+            "Skip filtered slips",
+            key=f"cl_lu_excl_filt_{cid}_{ym}",
+            help="This month only — uncheck slips matching the filter",
+        ):
             if slip_filter:
                 for s in slips:
                     blob = " ".join([
@@ -1129,7 +1154,11 @@ def _tab_month_preview():
                 st.session_state[draft_key] = sorted(draft_excl)
                 st.session_state[excl_key] = sorted(excl)
                 _lu_remount_slip_editor()
-        if qa4.button("Include filtered", key=f"cl_lu_incl_filt_{cid}_{ym}"):
+        if qa4.button(
+            "Bill filtered slips",
+            key=f"cl_lu_incl_filt_{cid}_{ym}",
+            help="This month only — check slips matching the filter",
+        ):
             if slip_filter:
                 for s in slips:
                     blob = " ".join([
@@ -1147,10 +1176,10 @@ def _tab_month_preview():
                 _lu_remount_slip_editor()
 
         # --- Individual slips (edit freely; Apply commits) ---
-        st.markdown("#### Weighbridge slips")
+        st.markdown("##### Slip list")
         st.caption(
-            "To drop a product (e.g. tanker LPG): type its code in the filter → "
-            "**Exclude filtered**, then **Apply include selection** if you used the checkboxes."
+            "Uncheck **Include** to skip a slip this month, then click **Apply include selection**. "
+            "Example: filter `LPG` → **Skip filtered slips** → **Apply include selection**."
         )
         slip_rows = []
         for s in slips:
