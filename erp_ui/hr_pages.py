@@ -372,6 +372,7 @@ def _render_single_employee_edit_pay(
         if line_paid
         else "<span class='sep-badge sep-badge-unpaid'>Ready to pay</span>"
     )
+    join_show = str(line.get("joining_date") or "").strip()[:10] or "—"
     st.markdown(
         f"<div style='display:flex;justify-content:space-between;align-items:center;"
         f"gap:8px;margin:4px 0 10px 0;flex-wrap:wrap'>"
@@ -379,7 +380,8 @@ def _render_single_employee_edit_pay(
         f"{escape(str(line.get('employee_name') or '—'))} "
         f"<span style='color:#64748b;font-weight:600;font-size:0.9rem'>"
         f"`{escape(str(line.get('emp_code') or ''))}` · "
-        f"{escape(str(line.get('department_name') or 'Unassigned'))}</span></div>"
+        f"{escape(str(line.get('department_name') or 'Unassigned'))}"
+        f" · Joined {escape(join_show)}</span></div>"
         f"{badge}</div>",
         unsafe_allow_html=True,
     )
@@ -428,8 +430,13 @@ def _render_single_employee_edit_pay(
 
     # Default must stay inside payroll month (today may be next month).
     leave_ui_default = _clamp_in_month(leave_default or min(date.today(), period_end))
-    lw1, lw2, lw3 = st.columns([1.4, 1.2, 1.4])
-    leaving_pick = lw1.date_input(
+    lw1, lw2, lw3, lw4 = st.columns([1.3, 1.1, 1.0, 1.2])
+    lw1.markdown(
+        f"<div style='padding-top:4px'><p style='margin:0;font-size:0.8rem;color:#64748b'>Date of joining</p>"
+        f"<p style='margin:0;font-weight:700;color:#0f172a'>{escape(join_show)}</p></div>",
+        unsafe_allow_html=True,
+    )
+    leaving_pick = lw2.date_input(
         "Last working day (resign / final pay)",
         value=leave_ui_default,
         min_value=period_start,
@@ -437,12 +444,12 @@ def _render_single_employee_edit_pay(
         key=f"pr_sep_leaving_{pid}_{sel_id}",
         help="Set when the employee leaves mid-month. Salary becomes Basic ÷ days × Present (paid leave included).",
     )
-    mark_left = lw2.checkbox(
+    mark_left = lw3.checkbox(
         "Mark employment as left",
         value=(str(line.get("employment_status") or "").lower() in ("left", "resigned", "terminated")),
         key=f"pr_sep_mark_left_{pid}_{sel_id}",
     )
-    if lw3.button("Apply final settlement", key=f"pr_sep_apply_leave_{pid}_{sel_id}", use_container_width=True):
+    if lw4.button("Apply final settlement", key=f"pr_sep_apply_leave_{pid}_{sel_id}", use_container_width=True):
         try:
             payload = {
                 "leaving_date": str(leaving_pick),
@@ -1303,6 +1310,27 @@ def page_hr_employees():
         sel = st.selectbox("Select Employee", [f"{r['code']} - {r['full_name']}" for r in rows])
         eid = next(r["id"] for r in rows if sel.startswith(r["code"]))
         emp = db.get_employee_hr(eid)
+        join_raw_hdr = str(emp.get("joining_date") or "").strip()[:10]
+        leave_raw_hdr = str(emp.get("leaving_date") or "").strip()[:10]
+        svc_lbl = "—"
+        try:
+            svc_rows = db.report_employee_service(active_only=False, as_of_date=str(date.today()))
+            emp_code = str(emp.get("code") or "")
+            for sr in svc_rows or []:
+                if str(sr.get("code") or "") == emp_code:
+                    svc_lbl = str(sr.get("service") or "—")
+                    break
+        except Exception:
+            svc_lbl = "—"
+        st.markdown(
+            f"<div style='margin:2px 0 10px 0;padding:8px 12px;border-radius:8px;"
+            f"background:#f8fafc;border:1px solid #e2e8f0;font-size:0.92rem;color:#0f172a'>"
+            f"<b>Date of joining:</b> {escape(join_raw_hdr or '—')}"
+            f" &nbsp;·&nbsp; <b>Service:</b> {escape(svc_lbl)}"
+            + (f" &nbsp;·&nbsp; <b>Left:</b> {escape(leave_raw_hdr)}" if leave_raw_hdr else "")
+            + f"</div>",
+            unsafe_allow_html=True,
+        )
         if db.user_can_hr(st.session_state.user, "edit"):
             with st.form("edit_emp_hr"):
                 c1, c2 = st.columns(2)
@@ -1405,6 +1433,10 @@ def page_hr_employees():
                         + (" Employee is now **inactive**." if not active else " Employee is **active**.")
                     )
         st.markdown("**Leave Balances**")
+        st.caption(
+            f"Date of joining: **{join_raw_hdr or '—'}** · Service: **{svc_lbl}**"
+            + (f" · Left: **{leave_raw_hdr}**" if leave_raw_hdr else "")
+        )
         bals = db.get_leave_balances(eid)
         if bals:
             show = pd.DataFrame([{
@@ -4353,7 +4385,9 @@ def page_employee_ledger():
         st.info("Employee not found.")
         return
     closing = float(entries[-1]["balance"]) if entries else 0.0
+    join_d = str(emp.get("joining_date") or "").strip()[:10] or "—"
     st.subheader(f"{emp.get('full_name') or emp.get('code')}")
+    st.caption(f"Date of joining: **{join_d}** · Code: `{emp.get('code') or '—'}`")
     ctx = None
     try:
         ctx = db.get_employee_advance_context(emp["id"])
@@ -4411,8 +4445,18 @@ def page_hr_reports():
     if report == "Employee List":
         only_active = st.checkbox("Active only", value=True, key="hr_rpt_emp_active")
         df = pd.DataFrame(db.report_employee_list(active_only=only_active))
-        render_dataframe_html_table(df)
-        export_df(df, "employees", "Employee List")
+        if df.empty:
+            st.info("No employees match the filters.")
+        else:
+            show_cols = [
+                c for c in (
+                    "code", "full_name", "department_name", "designation_name",
+                    "joining_date", "service_years", "service_months", "service",
+                    "mobile", "is_active",
+                ) if c in df.columns
+            ]
+            render_dataframe_html_table(df[show_cols])
+            export_df(df, "employees", "Employee List")
     elif report == "Employee Service Report":
         c1, c2, c3 = st.columns([1.2, 1.2, 1.6])
         as_of = c1.date_input("Service as of", value=date.today(), key="hr_rpt_svc_asof")
