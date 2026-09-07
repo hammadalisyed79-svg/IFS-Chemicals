@@ -164,6 +164,153 @@ def _ensure_loading_unloading_schema(conn):
             "ALTER TABLE contract_labour_month_runs ADD COLUMN excluded_slip_ids TEXT"
         )
 
+    # Permanent product excludes for L/U (carry across months; slips hidden + not billed)
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS contract_labour_lu_exclude_products (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            contractor_id   INTEGER NOT NULL
+                REFERENCES contract_labourers(id) ON DELETE CASCADE,
+            product_code    TEXT NOT NULL,
+            product_name    TEXT,
+            product_id      INTEGER REFERENCES products(id),
+            created_by      INTEGER REFERENCES users(id),
+            created_at      TEXT DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(contractor_id, product_code)
+        )
+        """
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_cl_lu_excl_c "
+        "ON contract_labour_lu_exclude_products(contractor_id)"
+    )
+
+
+def normalize_lu_exclude_code(code) -> str:
+    """Canonical product code for L/U permanent excludes. Blank / none → (NONE)."""
+    c = str(code or "").strip().upper()
+    if not c or c in ("(NONE)", "NONE", "N/A", "-"):
+        return "(NONE)"
+    return c
+
+
+def list_lu_excluded_products(contractor_id: int) -> list[dict]:
+    from database import get_connection, rows_to_list
+
+    with get_connection() as conn:
+        apply_contract_labour(conn)
+        return rows_to_list(
+            conn.execute(
+                """
+                SELECT id, contractor_id, product_code, product_name, product_id,
+                       created_at, created_by
+                FROM contract_labour_lu_exclude_products
+                WHERE contractor_id=?
+                ORDER BY product_code
+                """,
+                (int(contractor_id),),
+            ).fetchall()
+        )
+
+
+def get_lu_excluded_product_codes(contractor_id: int) -> set[str]:
+    return {
+        normalize_lu_exclude_code(r.get("product_code"))
+        for r in list_lu_excluded_products(contractor_id)
+    }
+
+
+def add_lu_excluded_product(
+    contractor_id: int,
+    product_code: str,
+    *,
+    product_name: str | None = None,
+    product_id: int | None = None,
+    user_id=None,
+) -> dict:
+    """Add a product code to the contractor's permanent L/U exclude list."""
+    from database import get_connection, row_to_dict
+
+    code = normalize_lu_exclude_code(product_code)
+    name = (product_name or "").strip() or (
+        "(no product)" if code == "(NONE)" else code
+    )
+    pid = int(product_id) if product_id else None
+    with get_connection() as conn:
+        apply_contract_labour(conn)
+        c = conn.execute(
+            "SELECT id, payment_type FROM contract_labourers WHERE id=?",
+            (int(contractor_id),),
+        ).fetchone()
+        if not c:
+            raise ValueError("Contractor not found.")
+        if (c["payment_type"] or "").strip() != PAYMENT_LOADING_UNLOADING:
+            raise ValueError(
+                "Permanent product excludes apply only to Loading & Unloading contractors."
+            )
+        conn.execute(
+            """
+            INSERT INTO contract_labour_lu_exclude_products(
+                contractor_id, product_code, product_name, product_id, created_by
+            ) VALUES (?,?,?,?,?)
+            ON CONFLICT(contractor_id, product_code) DO UPDATE SET
+                product_name=excluded.product_name,
+                product_id=COALESCE(excluded.product_id, product_id)
+            """,
+            (int(contractor_id), code, name, pid, user_id),
+        )
+        row = conn.execute(
+            """
+            SELECT id, contractor_id, product_code, product_name, product_id,
+                   created_at, created_by
+            FROM contract_labour_lu_exclude_products
+            WHERE contractor_id=? AND product_code=?
+            """,
+            (int(contractor_id), code),
+        ).fetchone()
+        return row_to_dict(row) or {"product_code": code, "product_name": name}
+
+
+def remove_lu_excluded_product(contractor_id: int, product_code: str) -> bool:
+    """Remove one code from the permanent L/U exclude list. Returns True if deleted."""
+    from database import get_connection
+
+    code = normalize_lu_exclude_code(product_code)
+    with get_connection() as conn:
+        apply_contract_labour(conn)
+        cur = conn.execute(
+            """
+            DELETE FROM contract_labour_lu_exclude_products
+            WHERE contractor_id=? AND product_code=?
+            """,
+            (int(contractor_id), code),
+        )
+        return cur.rowcount > 0
+
+
+def add_lu_excluded_products_bulk(
+    contractor_id: int,
+    items: list[dict],
+    *,
+    user_id=None,
+) -> int:
+    """Add many {product_code, product_name?, product_id?} rows. Returns count added/updated."""
+    n = 0
+    for it in items or []:
+        code = (it.get("product_code") if isinstance(it, dict) else it) or ""
+        if not str(code).strip() and not isinstance(it, dict):
+            continue
+        add_lu_excluded_product(
+            contractor_id,
+            code if not isinstance(it, dict) else (it.get("product_code") or ""),
+            product_name=(it.get("product_name") if isinstance(it, dict) else None),
+            product_id=(it.get("product_id") if isinstance(it, dict) else None),
+            user_id=user_id,
+        )
+        n += 1
+    return n
+
+
 def _table_exists(conn, name: str) -> bool:
     return bool(
         conn.execute(
@@ -957,15 +1104,33 @@ def weighbridge_kg_for_month(
     to_date: str,
     *,
     exclude_slip_ids: list[int] | set[int] | None = None,
+    exclude_product_codes: list[str] | set[str] | None = None,
+    hide_excluded_products: bool = True,
 ) -> dict:
-    """Completed weighbridge net kg split by sale (loading) vs purchase (unloading)."""
+    """Completed weighbridge net kg split by sale (loading) vs purchase (unloading).
+
+    ``exclude_product_codes`` — permanent / filter excludes by product code
+    (``(NONE)`` for slips with no product). Those slips are never billed; when
+    ``hide_excluded_products`` is True they are omitted from ``slips``.
+    """
     excl = set(_parse_excluded_slip_ids(exclude_slip_ids))
-    slips = list_weighbridge_slips_for_month(from_date, to_date)
+    excl_codes = {
+        normalize_lu_exclude_code(c) for c in (exclude_product_codes or []) if c is not None
+    }
+    all_slips = list_weighbridge_slips_for_month(from_date, to_date)
+    # Auto-exclude slip ids that match permanent product codes
+    for s in all_slips:
+        if normalize_lu_exclude_code(s.get("product_code")) in excl_codes:
+            excl.add(int(s["id"]))
+
     sale_kg = purch_kg = 0.0
     sale_n = purch_n = 0
     sale_excl = purch_excl = 0
     products: dict[tuple, dict] = {}
-    for s in slips:
+    visible_slips = []
+    for s in all_slips:
+        code_n = normalize_lu_exclude_code(s.get("product_code"))
+        product_blocked = code_n in excl_codes
         pid_key = s.get("product_id") or 0
         pkey = (s["side"], pid_key, s["product_code"], s["product_name"])
         if pkey not in products:
@@ -980,11 +1145,12 @@ def weighbridge_kg_for_month(
                 "excluded_count": 0,
                 "excluded_kg": 0.0,
                 "slip_ids": [],
+                "permanently_excluded": product_blocked,
             }
         products[pkey]["slip_count"] += 1
         products[pkey]["net_kg"] = round(products[pkey]["net_kg"] + s["net_weight"], 4)
         products[pkey]["slip_ids"].append(s["id"])
-        if s["id"] in excl:
+        if s["id"] in excl or product_blocked:
             products[pkey]["excluded_count"] += 1
             products[pkey]["excluded_kg"] = round(
                 products[pkey]["excluded_kg"] + s["net_weight"], 4,
@@ -993,7 +1159,10 @@ def weighbridge_kg_for_month(
                 sale_excl += 1
             else:
                 purch_excl += 1
+            if not (hide_excluded_products and product_blocked):
+                visible_slips.append(s)
             continue
+        visible_slips.append(s)
         if s["side"] == "sale":
             sale_kg += s["net_weight"]
             sale_n += 1
@@ -1016,9 +1185,11 @@ def weighbridge_kg_for_month(
         "sale_excluded_count": sale_excl,
         "purchase_excluded_count": purch_excl,
         "excluded_slip_ids": sorted(excl),
+        "exclude_product_codes": sorted(excl_codes),
         "from_date": fd,
         "to_date": td,
-        "slips": slips,
+        "slips": visible_slips,
+        "slips_all": all_slips,
         "products": product_rows,
     }
 
@@ -1031,6 +1202,7 @@ def calculate_loading_unloading_month(
     loading_rate: float | None = None,
     unloading_rate: float | None = None,
     exclude_slip_ids: list[int] | set[int] | None = None,
+    exclude_product_codes: list[str] | set[str] | None = None,
 ) -> dict:
     """Month bill = sale kg × loading rate + purchase kg × unloading rate."""
     c = get_contractor(contractor_id)
@@ -1039,7 +1211,16 @@ def calculate_loading_unloading_month(
     if (c.get("payment_type") or "").strip() != PAYMENT_LOADING_UNLOADING:
         raise ValueError("Contractor is not a Loading & Unloading type.")
 
-    kg = weighbridge_kg_for_month(from_date, to_date, exclude_slip_ids=exclude_slip_ids)
+    perm = get_lu_excluded_product_codes(contractor_id)
+    if exclude_product_codes:
+        perm |= {normalize_lu_exclude_code(x) for x in exclude_product_codes}
+    kg = weighbridge_kg_for_month(
+        from_date,
+        to_date,
+        exclude_slip_ids=exclude_slip_ids,
+        exclude_product_codes=perm,
+        hide_excluded_products=True,
+    )
     load_rate = float(
         loading_rate if loading_rate is not None else (c.get("loading_rate") or 0)
     )
@@ -1112,6 +1293,7 @@ def calculate_loading_unloading_month(
         "slips": kg.get("slips") or [],
         "products": kg.get("products") or [],
         "excluded_slip_ids": list(kg.get("excluded_slip_ids") or []),
+        "exclude_product_codes": list(kg.get("exclude_product_codes") or []),
         "totals": {
             "sale_kg": sale_kg,
             "purchase_kg": purch_kg,

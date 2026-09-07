@@ -17,6 +17,7 @@ from db_contractors import (
     PAYMENT_PRODUCTION_QTY,
     PAYMENT_TYPES,
     add_contractor,
+    add_lu_excluded_product,
     calculate_contractor_month,
     clear_contractor_products,
     deactivate_contractor,
@@ -27,10 +28,14 @@ from db_contractors import (
     get_contractor_product_billing,
     get_contractor_product_ids,
     get_contractor_product_rates,
+    get_lu_excluded_product_codes,
     list_contractor_month_runs,
     list_contractors,
+    list_lu_excluded_products,
     month_bounds,
+    normalize_lu_exclude_code,
     product_ids_by_code_prefix,
+    remove_lu_excluded_product,
     save_contractor_month_run,
     save_contractor_products,
     update_contractor,
@@ -839,6 +844,201 @@ def _tab_month_preview():
         slips = list(result.get("slips") or [])
         if not slips:
             st.warning("Click **Load / refresh month** to load product and slip detail.")
+
+        # --- Permanent product exclude list (carries to future months) ---
+        with st.expander(
+            "Permanent product excludes (all months)",
+            expanded=False,
+        ):
+            st.caption(
+                "Codes on this list are **hidden and not billed** every month "
+                "(including future months). Add tanker LPG, (no product), etc. once — "
+                "they stay excluded until you remove them."
+            )
+            perm_rows = list_lu_excluded_products(cid)
+            perm_codes = {
+                normalize_lu_exclude_code(r.get("product_code")) for r in perm_rows
+            }
+            if perm_rows:
+                hlp.render_dataframe_html_table(
+                    pd.DataFrame(
+                        [
+                            {
+                                "Code": r.get("product_code"),
+                                "Name": r.get("product_name") or "",
+                            }
+                            for r in perm_rows
+                        ]
+                    )
+                )
+            else:
+                st.caption("No permanent excludes yet.")
+
+            # Codes seen in this month's slips (from result products / visible+hidden)
+            month_codes = {}
+            for s in (result.get("slips") or []) + (
+                (result.get("weighbridge") or {}).get("slips_all") or []
+            ):
+                code = normalize_lu_exclude_code(s.get("product_code"))
+                if code not in month_codes:
+                    month_codes[code] = {
+                        "product_code": code,
+                        "product_name": s.get("product_name") or code,
+                        "product_id": s.get("product_id"),
+                    }
+            for pr in (result.get("products") or []):
+                code = normalize_lu_exclude_code(pr.get("product_code"))
+                if code not in month_codes:
+                    month_codes[code] = {
+                        "product_code": code,
+                        "product_name": pr.get("product_name") or code,
+                        "product_id": pr.get("product_id"),
+                    }
+            addable = sorted(
+                [v for k, v in month_codes.items() if k not in perm_codes],
+                key=lambda x: x["product_code"],
+            )
+            pe1, pe2 = st.columns([2.2, 1])
+            add_opts = {
+                f"{a['product_code']} — {a['product_name']}": a for a in addable
+            }
+            pick_add = pe1.selectbox(
+                "Add product from this month",
+                ["—"] + list(add_opts.keys()),
+                key=f"cl_lu_perm_add_{cid}_{ym}",
+            )
+            if pe2.button(
+                "Add to exclude list",
+                key=f"cl_lu_perm_add_btn_{cid}_{ym}",
+                use_container_width=True,
+                disabled=pick_add == "—",
+            ):
+                try:
+                    item = add_opts[pick_add]
+                    add_lu_excluded_product(
+                        cid,
+                        item["product_code"],
+                        product_name=item.get("product_name"),
+                        product_id=item.get("product_id"),
+                        user_id=hlp.uid(),
+                    )
+                    # Reload month so slips disappear from the grid
+                    rates = st.session_state.get(rate_key) or {}
+                    excl = list(st.session_state.get(excl_key) or [])
+                    st.session_state["cl_prev_result"] = calculate_contractor_month(
+                        cid, fd, td,
+                        loading_rate=float(rates.get("loading") or 0),
+                        unloading_rate=float(rates.get("unloading") or 0),
+                        exclude_slip_ids=excl,
+                    )
+                    st.session_state.pop(f"cl_lu_slip_ed_{cid}_{ym}", None)
+                    st.session_state.pop(f"cl_lu_slip_seed_{cid}_{ym}", None)
+                    st.session_state.pop(f"cl_lu_excl_draft_{cid}_{ym}", None)
+                    ff.action_done(
+                        f"**{item['product_code']}** added to permanent excludes — "
+                        "hidden in this and future months."
+                    )
+                except Exception as e:
+                    st.error(str(e))
+
+            man_code = st.text_input(
+                "Or type a product code to exclude",
+                key=f"cl_lu_perm_manual_{cid}_{ym}",
+                placeholder="e.g. LPG, RM0001, or NONE for (no product)",
+            )
+            if st.button(
+                "Add typed code",
+                key=f"cl_lu_perm_manual_btn_{cid}_{ym}",
+            ):
+                try:
+                    add_lu_excluded_product(
+                        cid, man_code, user_id=hlp.uid(),
+                    )
+                    rates = st.session_state.get(rate_key) or {}
+                    excl = list(st.session_state.get(excl_key) or [])
+                    st.session_state["cl_prev_result"] = calculate_contractor_month(
+                        cid, fd, td,
+                        loading_rate=float(rates.get("loading") or 0),
+                        unloading_rate=float(rates.get("unloading") or 0),
+                        exclude_slip_ids=excl,
+                    )
+                    st.session_state.pop(f"cl_lu_slip_ed_{cid}_{ym}", None)
+                    st.session_state.pop(f"cl_lu_slip_seed_{cid}_{ym}", None)
+                    st.session_state.pop(f"cl_lu_excl_draft_{cid}_{ym}", None)
+                    ff.action_done(
+                        f"**{normalize_lu_exclude_code(man_code)}** on permanent exclude list."
+                    )
+                except Exception as e:
+                    st.error(str(e))
+
+            if perm_rows:
+                rem_opts = {
+                    f"{r.get('product_code')} — {r.get('product_name') or ''}": r.get(
+                        "product_code"
+                    )
+                    for r in perm_rows
+                }
+                r1, r2 = st.columns([2.2, 1])
+                rem_pick = r1.selectbox(
+                    "Remove from exclude list",
+                    ["—"] + list(rem_opts.keys()),
+                    key=f"cl_lu_perm_rem_{cid}_{ym}",
+                )
+                if r2.button(
+                    "Remove",
+                    key=f"cl_lu_perm_rem_btn_{cid}_{ym}",
+                    use_container_width=True,
+                    disabled=rem_pick == "—",
+                ):
+                    try:
+                        code = rem_opts[rem_pick]
+                        remove_lu_excluded_product(cid, code)
+                        rates = st.session_state.get(rate_key) or {}
+                        excl = list(st.session_state.get(excl_key) or [])
+                        st.session_state["cl_prev_result"] = calculate_contractor_month(
+                            cid, fd, td,
+                            loading_rate=float(rates.get("loading") or 0),
+                            unloading_rate=float(rates.get("unloading") or 0),
+                            exclude_slip_ids=excl,
+                        )
+                        st.session_state.pop(f"cl_lu_slip_ed_{cid}_{ym}", None)
+                        st.session_state.pop(f"cl_lu_slip_seed_{cid}_{ym}", None)
+                        st.session_state.pop(f"cl_lu_excl_draft_{cid}_{ym}", None)
+                        ff.action_done(
+                            f"**{code}** removed — will appear again after reload."
+                        )
+                    except Exception as e:
+                        st.error(str(e))
+
+            if st.button(
+                "Add (no product) to permanent excludes",
+                key=f"cl_lu_perm_none_{cid}_{ym}",
+            ):
+                try:
+                    add_lu_excluded_product(
+                        cid, "(NONE)", product_name="(no product)", user_id=hlp.uid(),
+                    )
+                    rates = st.session_state.get(rate_key) or {}
+                    excl = list(st.session_state.get(excl_key) or [])
+                    st.session_state["cl_prev_result"] = calculate_contractor_month(
+                        cid, fd, td,
+                        loading_rate=float(rates.get("loading") or 0),
+                        unloading_rate=float(rates.get("unloading") or 0),
+                        exclude_slip_ids=excl,
+                    )
+                    st.session_state.pop(f"cl_lu_slip_ed_{cid}_{ym}", None)
+                    st.session_state.pop(f"cl_lu_slip_seed_{cid}_{ym}", None)
+                    st.session_state.pop(f"cl_lu_excl_draft_{cid}_{ym}", None)
+                    ff.action_done("**(NONE)** / no-product slips permanently excluded.")
+                except Exception as e:
+                    st.error(str(e))
+
+        n_perm = len(get_lu_excluded_product_codes(cid))
+        if n_perm:
+            st.info(
+                f"**{n_perm}** product code(s) on the permanent exclude list — "
+                "hidden from this worksheet and future months."
+            )
 
         draft_key = f"cl_lu_excl_draft_{cid}_{ym}"
         seed_key = f"cl_lu_slip_seed_{cid}_{ym}"
