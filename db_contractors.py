@@ -1219,7 +1219,8 @@ def calculate_loading_unloading_month(
         to_date,
         exclude_slip_ids=exclude_slip_ids,
         exclude_product_codes=perm,
-        hide_excluded_products=True,
+        # Keep permanently blocked slips visible so users can move them back to Include
+        hide_excluded_products=False,
     )
     load_rate = float(
         loading_rate if loading_rate is not None else (c.get("loading_rate") or 0)

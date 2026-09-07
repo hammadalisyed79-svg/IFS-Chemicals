@@ -18,6 +18,7 @@ from db_contractors import (
     PAYMENT_TYPES,
     add_contractor,
     add_lu_excluded_product,
+    add_lu_excluded_products_bulk,
     calculate_contractor_month,
     clear_contractor_products,
     deactivate_contractor,
@@ -734,9 +735,12 @@ def _tab_month_preview():
                     unloading_rate=float(rates.get("unloading") or 0),
                     exclude_slip_ids=excl,
                 )
-                # Reset slip editor so Include matches current exclusions
+                # Sync exclusions (saved + permanent products) and remount lists
+                st.session_state[excl_key] = list(result.get("excluded_slip_ids") or [])
                 st.session_state.pop(f"cl_lu_slip_ed_{cid}_{ym}", None)
                 st.session_state.pop(f"cl_lu_slip_seed_{cid}_{ym}", None)
+                st.session_state.pop(f"cl_lu_excl_ed_{cid}_{ym}", None)
+                st.session_state.pop(f"cl_lu_excl_seed_{cid}_{ym}", None)
                 st.session_state.pop(f"cl_lu_excl_draft_{cid}_{ym}", None)
                 st.session_state.pop(f"cl_lu_slip_filt_prev_{cid}_{ym}", None)
             else:
@@ -834,29 +838,32 @@ def _tab_month_preview():
     if is_lu:
         st.markdown(
             "**Worksheet** — weighbridge completed slips. "
-            "Uncheck slips freely, then **Apply include selection** "
-            "(Sale/Purchase kg do not change until you apply). "
-            "Bulk Include/Exclude buttons apply immediately."
+            "**Include list** = billed this month. **Exclude list** = skipped "
+            "(and those product codes stay excluded in future months until you move them back)."
         )
         rates = st.session_state.get(rate_key) or {}
         load_rate = float(rates.get("loading") or 0)
         unload_rate = float(rates.get("unloading") or 0)
         slips = list(result.get("slips") or [])
-        if not slips:
+        if not slips and not ((result.get("weighbridge") or {}).get("slips_all")):
             st.warning("Click **Load / refresh month** to load product and slip detail.")
 
         # --- Permanent product exclude list (carries to future months) ---
         def _lu_reload_after_perm_change():
             rates_r = st.session_state.get(rate_key) or {}
             excl_r = list(st.session_state.get(excl_key) or [])
-            st.session_state["cl_prev_result"] = calculate_contractor_month(
+            refreshed = calculate_contractor_month(
                 cid, fd, td,
                 loading_rate=float(rates_r.get("loading") or 0),
                 unloading_rate=float(rates_r.get("unloading") or 0),
                 exclude_slip_ids=excl_r,
             )
+            st.session_state["cl_prev_result"] = refreshed
+            st.session_state[excl_key] = list(refreshed.get("excluded_slip_ids") or [])
             st.session_state.pop(f"cl_lu_slip_ed_{cid}_{ym}", None)
             st.session_state.pop(f"cl_lu_slip_seed_{cid}_{ym}", None)
+            st.session_state.pop(f"cl_lu_excl_ed_{cid}_{ym}", None)
+            st.session_state.pop(f"cl_lu_excl_seed_{cid}_{ym}", None)
             st.session_state.pop(f"cl_lu_excl_draft_{cid}_{ym}", None)
 
         perm_rows = list_lu_excluded_products(cid)
@@ -891,35 +898,13 @@ def _tab_month_preview():
 
         with st.expander(
             f"Always hide products (every month) · {n_perm} blocked",
-            expanded=n_perm > 0,
+            expanded=False,
         ):
-            st.markdown(
-                """
-                <div style="display:flex;flex-wrap:wrap;gap:10px 18px;align-items:flex-start;
-                            margin:0 0 12px 0;padding:10px 14px;background:#f8fafc;
-                            border:1px solid #e2e8f0;border-radius:8px;border-left:4px solid #1d4ed8">
-                  <div style="flex:1;min-width:220px">
-                    <div style="font-size:0.72rem;text-transform:uppercase;letter-spacing:0.04em;
-                                color:#64748b;font-weight:700;margin-bottom:2px">Permanent block list</div>
-                    <div style="font-size:0.9rem;color:#0f172a;line-height:1.4">
-                      Use this for products that should <b>never be billed</b> for this contractor
-                      (e.g. tanker LPG, packing film). Applies to <b>this month and all future months</b>
-                      until you unblock them. This is different from skipping individual slips below.
-                    </div>
-                  </div>
-                  <div style="min-width:100px">
-                    <div style="font-size:0.72rem;text-transform:uppercase;letter-spacing:0.04em;
-                                color:#64748b;font-weight:700;margin-bottom:2px">Blocked codes</div>
-                    <div style="font-size:1.35rem;font-weight:800;color:#0f172a;line-height:1.1">
-                """
-                + f"{n_perm}"
-                + """</div>
-                  </div>
-                </div>
-                """,
-                unsafe_allow_html=True,
+            st.caption(
+                "Usually you only need the Include / Exclude lists below. "
+                "Moving a slip to **Exclude** also blocks that product next month. "
+                "Moving it back to **Include** unblocks the product for future months."
             )
-
             if perm_rows:
                 chip_html = "".join(
                     f"<span style='display:inline-flex;align-items:center;gap:6px;"
@@ -935,9 +920,7 @@ def _tab_month_preview():
                     unsafe_allow_html=True,
                 )
             else:
-                st.caption(
-                    "No products blocked yet — use the tab below for tanker LPG, packing film, or (no product)."
-                )
+                st.caption("No products blocked yet.")
 
             tab_add, tab_remove = st.tabs([
                 "Always hide a product",
@@ -972,7 +955,7 @@ def _tab_month_preview():
                         )
                         _lu_reload_after_perm_change()
                         ff.action_done(
-                            f"**{item['product_code']}** will stay hidden every month."
+                            f"**{item['product_code']}** will stay on the Exclude list every month."
                         )
                     except Exception as e:
                         st.error(str(e))
@@ -996,7 +979,7 @@ def _tab_month_preview():
                         add_lu_excluded_product(cid, man_code, user_id=hlp.uid())
                         _lu_reload_after_perm_change()
                         ff.action_done(
-                            f"**{normalize_lu_exclude_code(man_code)}** will stay hidden every month."
+                            f"**{normalize_lu_exclude_code(man_code)}** will stay on the Exclude list every month."
                         )
                     except Exception as e:
                         st.error(str(e))
@@ -1013,7 +996,7 @@ def _tab_month_preview():
                             cid, "(NONE)", product_name="(no product)", user_id=hlp.uid(),
                         )
                         _lu_reload_after_perm_change()
-                        ff.action_done("**(NONE)** will stay hidden every month.")
+                        ff.action_done("**(NONE)** will stay on the Exclude list every month.")
                     except Exception as e:
                         st.error(str(e))
 
@@ -1045,155 +1028,35 @@ def _tab_month_preview():
                             remove_lu_excluded_product(cid, code)
                             _lu_reload_after_perm_change()
                             ff.action_done(
-                                f"**{code}** unblocked — slips will show again after reload."
+                                f"**{code}** unblocked — slips move to Include after reload."
                             )
                         except Exception as e:
                             st.error(str(e))
 
-        draft_key = f"cl_lu_excl_draft_{cid}_{ym}"
-        seed_key = f"cl_lu_slip_seed_{cid}_{ym}"
-        ed_key = f"cl_lu_slip_ed_{cid}_{ym}"
+        incl_seed_key = f"cl_lu_slip_seed_{cid}_{ym}"
+        incl_ed_key = f"cl_lu_slip_ed_{cid}_{ym}"
+        excl_seed_key = f"cl_lu_excl_seed_{cid}_{ym}"
+        excl_ed_key = f"cl_lu_excl_ed_{cid}_{ym}"
         filt_prev_key = f"cl_lu_slip_filt_prev_{cid}_{ym}"
-        if draft_key not in st.session_state:
-            st.session_state[draft_key] = list(st.session_state.get(excl_key) or [])
 
-        def _lu_remount_slip_editor():
-            st.session_state.pop(ed_key, None)
-            st.session_state.pop(seed_key, None)
+        def _lu_remount_slip_lists():
+            st.session_state.pop(incl_ed_key, None)
+            st.session_state.pop(incl_seed_key, None)
+            st.session_state.pop(excl_ed_key, None)
+            st.session_state.pop(excl_seed_key, None)
 
-        def _lu_excl_from_edited(edited_df, all_slips, base_excl):
-            """Merge visible Include ticks into exclusion set (keep hidden exclusions)."""
-            out = set(int(x) for x in (base_excl or []))
-            if edited_df is None or getattr(edited_df, "empty", True):
-                return out
-            visible = set()
-            for _, row in edited_df.iterrows():
-                sid = int(row["_id"])
-                visible.add(sid)
-                if bool(row.get("Include")):
-                    out.discard(sid)
-                else:
-                    out.add(sid)
-            for s in all_slips:
-                sid = int(s["id"])
-                if sid not in visible and sid in set(int(x) for x in (base_excl or [])):
-                    out.add(sid)
-            return out
-
-        excl = set(int(x) for x in (st.session_state.get(excl_key) or []))
-        draft_excl = set(int(x) for x in (st.session_state.get(draft_key) or []))
-
-        st.markdown("#### This month only — which slips to bill")
-        st.caption(
-            "These buttons and checkboxes affect **only this month’s worksheet**. "
-            "They do not permanently block a product. For forever hide, use "
-            "**Always hide products** above."
-        )
-
-        slip_filter = st.text_input(
-            "Filter slips (product / vehicle / party / slip no)",
-            key=f"cl_lu_slip_filter_{cid}_{ym}",
-            placeholder="e.g. LPG, SILICATE, tanker plate…",
-        ).strip().lower()
-
-        # Filter change: keep pending ticks, remount visible rows
-        if st.session_state.get(filt_prev_key) != slip_filter:
-            prev_ed = st.session_state.get(ed_key)
-            if prev_ed is not None:
-                try:
-                    ed_df = prev_ed if hasattr(prev_ed, "iterrows") else pd.DataFrame(prev_ed)
-                    draft_excl = _lu_excl_from_edited(ed_df, slips, draft_excl)
-                    st.session_state[draft_key] = sorted(draft_excl)
-                except Exception:
-                    pass
-            st.session_state[filt_prev_key] = slip_filter
-            _lu_remount_slip_editor()
-
-        qa1, qa2, qa3, qa4 = st.columns(4)
-        if qa1.button(
-            "Bill all slips",
-            key=f"cl_lu_incl_all_{cid}_{ym}",
-            help="This month only — clear all slip skips",
-        ):
-            draft_excl = set()
-            excl = set()
-            st.session_state[draft_key] = []
-            st.session_state[excl_key] = []
-            _lu_remount_slip_editor()
-        if qa2.button(
-            "Skip no-product slips",
-            key=f"cl_lu_excl_none_{cid}_{ym}",
-            help="This month only — uncheck slips with no product",
-        ):
-            add = {
-                int(s["id"]) for s in slips
-                if (s.get("product_code") or "(none)") == "(none)"
-            }
-            draft_excl |= add
-            excl |= add
-            st.session_state[draft_key] = sorted(draft_excl)
-            st.session_state[excl_key] = sorted(excl)
-            _lu_remount_slip_editor()
-        if qa3.button(
-            "Skip filtered slips",
-            key=f"cl_lu_excl_filt_{cid}_{ym}",
-            help="This month only — uncheck slips matching the filter",
-        ):
-            if slip_filter:
-                for s in slips:
-                    blob = " ".join([
-                        str(s.get("document_no") or ""),
-                        str(s.get("product_code") or ""),
-                        str(s.get("product_name") or ""),
-                        str(s.get("party_name") or ""),
-                        str(s.get("vehicle_no") or ""),
-                    ]).lower()
-                    if slip_filter in blob:
-                        draft_excl.add(int(s["id"]))
-                        excl.add(int(s["id"]))
-                st.session_state[draft_key] = sorted(draft_excl)
-                st.session_state[excl_key] = sorted(excl)
-                _lu_remount_slip_editor()
-        if qa4.button(
-            "Bill filtered slips",
-            key=f"cl_lu_incl_filt_{cid}_{ym}",
-            help="This month only — check slips matching the filter",
-        ):
-            if slip_filter:
-                for s in slips:
-                    blob = " ".join([
-                        str(s.get("document_no") or ""),
-                        str(s.get("product_code") or ""),
-                        str(s.get("product_name") or ""),
-                        str(s.get("party_name") or ""),
-                        str(s.get("vehicle_no") or ""),
-                    ]).lower()
-                    if slip_filter in blob:
-                        draft_excl.discard(int(s["id"]))
-                        excl.discard(int(s["id"]))
-                st.session_state[draft_key] = sorted(draft_excl)
-                st.session_state[excl_key] = sorted(excl)
-                _lu_remount_slip_editor()
-
-        # --- Individual slips (edit freely; Apply commits) ---
-        st.markdown("##### Slip list")
-        st.caption(
-            "Uncheck **Include** to skip a slip this month, then click **Apply include selection**. "
-            "Example: filter `LPG` → **Skip filtered slips** → **Apply include selection**."
-        )
-        slip_rows = []
-        for s in slips:
-            blob = " ".join([
+        def _lu_slip_blob(s):
+            return " ".join([
                 str(s.get("document_no") or ""),
                 str(s.get("product_code") or ""),
                 str(s.get("product_name") or ""),
                 str(s.get("party_name") or ""),
                 str(s.get("vehicle_no") or ""),
             ]).lower()
-            if slip_filter and slip_filter not in blob:
-                continue
-            slip_rows.append({
-                "Include": int(s["id"]) not in draft_excl,
+
+        def _lu_slip_row(s, *, select_default=False):
+            return {
+                "Select": bool(select_default),
                 "Side": s.get("side_label") or s.get("side"),
                 "Date": s.get("slip_date"),
                 "Slip": s.get("document_no"),
@@ -1203,66 +1066,255 @@ def _tab_month_preview():
                 "Vehicle": s.get("vehicle_no"),
                 "Net kg": float(s.get("net_weight") or 0),
                 "_id": int(s["id"]),
-            })
-        edited_slips = None
-        if slip_rows:
-            if seed_key not in st.session_state:
-                st.session_state[seed_key] = pd.DataFrame(slip_rows)
-            edited_slips = st.data_editor(
-                st.session_state[seed_key],
+                "_code": normalize_lu_exclude_code(s.get("product_code")),
+            }
+
+        def _lu_selected_ids(edited_df):
+            ids = []
+            if edited_df is None or getattr(edited_df, "empty", True):
+                return ids
+            for _, row in edited_df.iterrows():
+                if bool(row.get("Select")):
+                    ids.append(int(row["_id"]))
+            return ids
+
+        def _lu_col_config():
+            return {
+                "Select": st.column_config.CheckboxColumn(
+                    "Select",
+                    help="Tick rows, then use the button under the list",
+                    default=False,
+                ),
+                "Side": st.column_config.TextColumn("Side", width="medium"),
+                "Date": st.column_config.TextColumn("Date", width="small"),
+                "Slip": st.column_config.TextColumn("Slip", width="medium"),
+                "Code": st.column_config.TextColumn("Code", width="small"),
+                "Product": st.column_config.TextColumn("Product", width="large"),
+                "Party": st.column_config.TextColumn("Party", width="medium"),
+                "Vehicle": st.column_config.TextColumn("Vehicle", width="small"),
+                "Net kg": st.column_config.NumberColumn("Net kg", format="%.2f"),
+                "_id": None,
+                "_code": None,
+            }
+
+        # Keep excl_key aligned with calc (includes permanent product auto-excludes)
+        excl = set(int(x) for x in (
+            st.session_state.get(excl_key)
+            or result.get("excluded_slip_ids")
+            or []
+        ))
+        st.session_state[excl_key] = sorted(excl)
+
+        slip_filter = st.text_input(
+            "Filter slips (product / vehicle / party / slip no)",
+            key=f"cl_lu_slip_filter_{cid}_{ym}",
+            placeholder="e.g. LPG, SILICATE, tanker plate…",
+        ).strip().lower()
+
+        if st.session_state.get(filt_prev_key) != slip_filter:
+            st.session_state[filt_prev_key] = slip_filter
+            _lu_remount_slip_lists()
+
+        qa1, qa2, qa3, qa4 = st.columns(4)
+        if qa1.button(
+            "Exclude all filtered",
+            key=f"cl_lu_excl_filt_{cid}_{ym}",
+            help="Move filtered Include slips to Exclude (blocks those products next months too)",
+        ):
+            codes_to_block = []
+            for s in slips:
+                if slip_filter and slip_filter not in _lu_slip_blob(s):
+                    continue
+                if int(s["id"]) in excl:
+                    continue
+                excl.add(int(s["id"]))
+                codes_to_block.append({
+                    "product_code": s.get("product_code"),
+                    "product_name": s.get("product_name"),
+                    "product_id": s.get("product_id"),
+                })
+            if codes_to_block:
+                add_lu_excluded_products_bulk(cid, codes_to_block, user_id=hlp.uid())
+            st.session_state[excl_key] = sorted(excl)
+            _lu_reload_after_perm_change()
+            st.rerun()
+        if qa2.button(
+            "Include all filtered",
+            key=f"cl_lu_incl_filt_{cid}_{ym}",
+            help="Move filtered Exclude slips to Include (unblocks those products for future months)",
+        ):
+            codes_to_free = set()
+            for s in slips:
+                if slip_filter and slip_filter not in _lu_slip_blob(s):
+                    continue
+                sid = int(s["id"])
+                if sid in excl:
+                    excl.discard(sid)
+                    codes_to_free.add(normalize_lu_exclude_code(s.get("product_code")))
+            for code in codes_to_free:
+                remove_lu_excluded_product(cid, code)
+            st.session_state[excl_key] = sorted(excl)
+            _lu_reload_after_perm_change()
+            st.rerun()
+        if qa3.button(
+            "Exclude no-product",
+            key=f"cl_lu_excl_none_{cid}_{ym}",
+            help="Move (no product) slips to Exclude and block them every month",
+        ):
+            for s in slips:
+                if normalize_lu_exclude_code(s.get("product_code")) == "(NONE)":
+                    excl.add(int(s["id"]))
+            add_lu_excluded_product(
+                cid, "(NONE)", product_name="(no product)", user_id=hlp.uid(),
+            )
+            st.session_state[excl_key] = sorted(excl)
+            _lu_reload_after_perm_change()
+            st.rerun()
+        if qa4.button(
+            "Include everything",
+            key=f"cl_lu_incl_all_{cid}_{ym}",
+            help="Clear this month’s excludes and unblock all permanent product codes",
+        ):
+            for code in list(get_lu_excluded_product_codes(cid)):
+                remove_lu_excluded_product(cid, code)
+            st.session_state[excl_key] = []
+            _lu_reload_after_perm_change()
+            st.rerun()
+
+        incl_rows = []
+        excl_rows = []
+        for s in slips:
+            if slip_filter and slip_filter not in _lu_slip_blob(s):
+                continue
+            row = _lu_slip_row(s)
+            if int(s["id"]) in excl:
+                excl_rows.append(row)
+            else:
+                incl_rows.append(row)
+
+        def _lu_seed_ids(seed_df):
+            if seed_df is None or getattr(seed_df, "empty", True):
+                return set()
+            try:
+                return {int(x) for x in seed_df["_id"].tolist()}
+            except Exception:
+                return set()
+
+        want_incl = {int(r["_id"]) for r in incl_rows}
+        want_excl = {int(r["_id"]) for r in excl_rows}
+        if (
+            _lu_seed_ids(st.session_state.get(incl_seed_key)) != want_incl
+            or _lu_seed_ids(st.session_state.get(excl_seed_key)) != want_excl
+        ):
+            _lu_remount_slip_lists()
+
+        empty_cols = [
+            "Select", "Side", "Date", "Slip", "Code", "Product", "Party",
+            "Vehicle", "Net kg", "_id", "_code",
+        ]
+
+        st.markdown(
+            f"##### Include list — billed this month ({len(incl_rows)})"
+        )
+        st.caption(
+            "Tick slips → **Move to Exclude**. Those product codes stay excluded in "
+            "following months until you move them back to Include."
+        )
+        if incl_seed_key not in st.session_state:
+            st.session_state[incl_seed_key] = (
+                pd.DataFrame(incl_rows) if incl_rows else pd.DataFrame(columns=empty_cols)
+            )
+        edited_incl = None
+        if not st.session_state[incl_seed_key].empty:
+            edited_incl = st.data_editor(
+                st.session_state[incl_seed_key],
                 hide_index=True,
                 use_container_width=True,
                 num_rows="fixed",
-                height=min(480, 48 + 35 * min(len(st.session_state[seed_key]), 12)),
+                height=min(360, 48 + 35 * min(len(st.session_state[incl_seed_key]), 10)),
                 disabled=[
                     "Side", "Date", "Slip", "Code", "Product", "Party", "Vehicle",
-                    "Net kg", "_id",
+                    "Net kg", "_id", "_code",
                 ],
-                column_config={
-                    "Include": st.column_config.CheckboxColumn(
-                        "Include",
-                        help="Uncheck freely, then click Apply include selection",
-                        default=True,
-                    ),
-                    "Side": st.column_config.TextColumn("Side", width="medium"),
-                    "Date": st.column_config.TextColumn("Date", width="small"),
-                    "Slip": st.column_config.TextColumn("Slip", width="medium"),
-                    "Code": st.column_config.TextColumn("Code", width="small"),
-                    "Product": st.column_config.TextColumn("Product", width="large"),
-                    "Party": st.column_config.TextColumn("Party", width="medium"),
-                    "Vehicle": st.column_config.TextColumn("Vehicle", width="small"),
-                    "Net kg": st.column_config.NumberColumn("Net kg", format="%.2f"),
-                    "_id": None,
-                },
-                key=ed_key,
+                column_config=_lu_col_config(),
+                key=incl_ed_key,
             )
-            pending_excl = _lu_excl_from_edited(edited_slips, slips, draft_excl)
-            pending = pending_excl != excl
-            ap1, ap2 = st.columns([1.4, 2.6])
-            if ap1.button(
-                "Apply include selection",
+            if st.button(
+                "Move selected to Exclude list",
                 type="primary",
-                key=f"cl_lu_apply_incl_{cid}_{ym}",
-                use_container_width=True,
+                key=f"cl_lu_move_excl_{cid}_{ym}",
             ):
-                st.session_state[draft_key] = sorted(pending_excl)
-                st.session_state[excl_key] = sorted(pending_excl)
-                _lu_remount_slip_editor()
-                st.rerun()
-            if pending:
-                ap2.warning(
-                    "Include ticks changed — click **Apply include selection** "
-                    "to update Sale/Purchase kg and Gross."
-                )
-            else:
-                ap2.caption("Selection matches billed totals. Uncheck slips, then Apply.")
-            # Keep draft aligned with editor for filter remounts
-            st.session_state[draft_key] = sorted(pending_excl)
-        elif slips:
-            st.caption("No slips match the filter.")
+                sel_ids = set(_lu_selected_ids(edited_incl))
+                if not sel_ids:
+                    st.warning("Tick at least one slip in the Include list.")
+                else:
+                    codes_bulk = []
+                    for s in slips:
+                        if int(s["id"]) in sel_ids:
+                            excl.add(int(s["id"]))
+                            codes_bulk.append({
+                                "product_code": s.get("product_code"),
+                                "product_name": s.get("product_name"),
+                                "product_id": s.get("product_id"),
+                            })
+                    if codes_bulk:
+                        add_lu_excluded_products_bulk(cid, codes_bulk, user_id=hlp.uid())
+                    st.session_state[excl_key] = sorted(excl)
+                    _lu_reload_after_perm_change()
+                    st.rerun()
         else:
-            st.caption("No slips to list.")
+            st.caption("No included slips" + (" match the filter." if slip_filter else "."))
 
+        st.markdown(
+            f"##### Exclude list — not billed ({len(excl_rows)})"
+        )
+        st.caption(
+            "Products here also start excluded next month. "
+            "Tick slips → **Move to Include** to bill them again (and unblock for future months)."
+        )
+        if excl_seed_key not in st.session_state:
+            st.session_state[excl_seed_key] = (
+                pd.DataFrame(excl_rows) if excl_rows else pd.DataFrame(columns=empty_cols)
+            )
+        edited_excl = None
+        if not st.session_state[excl_seed_key].empty:
+            edited_excl = st.data_editor(
+                st.session_state[excl_seed_key],
+                hide_index=True,
+                use_container_width=True,
+                num_rows="fixed",
+                height=min(360, 48 + 35 * min(len(st.session_state[excl_seed_key]), 10)),
+                disabled=[
+                    "Side", "Date", "Slip", "Code", "Product", "Party", "Vehicle",
+                    "Net kg", "_id", "_code",
+                ],
+                column_config=_lu_col_config(),
+                key=excl_ed_key,
+            )
+            if st.button(
+                "Move selected to Include list",
+                type="primary",
+                key=f"cl_lu_move_incl_{cid}_{ym}",
+            ):
+                sel_ids = set(_lu_selected_ids(edited_excl))
+                if not sel_ids:
+                    st.warning("Tick at least one slip in the Exclude list.")
+                else:
+                    codes_free = set()
+                    for s in slips:
+                        if int(s["id"]) in sel_ids:
+                            excl.discard(int(s["id"]))
+                            codes_free.add(normalize_lu_exclude_code(s.get("product_code")))
+                    for code in codes_free:
+                        remove_lu_excluded_product(cid, code)
+                    st.session_state[excl_key] = sorted(excl)
+                    _lu_reload_after_perm_change()
+                    st.rerun()
+        else:
+            st.caption("No excluded slips" + (" match the filter." if slip_filter else "."))
+
+        # Ensure save path uses current exclusions
+        st.session_state[excl_key] = sorted(excl)
         # Recalculate billed kg from committed inclusions only
         sale_kg = purch_kg = 0.0
         sale_n = purch_n = 0
