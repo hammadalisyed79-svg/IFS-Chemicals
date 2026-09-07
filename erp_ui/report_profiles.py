@@ -108,7 +108,15 @@ REPORT_COLUMNS: dict[str, list[str]] = {
         "line_no", "voucher_no", "voucher_date", "party", "amount",
         "status", "user", "particulars", "time", "module", "voucher_type", "action",
     ],
-    "Employee List": ["code", "full_name", "department_name", "designation_name", "phone", "joining_date", "is_active"],
+    "Employee List": [
+        "code", "full_name", "department_name", "designation_name", "mobile",
+        "joining_date", "service_years", "service_months", "service", "is_active",
+    ],
+    "Employee Service Report": [
+        "code", "full_name", "department_name", "designation_name",
+        "joining_date", "leaving_date", "service_years", "service_months",
+        "service_total_months", "service", "employment_status", "basic_salary", "is_active",
+    ],
     "Employee Ledger": ["date", "ref", "description", "debit", "credit", "balance"],
     "Attendance Report": ["att_date", "emp_code", "employee_name", "status", "check_in", "check_out", "overtime_hrs"],
     "Payroll Register": [

@@ -164,7 +164,12 @@ REPORT_CATALOG = {
         ),
     ],
     "HR & Payroll": [
-        _r("Employee List", "Active employees master.", date=False),
+        _r("Employee List", "Employees with joining date and service tenure.", date=False),
+        _r(
+            "Employee Service Report",
+            "Joining date, leaving date, service years / months (as of a chosen date).",
+            date=False,
+        ),
         _r("Employee Ledger", "Advances, loans, payroll per employee.", employee=True, party_required="employee"),
         _r("Attendance Report", "Daily attendance summary.", employee=True),
         _r("Overtime Report", "Overtime hours and amounts."),
@@ -1369,6 +1374,8 @@ def _run_report(report, fd, td, cid, sid, pid, wid, eid, payroll_id=None, gf=Non
 
     if report == "Employee List":
         return pd.DataFrame(db.report_employee_list())
+    if report == "Employee Service Report":
+        return pd.DataFrame(db.report_employee_service(active_only=False, as_of_date=str(td) if td else None))
     if report == "Employee Ledger":
         if not eid:
             st.warning("Select an employee for Employee Ledger.")

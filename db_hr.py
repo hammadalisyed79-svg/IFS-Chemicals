@@ -1,7 +1,7 @@
 """IFS Chemicals ERP - HR & Payroll module."""
 
 import calendar
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 
 SCHEMA_HR_PATH = Path(__file__).parent / "schema_hr.sql"
@@ -4173,7 +4173,90 @@ def reimburse_expense_claim(claim_id, user_id, payment_mode="cash"):
 
 # ---------- HR Reports ----------
 def report_employee_list(active_only=True):
-    return get_employees_hr(active_only)
+    """Active employee master (includes joining date + service tenure)."""
+    return report_employee_service(active_only=active_only)
+
+
+def _iso_date_or_none(raw):
+    s = str(raw or "").strip()[:10]
+    if not s:
+        return None
+    try:
+        y, m, d = int(s[:4]), int(s[5:7]), int(s[8:10])
+        return date(y, m, d)
+    except (TypeError, ValueError):
+        return None
+
+
+def _service_ym(join_d: date, as_of: date) -> tuple[int, int, int]:
+    """Return (years, months, total_months) from join_d to as_of inclusive of calendar span."""
+    if as_of < join_d:
+        return 0, 0, 0
+    total_months = (as_of.year - join_d.year) * 12 + (as_of.month - join_d.month)
+    if as_of.day < join_d.day:
+        total_months -= 1
+    if total_months < 0:
+        total_months = 0
+    return total_months // 12, total_months % 12, total_months
+
+
+def report_employee_service(active_only=True, as_of_date=None, department_id=None):
+    """Employee joining / service tenure report.
+
+    Service is measured to ``as_of_date`` (default today), or to leaving_date when
+    the employee has already left (whichever is earlier).
+    """
+    as_of = _iso_date_or_none(as_of_date) or date.today()
+    rows = get_employees_hr(active_only=False)
+    out = []
+    for r in rows or []:
+        if active_only and not r.get("is_active"):
+            continue
+        if department_id is not None and int(r.get("department_id") or 0) != int(department_id):
+            continue
+        join_d = _iso_date_or_none(r.get("joining_date"))
+        leave_d = _iso_date_or_none(r.get("leaving_date"))
+        end_d = as_of
+        if leave_d and leave_d < end_d:
+            end_d = leave_d
+        if join_d:
+            years, months, total_m = _service_ym(join_d, end_d)
+            if years and months:
+                service_lbl = f"{years} year{'s' if years != 1 else ''} {months} month{'s' if months != 1 else ''}"
+            elif years:
+                service_lbl = f"{years} year{'s' if years != 1 else ''}"
+            elif months:
+                service_lbl = f"{months} month{'s' if months != 1 else ''}"
+            else:
+                service_lbl = "Under 1 month"
+        else:
+            years = months = total_m = None
+            service_lbl = "—"
+        out.append({
+            "code": r.get("code"),
+            "full_name": r.get("full_name"),
+            "department_name": r.get("department_name") or r.get("department") or "—",
+            "designation_name": r.get("designation_name") or r.get("designation") or "—",
+            "mobile": r.get("mobile") or r.get("phone") or "—",
+            "joining_date": str(join_d) if join_d else "",
+            "leaving_date": str(leave_d) if leave_d else "",
+            "service_years": years if years is not None else "",
+            "service_months": months if months is not None else "",
+            "service_total_months": total_m if total_m is not None else "",
+            "service": service_lbl,
+            "employment_status": r.get("employment_status") or ("active" if r.get("is_active") else "inactive"),
+            "basic_salary": float(r.get("basic_salary") or 0),
+            "is_active": "Active" if r.get("is_active") else "Inactive",
+            "as_of": str(end_d),
+        })
+    out.sort(
+        key=lambda x: (
+            str(x.get("department_name") or ""),
+            str(x.get("full_name") or ""),
+            str(x.get("code") or ""),
+        )
+    )
+    return out
 
 
 def report_attendance(from_date, to_date, employee_id=None):

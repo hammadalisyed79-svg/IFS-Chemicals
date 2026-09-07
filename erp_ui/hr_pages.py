@@ -1188,9 +1188,11 @@ def page_hr_employees():
             )
             ths = "".join(
                 f"<th>{h}</th>"
-                for h in ("Department", "Code", "Name", "Designation", "Joining", "Mobile", "Status")
+                for h in ("Department", "Code", "Name", "Designation", "Joining", "Service", "Mobile", "Status")
             )
             body = []
+            svc_all = db.report_employee_service(active_only=False)
+            svc_by_code = {str(r.get("code") or ""): r for r in svc_all}
             for r in rows:
                 active = bool(r.get("is_active"))
                 badge = (
@@ -1199,6 +1201,7 @@ def page_hr_employees():
                     else '<span class="inv-badge inv-badge-cancelled">Inactive</span>'
                 )
                 join_d = str(r.get("joining_date") or "").strip()[:10] or "—"
+                svc = (svc_by_code.get(str(r.get("code") or "")) or {}).get("service") or "—"
                 body.append(
                     "<tr>"
                     f"<td>{escape(str(r.get('department_name') or '—'))}</td>"
@@ -1206,6 +1209,7 @@ def page_hr_employees():
                     f"<td>{escape(str(r.get('full_name') or ''))}</td>"
                     f"<td>{escape(str(r.get('designation_name') or '—'))}</td>"
                     f"<td>{escape(join_d)}</td>"
+                    f"<td>{escape(str(svc))}</td>"
                     f"<td>{escape(str(r.get('mobile') or '—'))}</td>"
                     f"<td class='txn-status-cell'>{badge}</td>"
                     "</tr>"
@@ -1215,10 +1219,19 @@ def page_hr_employees():
                 f"<thead><tr>{ths}</tr></thead><tbody>{''.join(body)}</tbody></table></div>",
                 unsafe_allow_html=True,
             )
-            cols = ["department_name", "code", "full_name", "father_name", "cnic", "designation_name",
-                    "mobile", "joining_date", "employment_status", "basic_salary", "is_active"]
-            df = pd.DataFrame(rows)[[c for c in cols if c in rows[0]]]
-            export_df(df, "employee_list")
+            cols = [
+                "code", "full_name", "department_name", "designation_name",
+                "joining_date", "service_years", "service_months", "service",
+                "mobile", "employment_status", "basic_salary", "is_active",
+            ]
+            export_rows = [
+                svc_by_code[str(r.get("code") or "")]
+                for r in rows
+                if str(r.get("code") or "") in svc_by_code
+            ]
+            df = pd.DataFrame(export_rows)
+            df = df[[c for c in cols if c in df.columns]]
+            export_df(df, "employee_list", "Employee List")
         else:
             st.markdown(
                 '<div class="erp-empty-state"><p>No employees yet.</p></div>',
@@ -4388,7 +4401,7 @@ def page_hr_reports():
     require_hr("view")
     std_page_header("Reports Center", title="HR Reports", status="register", status_kind="shell")
     report = st.selectbox("Report", [
-        "Employee List", "Employee Ledger", "Attendance Report", "Leave Report", "Overtime Report",
+        "Employee List", "Employee Service Report", "Employee Ledger", "Attendance Report", "Leave Report", "Overtime Report",
         "Payroll Register", "Department Salary Cost", "Outstanding Advances",
         "Outstanding Loans", "Employee History",
     ])
@@ -4396,9 +4409,39 @@ def page_hr_reports():
         page_employee_ledger()
         return
     if report == "Employee List":
-        df = pd.DataFrame(db.report_employee_list())
+        only_active = st.checkbox("Active only", value=True, key="hr_rpt_emp_active")
+        df = pd.DataFrame(db.report_employee_list(active_only=only_active))
         render_dataframe_html_table(df)
-        export_df(df, "employees")
+        export_df(df, "employees", "Employee List")
+    elif report == "Employee Service Report":
+        c1, c2, c3 = st.columns([1.2, 1.2, 1.6])
+        as_of = c1.date_input("Service as of", value=date.today(), key="hr_rpt_svc_asof")
+        only_active = c2.checkbox("Active only", value=True, key="hr_rpt_svc_active")
+        depts = _dept_opts()
+        dept_lbl = c3.selectbox(
+            "Department",
+            ["All departments"] + list(depts.keys()),
+            key="hr_rpt_svc_dept",
+        )
+        dept_id = None if dept_lbl == "All departments" else depts.get(dept_lbl)
+        rows = db.report_employee_service(
+            active_only=only_active,
+            as_of_date=str(as_of),
+            department_id=dept_id,
+        )
+        df = pd.DataFrame(rows)
+        if df.empty:
+            st.info("No employees match the filters.")
+        else:
+            show_cols = [
+                c for c in (
+                    "code", "full_name", "department_name", "designation_name",
+                    "joining_date", "leaving_date", "service_years", "service_months",
+                    "service", "employment_status", "basic_salary", "is_active",
+                ) if c in df.columns
+            ]
+            render_dataframe_html_table(df[show_cols])
+            export_df(df, "employee_service", "Employee Service Report")
     elif report == "Attendance Report":
         c1, c2 = st.columns(2)
         fd, td = c1.date_input("From", value=date.today().replace(day=1)), c2.date_input("To", value=date.today())
