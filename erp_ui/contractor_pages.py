@@ -943,40 +943,12 @@ def _tab_month_preview():
                 st.session_state[excl_key] = sorted(excl)
                 _lu_remount_slip_editor()
 
-        # --- Product summary (committed exclusions only) ---
-        st.markdown("#### Products this month")
-        if products:
-            prod_view = []
-            for pr in products:
-                ids = [int(x) for x in (pr.get("slip_ids") or [])]
-                ex_kg = sum(
-                    float(s.get("net_weight") or 0)
-                    for s in slips
-                    if int(s["id"]) in ids and int(s["id"]) in excl
-                )
-                tot = float(pr.get("net_kg") or 0)
-                inc = round(tot - ex_kg, 4)
-                ex_n = sum(1 for sid in ids if sid in excl)
-                prod_view.append({
-                    "Side": pr.get("side_label") or pr.get("side"),
-                    "Code": pr.get("product_code"),
-                    "Product": pr.get("product_name"),
-                    "Slips": int(pr.get("slip_count") or 0),
-                    "Included": int(pr.get("slip_count") or 0) - ex_n,
-                    "Total kg": tot,
-                    "Included kg": inc,
-                    "Excluded kg": round(ex_kg, 4),
-                })
-            hlp.render_dataframe_html_table(pd.DataFrame(prod_view))
-            st.caption(
-                "To drop a product (e.g. tanker LPG): type its code in the filter → "
-                "**Exclude filtered**. Or uncheck slips below and **Apply include selection**."
-            )
-        else:
-            st.caption("No completed weighbridge slips in this month.")
-
         # --- Individual slips (edit freely; Apply commits) ---
         st.markdown("#### Weighbridge slips")
+        st.caption(
+            "To drop a product (e.g. tanker LPG): type its code in the filter → "
+            "**Exclude filtered**, then **Apply include selection** if you used the checkboxes."
+        )
         slip_rows = []
         for s in slips:
             blob = " ".join([
