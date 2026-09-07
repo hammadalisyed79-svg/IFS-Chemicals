@@ -100,7 +100,10 @@ def _tab_payment_proofs(user: dict):
             data = p.read_bytes()
             ext = p.suffix.lower()
             if ext in (".png", ".jpg", ".jpeg", ".webp", ".gif"):
-                st.image(data, caption=p.name, use_container_width=True)
+                try:
+                    st.image(data, caption=p.name, use_container_width=True)
+                except TypeError:
+                    st.image(data, caption=p.name, use_column_width=True)
             else:
                 st.download_button(
                     "Download slip",
