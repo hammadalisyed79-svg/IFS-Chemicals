@@ -687,7 +687,91 @@ def _parse_doc_number(document_no):
         return int(digits) if digits else None
 
 
+def _si_period_ym(doc_date=None) -> str:
+    """Calendar period for sales invoice numbers: YYYYMM."""
+    from datetime import date as _date
+
+    raw = str(doc_date or "").strip()[:10]
+    if raw:
+        try:
+            parts = raw.replace("/", "-").split("-")
+            y, m = int(parts[0]), int(parts[1])
+            if y >= 100 and 1 <= m <= 12:
+                return f"{y:04d}{m:02d}"
+        except (TypeError, ValueError, IndexError):
+            pass
+    today = _date.today()
+    return f"{today.year:04d}{today.month:02d}"
+
+
+def _parse_si_yyyymm_number(document_no):
+    """Return (YYYYMM, seq) for new-format SI numbers like 20260900001; else None."""
+    doc = str(document_no or "").strip()
+    if len(doc) == 11 and doc.isdigit():
+        yyyymm, seq_s = doc[:6], doc[6:]
+        try:
+            y, m = int(yyyymm[:4]), int(yyyymm[4:6])
+            if y >= 2000 and 1 <= m <= 12:
+                return yyyymm, int(seq_s)
+        except (TypeError, ValueError):
+            return None
+    return None
+
+
+def is_sales_invoice_document_no(document_no) -> bool:
+    """True for legacy SAL-* / FMYE YYMM#### and new YYYYMM##### sales invoice numbers."""
+    doc = str(document_no or "").strip()
+    if not doc:
+        return False
+    if doc.upper().startswith("SAL"):
+        return True
+    if _parse_si_yyyymm_number(doc):
+        return True
+    # Legacy FMYE-style bare numbers (e.g. 26080139)
+    if doc.isdigit() and 7 <= len(doc) <= 10:
+        return True
+    return False
+
+
+def _max_si_period_seq(conn, yyyymm: str) -> int:
+    """Highest 5-digit sequence for sales invoices in period YYYYMM (new format only)."""
+    if not _table_exists(conn, "sales_invoices"):
+        return 0
+    max_n = 0
+    for r in conn.execute(
+        """SELECT document_no FROM sales_invoices
+           WHERE document_no IS NOT NULL AND TRIM(document_no) != ''
+             AND length(TRIM(document_no)) = 11
+             AND document_no GLOB '[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]'
+             AND document_no LIKE ?""",
+        (f"{yyyymm}%",),
+    ):
+        parsed = _parse_si_yyyymm_number(r[0])
+        if parsed and parsed[0] == yyyymm:
+            max_n = max(max_n, parsed[1])
+    return max_n
+
+
 def _sync_doc_sequence(conn, doc_type: str, document_no: str):
+    if doc_type == "SI":
+        parsed = _parse_si_yyyymm_number(document_no)
+        if not parsed:
+            return  # never advance monthly counter from legacy SAL-/YYMM numbers
+        yyyymm, seq = parsed
+        row = conn.execute(
+            "SELECT prefix, last_number FROM document_sequences WHERE doc_type=?",
+            (doc_type,),
+        ).fetchone()
+        if not row:
+            return
+        if str(row["prefix"] or "") != yyyymm:
+            return
+        if seq > int(row["last_number"] or 0):
+            conn.execute(
+                "UPDATE document_sequences SET last_number=?, modified_at=? WHERE doc_type=?",
+                (seq, _now(), doc_type),
+            )
+        return
     num = _parse_doc_number(document_no)
     if num is None:
         return
@@ -766,6 +850,30 @@ def sync_document_sequences(conn=None):
     """Align sequence counters with the highest document numbers already in the database."""
     def _run(c):
         for doc_type, sources in DOC_NUMBER_SOURCES.items():
+            if doc_type == "SI":
+                # New SI format is YYYYMM##### — sync current calendar month only.
+                # Never pull legacy SAL-/8-digit FMYE counters into the monthly sequence.
+                yyyymm = _si_period_ym()
+                max_n = _max_si_period_seq(c, yyyymm)
+                row = c.execute(
+                    "SELECT prefix, last_number FROM document_sequences WHERE doc_type=?",
+                    (doc_type,),
+                ).fetchone()
+                if not row:
+                    continue
+                if str(row["prefix"] or "") != yyyymm:
+                    c.execute(
+                        """UPDATE document_sequences
+                           SET prefix=?, padding=5, last_number=?, modified_at=?
+                           WHERE doc_type=?""",
+                        (yyyymm, max_n, _now(), doc_type),
+                    )
+                elif max_n > int(row["last_number"] or 0):
+                    c.execute(
+                        "UPDATE document_sequences SET last_number=?, modified_at=? WHERE doc_type=?",
+                        (max_n, _now(), doc_type),
+                    )
+                continue
             max_n = 0
             for table, col in sources:
                 max_n = max(max_n, _max_doc_suffix_from_table(c, table, col))
@@ -784,7 +892,87 @@ def sync_document_sequences(conn=None):
             _run(c)
 
 
-def _peek_document_conn(conn, doc_type: str) -> str:
+def _ensure_si_sequence_period(conn, yyyymm: str):
+    """Point SI document_sequences at YYYYMM with seq from existing new-format invoices."""
+    row = conn.execute(
+        "SELECT prefix, last_number, padding FROM document_sequences WHERE doc_type=?",
+        ("SI",),
+    ).fetchone()
+    table_max = _max_si_period_seq(conn, yyyymm)
+    if not row:
+        conn.execute(
+            "INSERT OR IGNORE INTO document_sequences(doc_type, prefix, padding, last_number) "
+            "VALUES('SI', ?, 5, ?)",
+            (yyyymm, table_max),
+        )
+        return
+    if str(row["prefix"] or "") != yyyymm or int(row["padding"] or 0) != 5:
+        conn.execute(
+            """UPDATE document_sequences
+               SET prefix=?, padding=5, last_number=?, modified_at=?
+               WHERE doc_type='SI'""",
+            (yyyymm, table_max, _now()),
+        )
+
+
+def _peek_si_document_conn(conn, doc_date=None) -> str:
+    yyyymm = _si_period_ym(doc_date)
+    _ensure_si_sequence_period(conn, yyyymm)
+    row = conn.execute(
+        "SELECT last_number FROM document_sequences WHERE doc_type=?",
+        ("SI",),
+    ).fetchone()
+    table_max = _max_si_period_seq(conn, yyyymm)
+    num = max(int(row["last_number"] or 0) if row else 0, table_max) + 1
+    return f"{yyyymm}{num:05d}"
+
+
+def _reserve_si_document_conn(conn, doc_date=None) -> str:
+    """Reserve next sales invoice number as YYYYMMxxxxx (does not renumber legacy docs)."""
+    yyyymm = _si_period_ym(doc_date)
+    for _ in range(40):
+        _ensure_si_sequence_period(conn, yyyymm)
+        row = conn.execute(
+            "SELECT prefix, last_number FROM document_sequences WHERE doc_type=?",
+            ("SI",),
+        ).fetchone()
+        if not row or str(row["prefix"] or "") != yyyymm:
+            continue
+        table_max = _max_si_period_seq(conn, yyyymm)
+        current = int(row["last_number"] or 0)
+        num = max(current, table_max) + 1
+        cur = conn.execute(
+            """UPDATE document_sequences
+               SET last_number=?, modified_at=?
+               WHERE doc_type='SI' AND prefix=? AND last_number=?""",
+            (num, _now(), yyyymm, current),
+        )
+        if cur.rowcount == 0:
+            continue
+        while True:
+            doc = f"{yyyymm}{num:05d}"
+            if not _document_no_in_use(conn, "SI", doc):
+                if num != max(current, table_max) + 1:
+                    conn.execute(
+                        "UPDATE document_sequences SET last_number=?, modified_at=? WHERE doc_type='SI'",
+                        (num, _now()),
+                    )
+                return doc
+            num += 1
+            if num > max(current, table_max) + 5000:
+                break
+            conn.execute(
+                "UPDATE document_sequences SET last_number=?, modified_at=? WHERE doc_type='SI'",
+                (num, _now()),
+            )
+    raise ValueError(
+        "Could not allocate a unique SI document number. Please try saving again."
+    )
+
+
+def _peek_document_conn(conn, doc_type: str, doc_date=None) -> str:
+    if doc_type == "SI":
+        return _peek_si_document_conn(conn, doc_date)
     row = conn.execute(
         "SELECT prefix, last_number, padding FROM document_sequences WHERE doc_type=?",
         (doc_type,),
@@ -818,15 +1006,17 @@ def _document_no_in_use(conn, doc_type: str, document_no: str) -> bool:
     return False
 
 
-def _reserve_document_conn(conn, doc_type: str) -> str:
+def _reserve_document_conn(conn, doc_type: str, doc_date=None) -> str:
     """Atomically reserve the next free document number (safe for concurrent users)."""
+    if doc_type == "SI":
+        return _reserve_si_document_conn(conn, doc_date)
     for _ in range(40):
         row = conn.execute(
             "SELECT prefix, last_number, padding FROM document_sequences WHERE doc_type=?",
             (doc_type,),
         ).fetchone()
         if not row:
-            prefix = {"SI": "SAL", "PI": "PUR"}.get(doc_type, doc_type)
+            prefix = {"PI": "PUR"}.get(doc_type, doc_type)
             conn.execute(
                 "INSERT OR IGNORE INTO document_sequences(doc_type, prefix, padding, last_number) "
                 "VALUES(?,?,?,0)",
@@ -874,35 +1064,46 @@ def _reserve_document_conn(conn, doc_type: str) -> str:
 
 
 # --- Document numbers ---
-def peek_document(doc_type: str) -> str:
+def peek_document(doc_type: str, doc_date=None) -> str:
     """Preview next document number without consuming it (safe for form display)."""
     with get_connection() as conn:
-        return _peek_document_conn(conn, doc_type)
+        return _peek_document_conn(conn, doc_type, doc_date)
 
 
-def next_document(doc_type: str) -> str:
+def next_document(doc_type: str, doc_date=None) -> str:
     """Reserve and return the next document number (use only at save/post time)."""
     with get_connection() as conn:
-        return _reserve_document_conn(conn, doc_type)
+        return _reserve_document_conn(conn, doc_type, doc_date)
 
 
-def ensure_document_no(doc_type: str, document_no=None, conn=None):
+def ensure_document_no(doc_type: str, document_no=None, conn=None, doc_date=None):
     """Confirm or reserve a document number when saving. Updates sequence to match.
 
     If multiple users prepare invoices with the same peeked number, the first save
     keeps it; later saves automatically get the next free number (no sequence error).
+
+    Sales invoices (SI) use YYYYMM##### going forward. Legacy SAL-* / bare YYMM numbers
+    are left unchanged on existing rows; new auto allocations never continue that series.
     """
     doc = (document_no or "").strip() if document_no is not None else ""
     auto_vals = {"", "AUTO", "auto"}
 
     def _run(c):
+        if doc_type == "SI":
+            # Stale UI peeks still showing SAL-… must not create more legacy numbers
+            if doc and doc.upper() not in auto_vals and not doc.upper().startswith("SAL"):
+                if _document_no_in_use(c, doc_type, doc):
+                    return _reserve_si_document_conn(c, doc_date)
+                _sync_doc_sequence(c, doc_type, doc)
+                return doc
+            return _reserve_si_document_conn(c, doc_date)
         if doc and doc.upper() not in auto_vals:
             if _document_no_in_use(c, doc_type, doc):
                 # Peeked/stale number already taken by another user — take next free
-                return _reserve_document_conn(c, doc_type)
+                return _reserve_document_conn(c, doc_type, doc_date)
             _sync_doc_sequence(c, doc_type, doc)
             return doc
-        return _reserve_document_conn(c, doc_type)
+        return _reserve_document_conn(c, doc_type, doc_date)
 
     if conn is not None:
         return _run(conn)
@@ -924,22 +1125,22 @@ def _next_master_code(prefix, table, code_col="code"):
         return f"{prefix}{num:03d}"
 
 
-def next_invoice(prefix, table, col="document_no"):
+def next_invoice(prefix, table, col="document_no", doc_date=None):
     mapping = {
         "purchases": "PI", "purchase_invoices": "PI", "purchase_returns": "PR",
         "sales": "SI", "sales_invoices": "SI", "sale_returns": "SR", "sales_returns": "SR",
     }
     doc_type = mapping.get(table, prefix)
-    return next_document(doc_type)
+    return next_document(doc_type, doc_date)
 
 
-def peek_invoice(prefix, table, col="document_no"):
+def peek_invoice(prefix, table, col="document_no", doc_date=None):
     mapping = {
         "purchases": "PI", "purchase_invoices": "PI", "purchase_returns": "PR",
         "sales": "SI", "sales_invoices": "SI", "sale_returns": "SR", "sales_returns": "SR",
     }
     doc_type = mapping.get(table, prefix)
-    return peek_document(doc_type)
+    return peek_document(doc_type, doc_date)
 
 
 def _default_warehouse_id(conn):
@@ -2368,7 +2569,9 @@ def save_sale(data, line_items, sale_id=None, user_id=None):
         _validate_weight_slip_unique(conn, data.get("weight_slip_id"), sale_id, "sales_invoices")
 
         if not sale_id:
-            data["invoice_no"] = ensure_document_no("SI", data.get("invoice_no"), conn)
+            data["invoice_no"] = ensure_document_no(
+                "SI", data.get("invoice_no"), conn, doc_date=data.get("sale_date"),
+            )
         elif data.get("invoice_no"):
             _sync_doc_sequence(conn, "SI", data["invoice_no"])
 
@@ -2447,7 +2650,9 @@ def save_sale(data, line_items, sale_id=None, user_id=None):
                     msg = str(ex).lower()
                     if "document_no" not in msg and "unique" not in msg:
                         raise
-                    data["invoice_no"] = ensure_document_no("SI", None, conn)
+                    data["invoice_no"] = ensure_document_no(
+                        "SI", None, conn, doc_date=data.get("sale_date"),
+                    )
             if not sale_id:
                 raise ValueError(
                     "Could not save invoice — document number conflict. Please try again."
@@ -2877,7 +3082,7 @@ def _add_cash_receipt(conn, entry_date, description, reference_no, amount, user_
     # Prefer Sale <invoice> when reference is a sales invoice — keeps Daily Activity in sync
     ref = (reference_no or "").strip()
     desc = (description or "").strip()
-    if ref.upper().startswith("SAL") and (not desc or desc.upper().startswith("SALE ")):
+    if is_sales_invoice_document_no(ref) and (not desc or desc.upper().startswith("SALE ")):
         desc = f"Sale {ref}"
     ts = _now()
     cur = conn.execute(
@@ -5246,6 +5451,8 @@ def _summary_ledger_group(entry) -> int:
     if desc in ("sale return", "purchase return") or vt in ("SR", "PR"):
         return 1
     if ref.startswith(("SAL", "SI-", "PUR", "PI-")) and "return" not in desc:
+        return 0
+    if is_sales_invoice_document_no(ref) and "return" not in desc and "purchase" not in desc:
         return 0
     return 2
 

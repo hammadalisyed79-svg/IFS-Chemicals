@@ -1,6 +1,9 @@
 """Extended report queries for Reporting & Printing Center."""
 
-from database import get_connection, rows_to_list, row_to_dict, _product_stock_join, _product_stock_sql
+from database import (
+    get_connection, rows_to_list, row_to_dict, _product_stock_join, _product_stock_sql,
+    is_sales_invoice_document_no,
+)
 
 
 def get_purchase_tax_report(from_date=None, to_date=None):
@@ -786,7 +789,7 @@ def _fetch_vouchers(conn, day: str, sql: str, params: tuple, spec: dict) -> list
         ref = (r.get("reference_no") or "").strip()
         if (
             spec.get("table") in ("cash_receipts", "bank_receipts")
-            and ref.upper().startswith("SAL")
+            and is_sales_invoice_document_no(ref)
         ):
             particulars = f"Sale {ref}"
         out.append(_voucher_row(
