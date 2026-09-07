@@ -1188,7 +1188,7 @@ def page_hr_employees():
             )
             ths = "".join(
                 f"<th>{h}</th>"
-                for h in ("Department", "Code", "Name", "Designation", "Mobile", "Status")
+                for h in ("Department", "Code", "Name", "Designation", "Joining", "Mobile", "Status")
             )
             body = []
             for r in rows:
@@ -1198,12 +1198,14 @@ def page_hr_employees():
                     if active
                     else '<span class="inv-badge inv-badge-cancelled">Inactive</span>'
                 )
+                join_d = str(r.get("joining_date") or "").strip()[:10] or "—"
                 body.append(
                     "<tr>"
                     f"<td>{escape(str(r.get('department_name') or '—'))}</td>"
                     f"<td>{escape(str(r.get('code') or ''))}</td>"
                     f"<td>{escape(str(r.get('full_name') or ''))}</td>"
                     f"<td>{escape(str(r.get('designation_name') or '—'))}</td>"
+                    f"<td>{escape(join_d)}</td>"
                     f"<td>{escape(str(r.get('mobile') or '—'))}</td>"
                     f"<td class='txn-status-cell'>{badge}</td>"
                     "</tr>"
@@ -1317,6 +1319,32 @@ def page_hr_employees():
                     status_opts,
                     index=status_idx,
                 )
+                join_raw = str(emp.get("joining_date") or "").strip()[:10]
+                join_val = None
+                if join_raw:
+                    try:
+                        join_val = date.fromisoformat(join_raw)
+                    except ValueError:
+                        join_val = None
+                conf_raw = str(emp.get("confirmation_date") or "").strip()[:10]
+                conf_val = None
+                if conf_raw:
+                    try:
+                        conf_val = date.fromisoformat(conf_raw)
+                    except ValueError:
+                        conf_val = None
+                j1, j2 = st.columns(2)
+                joining = j1.date_input(
+                    "Joining Date",
+                    value=join_val,
+                    key="hr_emp_edit_joining",
+                    help="From old payroll (JoineOn) when imported — required for mid-month joiners.",
+                )
+                confirm = j2.date_input(
+                    "Confirmation Date",
+                    value=conf_val,
+                    key="hr_emp_edit_confirm",
+                )
                 leave_raw = str(emp.get("leaving_date") or "").strip()[:10]
                 leave_val = None
                 if leave_raw:
@@ -1353,8 +1381,8 @@ def page_hr_employees():
                         "department_id": depts.get(dept), "designation_id": desigs.get(desig),
                         "employment_status": status, "basic_salary": basic, "bank_account": bank,
                         "leaving_date": leave_out,
-                        "joining_date": emp.get("joining_date"),
-                        "confirmation_date": emp.get("confirmation_date"),
+                        "joining_date": str(joining) if joining else None,
+                        "confirmation_date": str(confirm) if confirm else None,
                         "department_name": dept.split(" - ", 1)[-1] if dept else None,
                         "designation_name": desig.split(" - ", 1)[-1] if desig else None,
                         "is_active": int(active),

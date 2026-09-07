@@ -315,7 +315,8 @@ def apply(src: Path, year_filter: int | None):
                     conn.execute(
                         """UPDATE employees SET full_name=?, gender=?, mobile=?, address=?, cnic=?,
                            department_id=?, designation_id=?, department=?, designation=?,
-                           joining_date=?, date_of_birth=?,
+                           joining_date=COALESCE(?, joining_date),
+                           date_of_birth=COALESCE(?, date_of_birth),
                            basic_salary=?, bank_account=?, confirmation_date=COALESCE(confirmation_date,?),
                            is_active=1, employment_status='active',
                            modified_by=?, modified_at=?
@@ -332,7 +333,8 @@ def apply(src: Path, year_filter: int | None):
                     conn.execute(
                         """UPDATE employees SET full_name=?, gender=?, mobile=?, address=?, cnic=?,
                            department_id=?, designation_id=?, department=?, designation=?,
-                           joining_date=?, date_of_birth=?,
+                           joining_date=COALESCE(?, joining_date),
+                           date_of_birth=COALESCE(?, date_of_birth),
                            basic_salary=?, bank_account=?, confirmation_date=COALESCE(confirmation_date,?),
                            modified_by=?, modified_at=?
                            WHERE id=?""",
