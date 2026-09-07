@@ -1633,10 +1633,14 @@ def _tab_month_preview():
         unsafe_allow_html=True,
     )
 
+    notes_key = f"cl_month_notes_{cid}_{ym}"
+    if notes_key not in st.session_state:
+        st.session_state[notes_key] = str((saved or {}).get("notes") or "")
     notes = st.text_input(
         "Save notes (optional)",
-        key=f"cl_month_notes_{cid}_{ym}",
-        help="Press Enter in the Physical Manual cell first so the value is kept, then Save.",
+        key=notes_key,
+        help="Saved with the month record and printed on the report. "
+             "Press Enter in the Physical Manual cell first so values are kept, then Save.",
     )
     if st.button("Save month record", type="primary", key=f"cl_month_save_{cid}_{ym}"):
         try:
@@ -1696,10 +1700,12 @@ def _tab_month_preview():
                                 sl["amount"] = round(billable * rate, 2)
                         gross = sum(_f(sl.get("amount")) for sl in save_lines)
                         billable_sum = sum(_f(sl.get("quantity")) for sl in save_lines)
+            note_val = (notes or "").strip() or None
             run_id = save_contractor_month_run(
-                cid, ym, save_lines, notes=notes, user_id=hlp.uid(),
+                cid, ym, save_lines, notes=note_val, user_id=hlp.uid(),
                 excluded_slip_ids=excl_save,
             )
+            st.session_state[notes_key] = note_val or ""
             # Remount editor from saved manuals + refresh month calc
             if not is_prod and not is_lu:
                 st.session_state[mk] = {
@@ -1719,11 +1725,13 @@ def _tab_month_preview():
             ff.action_done(
                 f"Month **{ym}** saved (record #{run_id}). "
                 f"Gross Rs. {gross:,.2f} · {billable_label} {billable_sum:,.2f}."
-                + (f" · excluded slips {len(excl_save)}" if excl_save else ""),
+                + (f" · excluded slips {len(excl_save)}" if excl_save else "")
+                + (f" · notes saved" if note_val else ""),
                 retain={
                     "cl_prev_result": st.session_state.get("cl_prev_result"),
                     "cl_prev_meta": st.session_state.get("cl_prev_meta"),
                     mk: st.session_state.get(mk),
+                    notes_key: note_val or "",
                 },
             )
         except Exception as e:
@@ -1751,9 +1759,16 @@ def _tab_month_preview():
         print_summary["Billable Qty"] = round(
             float(pd.to_numeric(print_df["Billable Qty"], errors="coerce").fillna(0).sum()), 2,
         )
+    note_print = (st.session_state.get(notes_key) or "").strip() or str(
+        (saved or {}).get("notes") or ""
+    ).strip()
+    print_filters = {"Notes": note_print} if note_print else None
+    if note_print:
+        print_summary["Notes"] = note_print
     report_toolbar(
         print_df, title, "contract_labour_month",
         period=f"{fd} to {td}",
+        filters=print_filters,
         summary=print_summary,
         key_prefix="cl_month",
         layout="landscape",
