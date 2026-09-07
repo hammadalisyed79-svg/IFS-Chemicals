@@ -1861,22 +1861,25 @@ def page_customer_due_aging():
     if not rows:
         st.info("No customer balances due for the selected filters.")
         return
-    df = prepare_report_dataframe(pd.DataFrame(rows), "Customer Due Aging")
+    raw = pd.DataFrame(rows)
+    total_due = float(pd.to_numeric(raw.get("total_due"), errors="coerce").fillna(0).sum())
+    over_90 = float(pd.to_numeric(raw.get("over_90"), errors="coerce").fillna(0).sum())
+    df = prepare_report_dataframe(raw, "Customer Due Aging")
     view = prettify_columns(df)
     k1, k2, k3 = st.columns(3, gap="small")
     k1.markdown(
         f"<div class='txn-kpi-card'><p class='txn-kpi'>Customers</p>"
-        f"<p class='txn-kpi-val'>{len(df):,}</p></div>",
+        f"<p class='txn-kpi-val'>{len(raw):,}</p></div>",
         unsafe_allow_html=True,
     )
     k2.markdown(
         f"<div class='txn-kpi-card'><p class='txn-kpi'>Total Due</p>"
-        f"<p class='txn-kpi-val'>{fmt(df['total_due'].sum())}</p></div>",
+        f"<p class='txn-kpi-val'>{fmt(total_due)}</p></div>",
         unsafe_allow_html=True,
     )
     k3.markdown(
         f"<div class='txn-kpi-card'><p class='txn-kpi'>Over 90 Days</p>"
-        f"<p class='txn-kpi-val'>{fmt(df['over_90'].sum())}</p></div>",
+        f"<p class='txn-kpi-val'>{fmt(over_90)}</p></div>",
         unsafe_allow_html=True,
     )
     from erp_ui.helpers import render_dataframe_html_table
@@ -1904,12 +1907,13 @@ def page_supplier_outstanding():
     if not rows:
         st.info("No supplier payables for the selected filters.")
         return
-    df = prepare_report_dataframe(pd.DataFrame(rows), "Supplier Outstanding")
-    tot = float(df["outstanding"].sum())
+    raw = pd.DataFrame(rows)
+    tot = float(pd.to_numeric(raw.get("outstanding"), errors="coerce").fillna(0).sum())
+    df = prepare_report_dataframe(raw, "Supplier Outstanding")
     k1, k2 = st.columns(2, gap="small")
     k1.markdown(
         f"<div class='txn-kpi-card'><p class='txn-kpi'>Suppliers</p>"
-        f"<p class='txn-kpi-val'>{len(df):,}</p></div>",
+        f"<p class='txn-kpi-val'>{len(raw):,}</p></div>",
         unsafe_allow_html=True,
     )
     k2.markdown(

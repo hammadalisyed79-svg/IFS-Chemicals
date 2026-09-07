@@ -345,14 +345,29 @@ def summary_keys_for_report(report_title: str | None, df: pd.DataFrame) -> dict:
             for col in names:
                 if col in df.columns:
                     try:
-                        return float(pd.to_numeric(df[col], errors="coerce").fillna(0).sum())
+                        raw = df[col]
+                        if getattr(raw, "dtype", None) == object:
+                            s = pd.to_numeric(
+                                raw.astype(str).str.replace(",", "", regex=False),
+                                errors="coerce",
+                            )
+                        else:
+                            s = pd.to_numeric(raw, errors="coerce")
+                        return float(s.fillna(0).sum())
                     except Exception:
                         pass
             return 0.0
 
         pdr = _sum_col("period_debit", "Period Debit")
         pcr = _sum_col("period_credit", "Period Credit")
-        bals = pd.to_numeric(df.get("balance", df.get("Balance", 0)), errors="coerce").fillna(0)
+        bal_raw = df["balance"] if "balance" in df.columns else df.get("Balance")
+        if bal_raw is not None and getattr(bal_raw, "dtype", None) == object:
+            bals = pd.to_numeric(
+                bal_raw.astype(str).str.replace(",", "", regex=False),
+                errors="coerce",
+            ).fillna(0)
+        else:
+            bals = pd.to_numeric(bal_raw if bal_raw is not None else 0, errors="coerce").fillna(0)
         net = float(bals.sum())
         opening = _sum_col("opening", "Opening")
         out = {}
