@@ -99,11 +99,21 @@ def _ensure_loading_unloading_schema(conn):
             "ALTER TABLE contract_labourers ADD COLUMN unloading_rate REAL DEFAULT 0"
         )
 
+    # Clean leftovers from interrupted rebuilds (avoids "table …__lu already exists")
+    conn.execute("DROP TABLE IF EXISTS contract_labourers__lu")
+    conn.execute("DROP TABLE IF EXISTS contract_labour_month_lines__lu")
+
     create_sql = conn.execute(
         "SELECT sql FROM sqlite_master WHERE type='table' AND name='contract_labourers'"
     ).fetchone()
     create_sql = (create_sql[0] or "") if create_sql else ""
-    if create_sql and "loading_unloading" not in create_sql:
+    # Only rebuild when an old CHECK constraint blocks new payment_type values.
+    # Modern schema is plain TEXT (no CHECK) — do not rebuild every page load.
+    needs_rebuild = bool(create_sql) and (
+        "CHECK" in create_sql.upper()
+        and "loading_unloading" not in create_sql
+    )
+    if needs_rebuild:
         conn.execute("PRAGMA foreign_keys=OFF")
         conn.executescript(
             """
@@ -142,6 +152,7 @@ def _ensure_loading_unloading_schema(conn):
     prod_col = ml_cols.get("product_id")
     if prod_col is not None and int(prod_col[3] or 0) == 1:  # notnull
         conn.execute("PRAGMA foreign_keys=OFF")
+        conn.execute("DROP TABLE IF EXISTS contract_labour_month_lines__lu")
         conn.executescript(
             """
             CREATE TABLE contract_labour_month_lines__lu (
