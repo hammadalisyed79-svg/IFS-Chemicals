@@ -421,6 +421,19 @@ def _render_single_employee_edit_pay(
     period_start = date(py, pm, 1) if py and pm else date.today()
     is_partial = bool(leave_default and leave_default < period_end)
 
+    settle = {}
+    if eid and hasattr(db, "employee_final_settlement_status"):
+        try:
+            settle = db.employee_final_settlement_status(eid) or {}
+        except Exception:
+            settle = {}
+    settle_clear = bool(settle.get("clear"))
+    if settle:
+        if settle_clear:
+            st.success(settle.get("message") or "Final settlement clear — ledger NIL.")
+        else:
+            st.warning(settle.get("message") or "Final settlement not done until ledger balance is NIL.")
+
     def _clamp_in_month(d: date) -> date:
         if d < period_start:
             return period_start
@@ -448,13 +461,21 @@ def _render_single_employee_edit_pay(
         "Mark employment as left",
         value=(str(line.get("employment_status") or "").lower() in ("left", "resigned", "terminated")),
         key=f"pr_sep_mark_left_{pid}_{sel_id}",
+        help="Blocked until employee ledger balance is NIL (final settlement clear).",
+        disabled=not settle_clear,
     )
+    if mark_left and not settle_clear:
+        st.caption("Clear ledger to NIL before marking left (recover advance/loan and pay final salary).")
     if lw4.button("Apply final settlement", key=f"pr_sep_apply_leave_{pid}_{sel_id}", use_container_width=True):
         try:
+            # Close employment only when ledger is NIL; leaving date may still be set for pro-rata
+            do_mark_left = bool(mark_left) and settle_clear
+            if do_mark_left and hasattr(db, "assert_final_settlement_clear"):
+                db.assert_final_settlement_clear(eid)
             payload = {
                 "leaving_date": str(leaving_pick),
             }
-            if mark_left:
+            if do_mark_left:
                 payload["employment_status"] = "left"
                 payload["is_active"] = 0
             # Preserve required identity fields for update_employee_hr
@@ -486,10 +507,20 @@ def _render_single_employee_edit_pay(
             }, uid())
             db.refresh_payroll_attendance_days(pid, user_id=uid())
             _payroll_clear_edit_live_state(pid)
-            ff.action_done(
-                f"Final settlement applied through **{leaving_pick}**. "
-                "Present/absent and net salary refreshed from attendance."
-            )
+            if do_mark_left:
+                ff.action_done(
+                    f"Final settlement complete through **{leaving_pick}** — ledger NIL, marked left."
+                )
+            else:
+                msg = f"Last working day set to **{leaving_pick}** (pro-rata refreshed). "
+                if not settle_clear:
+                    msg += (
+                        settle.get("message")
+                        or "Final settlement not done until ledger balance is NIL."
+                    )
+                else:
+                    msg += "Ledger is NIL — tick **Mark employment as left** to close."
+                ff.action_done(msg)
         except Exception as e:
             st.error(str(e))
     if is_partial or leave_default:
@@ -1331,6 +1362,17 @@ def page_hr_employees():
             + f"</div>",
             unsafe_allow_html=True,
         )
+        settle_edit = {}
+        if hasattr(db, "employee_final_settlement_status"):
+            try:
+                settle_edit = db.employee_final_settlement_status(eid) or {}
+            except Exception:
+                settle_edit = {}
+        if settle_edit:
+            if settle_edit.get("clear"):
+                st.success(settle_edit.get("message") or "Final settlement clear — ledger NIL.")
+            else:
+                st.warning(settle_edit.get("message") or "Final settlement not done until ledger is NIL.")
         if db.user_can_hr(st.session_state.user, "edit"):
             with st.form("edit_emp_hr"):
                 c1, c2 = st.columns(2)

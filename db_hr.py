@@ -477,6 +477,29 @@ def add_employee_hr(data, user_id=None):
 
 def update_employee_hr(eid, data, user_id=None):
     from database import get_connection
+
+    prev_emp = get_employee_hr(eid) or {}
+    prev_status_l = str(prev_emp.get("employment_status") or "").strip().lower()
+    prev_active = int(prev_emp.get("is_active") or 0)
+    new_status_l = str(
+        data.get("employment_status", prev_emp.get("employment_status") or "active") or ""
+    ).strip().lower()
+    new_active = int(data["is_active"]) if "is_active" in data else prev_active
+    leave_d_check = data["leaving_date"] if "leaving_date" in data else prev_emp.get("leaving_date")
+    becoming_exit = (
+        (new_status_l in _FINAL_EXIT_STATUSES and prev_status_l not in _FINAL_EXIT_STATUSES)
+        or (
+            new_active == 0
+            and prev_active == 1
+            and (
+                new_status_l in _FINAL_EXIT_STATUSES
+                or bool(str(leave_d_check or "").strip())
+            )
+        )
+    )
+    if becoming_exit:
+        assert_final_settlement_clear(eid)
+
     with get_connection() as conn:
         prev = conn.execute(
             "SELECT joining_date, confirmation_date, leaving_date FROM employees WHERE id=?",
@@ -3691,6 +3714,45 @@ def get_employee_advance_context(employee_id: int) -> dict | None:
         "advance_outstanding": round(adv_out, 2),
         "loan_outstanding": round(loan_out, 2),
     }
+
+
+_LEDGER_NIL_TOL = 0.01
+_FINAL_EXIT_STATUSES = frozenset({"left", "resigned", "terminated"})
+
+
+def employee_final_settlement_status(employee_id: int) -> dict:
+    """Whether employee ledger is clear enough to close final settlement.
+
+    Ledger balance must be NIL (within 1 paisa). Positive = employee owes company;
+    negative = company owes employee (unpaid salary / refund).
+    """
+    ctx = get_employee_advance_context(int(employee_id)) or {}
+    bal = float(ctx.get("ledger_balance") or 0)
+    adv = float(ctx.get("advance_outstanding") or 0)
+    loan = float(ctx.get("loan_outstanding") or 0)
+    clear = abs(bal) < _LEDGER_NIL_TOL
+    return {
+        "clear": clear,
+        "ledger_balance": round(bal, 2),
+        "advance_outstanding": round(adv, 2),
+        "loan_outstanding": round(loan, 2),
+        "message": (
+            "Final settlement clear — ledger balance NIL."
+            if clear
+            else (
+                f"Final settlement not done — ledger balance {bal:,.2f} "
+                f"(advance {adv:,.2f}, loan {loan:,.2f}). "
+                "Settle until balance is NIL before marking left."
+            )
+        ),
+    }
+
+
+def assert_final_settlement_clear(employee_id: int) -> None:
+    """Raise if employee still has a non-NIL ledger balance."""
+    st = employee_final_settlement_status(employee_id)
+    if not st.get("clear"):
+        raise ValueError(st["message"])
 
 
 def save_advance(data, user_id=None):
