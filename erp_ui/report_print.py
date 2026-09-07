@@ -1201,7 +1201,12 @@ def build_report_pdf(title, df, period="", filters=None, summary=None, layout="l
     if filter_txt2.strip().lower() in ("all", "-", ""):
         filter_txt2 = ""
     if filter_txt2:
-        pdf.cell(0, 4, _pdf_clip(f"Filters: {filter_txt2}", 100), ln=True)
+        # Long notes (e.g. Contract Labour) need wrap, not a hard 100-char clip
+        label = f"Filters: {filter_txt2}"
+        if len(label) > 90 or "Notes:" in filter_txt2:
+            pdf.multi_cell(0, 4, _pdf_safe_text(label)[:500])
+        else:
+            pdf.cell(0, 4, _pdf_clip(label, 100), ln=True)
     mode = _ledger_report_kind(report_key or title)
     if mode:
         pdf.cell(
