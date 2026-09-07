@@ -5,11 +5,13 @@ from __future__ import annotations
 PAYMENT_PRODUCTION_QTY = "production_qty"
 PAYMENT_SKU_CARTON = "sku_carton"
 PAYMENT_LOADING_UNLOADING = "loading_unloading"
+PAYMENT_PURCHASE_QTY = "purchase_qty"
 
 PAYMENT_TYPES = {
     PAYMENT_PRODUCTION_QTY: "Production quantity (qty x rate per SKU)",
     PAYMENT_SKU_CARTON: "SKU / cartons x rate per SKU",
     PAYMENT_LOADING_UNLOADING: "Loading & unloading (sale/purchase kg × rate)",
+    PAYMENT_PURCHASE_QTY: "Purchase quantity (purchased qty × rate per SKU)",
 }
 
 LINE_CODE_LOADING = "LOADING"
@@ -19,19 +21,24 @@ LINE_CODE_UNLOADING = "UNLOADING"
 BILLING_PRODUCTION = "production"
 BILLING_SOLD = "sold"
 BILLING_CLOSING = "closing"
+BILLING_PURCHASED = "purchased"
 BILLING_BASES = {
     BILLING_PRODUCTION: "Production qty × rate",
     BILLING_SOLD: "Sold qty × rate",
     BILLING_CLOSING: "Closing stock × rate",
+    BILLING_PURCHASED: "Purchased qty × rate",
 }
 
 
 def default_billing_basis(product_code: str | None, contractor_payment_type: str | None) -> str:
     """SF* (semi-finished / base powder) bills on sold qty; else follow contractor type."""
     code = (product_code or "").strip().upper()
+    pay = (contractor_payment_type or "").strip()
+    if pay == PAYMENT_PURCHASE_QTY:
+        return BILLING_PURCHASED
     if code.startswith("SF"):
         return BILLING_SOLD
-    if (contractor_payment_type or "").strip() == PAYMENT_PRODUCTION_QTY:
+    if pay == PAYMENT_PRODUCTION_QTY:
         return BILLING_PRODUCTION
     return BILLING_CLOSING
 
@@ -68,6 +75,14 @@ def _ensure_billing_basis_column(conn):
                WHERE COALESCE(billing_basis,'')=''
                  AND contractor_id IN (
                    SELECT id FROM contract_labourers WHERE payment_type='sku_carton'
+                 )"""
+        )
+        conn.execute(
+            """UPDATE contract_labour_products
+               SET billing_basis='purchased'
+               WHERE COALESCE(billing_basis,'') IN ('', 'closing')
+                 AND contractor_id IN (
+                   SELECT id FROM contract_labourers WHERE payment_type='purchase_qty'
                  )"""
         )
 
@@ -763,6 +778,30 @@ def sold_qty_for_products(product_ids: list[int], from_date: str, to_date: str) 
     return {int(r["product_id"]): float(r["sold_qty"] or 0) for r in rows}
 
 
+def purchased_qty_for_products(
+    product_ids: list[int], from_date: str, to_date: str,
+) -> dict[int, float]:
+    """Approved purchase invoice qty by product in date range (excludes draft/pending/rejected)."""
+    from database import get_connection
+
+    ids = [int(p) for p in (product_ids or []) if p]
+    if not ids:
+        return {}
+    placeholders = ",".join("?" * len(ids))
+    q = f"""
+        SELECT pii.product_id, COALESCE(SUM(pii.quantity), 0) AS purchased_qty
+        FROM purchase_invoice_items pii
+        JOIN purchase_invoices pi ON pii.invoice_id = pi.id
+        WHERE pii.product_id IN ({placeholders})
+          AND pi.invoice_date >= ? AND pi.invoice_date <= ?
+          AND LOWER(COALESCE(pi.status, '')) IN ('approved', 'posted')
+        GROUP BY pii.product_id
+    """
+    with get_connection() as conn:
+        rows = conn.execute(q, [*ids, from_date, to_date]).fetchall()
+    return {int(r["product_id"]): float(r["purchased_qty"] or 0) for r in rows}
+
+
 def sale_return_qty_for_products(
     product_ids: list[int], from_date: str, to_date: str,
 ) -> dict[int, float]:
@@ -860,6 +899,7 @@ def calculate_contractor_month(
       production — completed production qty × rate
       sold       — sale qty × rate (default for SF* base powder)
       closing    — (Sold − Opening − Sale return + Physical Manual) × rate
+      purchased  — approved purchase qty × rate (e.g. Salt Stone RM187)
       loading_unloading — sale kg × loading rate + purchase kg × unloading rate
     """
     c = get_contractor(contractor_id)
@@ -879,9 +919,10 @@ def calculate_contractor_month(
     products = c.get("products") or []
     pids = [int(p["product_id"]) for p in products]
     is_prod = pay_type == PAYMENT_PRODUCTION_QTY
+    is_purchase = pay_type == PAYMENT_PURCHASE_QTY
 
     bases = {}
-    needs_prod = needs_sold = needs_closing = False
+    needs_prod = needs_sold = needs_closing = needs_purchased = False
     for p in products:
         pid = int(p["product_id"])
         basis = (p.get("billing_basis") or "").strip().lower()
@@ -892,6 +933,8 @@ def calculate_contractor_month(
             needs_prod = True
         elif basis == BILLING_SOLD:
             needs_sold = True
+        elif basis == BILLING_PURCHASED:
+            needs_purchased = True
         else:
             needs_closing = True
 
@@ -907,6 +950,9 @@ def calculate_contractor_month(
         return_map = sale_return_qty_for_products(pids, from_date, to_date)
     if needs_closing:
         stock_map = stock_on_hand_for_products(pids, as_of_date=from_date)
+    purchased_map = {}
+    if needs_purchased or is_purchase:
+        purchased_map = purchased_qty_for_products(pids, from_date, to_date)
 
     manual = {}
     if needs_closing:
@@ -920,7 +966,7 @@ def calculate_contractor_month(
     lines = []
     total = 0.0
     total_sold = total_stock = total_return = total_manual = 0.0
-    total_billable = total_prod = total_closing = 0.0
+    total_billable = total_prod = total_closing = total_purchased = 0.0
     for p in products:
         pid = int(p["product_id"])
         basis = bases[pid]
@@ -930,11 +976,14 @@ def calculate_contractor_month(
         stock = round(float(stock_map.get(pid) or 0), 4)
         ret = round(float(return_map.get(pid) or 0), 4)
         man = round(float(manual.get(pid) or 0), 4)
+        purchased = round(float(purchased_map.get(pid) or 0), 4)
         closing = round(sold - stock - ret + man, 4)
         if basis == BILLING_PRODUCTION:
             billable = prod_qty
         elif basis == BILLING_SOLD:
             billable = sold
+        elif basis == BILLING_PURCHASED:
+            billable = purchased
         else:
             billable = closing
         rate = float(p["rate"] if p.get("rate") is not None else default_rate)
@@ -946,6 +995,7 @@ def calculate_contractor_month(
         total_manual += man
         total_billable += billable
         total_prod += prod_qty
+        total_purchased += purchased
         total_closing += closing if basis == BILLING_CLOSING else 0.0
         lines.append({
             "product_id": pid,
@@ -957,6 +1007,7 @@ def calculate_contractor_month(
             "stock_qty": stock,
             "sale_return_qty": ret,
             "manual_qty": man,
+            "purchased_qty": purchased,
             "closing_stock": closing if basis == BILLING_CLOSING else 0.0,
             "batch_count": int(qinfo.get("batch_count") or 0),
             "production_qty": prod_qty,
@@ -969,11 +1020,13 @@ def calculate_contractor_month(
     if hybrid:
         formula = (
             "Per SKU: production × rate, sold × rate (SF*), "
-            "or closing stock × rate"
+            "purchased × rate, or closing stock × rate"
         )
-    elif needs_prod and not needs_sold and not needs_closing:
+    elif needs_purchased and not needs_prod and not needs_sold and not needs_closing:
+        formula = "Billable = Purchased qty (month); Amount = Purchased × Rate"
+    elif needs_prod and not needs_sold and not needs_closing and not needs_purchased:
         formula = "Billable = Production qty (month); Amount = Production × Rate"
-    elif needs_sold and not needs_prod and not needs_closing:
+    elif needs_sold and not needs_prod and not needs_closing and not needs_purchased:
         formula = "Billable = Sold qty (month); Amount = Sold × Rate"
     else:
         formula = (
@@ -988,10 +1041,12 @@ def calculate_contractor_month(
         "payment_type": pay_type,
         "payment_type_label": PAYMENT_TYPES.get(pay_type, pay_type),
         "is_production_qty": is_prod,
+        "is_purchase_qty": is_purchase,
         "is_loading_unloading": False,
         "has_sold_basis": needs_sold,
         "has_closing_basis": needs_closing,
         "has_production_basis": needs_prod,
+        "has_purchased_basis": needs_purchased,
         "hybrid_billing": hybrid,
         "formula": formula,
         "lines": lines,
@@ -1002,6 +1057,7 @@ def calculate_contractor_month(
             "sale_return_qty": round(total_return, 4),
             "manual_qty": round(total_manual, 4),
             "production_qty": round(total_prod, 4),
+            "purchased_qty": round(total_purchased, 4),
             "closing_stock": round(total_closing, 4),
             "billable_qty": round(total_billable, 4),
             "gross_amount": round(total, 2),

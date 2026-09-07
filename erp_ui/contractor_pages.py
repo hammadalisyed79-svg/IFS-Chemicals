@@ -15,6 +15,7 @@ from db_contractors import (
     LINE_CODE_UNLOADING,
     PAYMENT_LOADING_UNLOADING,
     PAYMENT_PRODUCTION_QTY,
+    PAYMENT_PURCHASE_QTY,
     PAYMENT_TYPES,
     add_contractor,
     add_lu_excluded_product,
@@ -111,7 +112,9 @@ def _tab_contractors():
         "① Production quantity — completed production qty × **rate per SKU**. "
         "② SKU / cartons × **rate per SKU**. "
         "③ **Loading & unloading** — sale kg × loading rate + purchase kg × unloading rate "
-        "(weighbridge). Assign SKUs on **Products** for ①/②; set kg rates here for ③."
+        "(weighbridge). "
+        "④ **Purchase quantity** — approved purchase qty × rate "
+        "(e.g. Salt Stone **RM187**). Assign SKUs on **Products** for ①/②/④; set kg rates here for ③."
     )
     rows = list_contractors(active_only=False)
     if rows:
@@ -348,15 +351,23 @@ def _tab_products():
     basis_draft = dict(st.session_state.get(bk) or {})
 
     is_prod_qty = (cur.get("payment_type") or "") == PAYMENT_PRODUCTION_QTY
+    is_purchase_qty = (cur.get("payment_type") or "") == PAYMENT_PURCHASE_QTY
     st.caption(
         f"**{cur.get('supplier_name')}** · {PAYMENT_TYPES.get(cur.get('payment_type'))}. "
         + (
             "DT / finished goods = **production qty × rate**. "
             if is_prod_qty else
+            "Salt stone / RM = **purchased qty × rate** (approved purchases). "
+            "Assign **RM187 SALT STONE** (and rate), then **Update selection**. "
+            if is_purchase_qty else
             "Finished goods = **closing stock × rate**. "
         )
-        + "**SF* base powder** = **sold qty × rate** (set automatically; changeable per SKU). "
-        "Bulk-add **SF**, **DT3**, etc., set rates, then **Update selection**."
+        + (
+            ""
+            if is_purchase_qty else
+            "**SF* base powder** = **sold qty × rate** (set automatically; changeable per SKU). "
+            "Bulk-add **SF**, **DT3**, etc., set rates, then **Update selection**."
+        )
     )
 
     # --- Bulk add by code prefix ---
@@ -504,6 +515,7 @@ def _tab_products():
     if new_ids:
         st.markdown(
             f"**Rate & billing basis** ({len(new_ids)} selected) — "
+            "Purchase contractors default to **Purchased qty × rate**; "
             "SF* defaults to **Sold qty × rate**; others follow contractor type."
         )
         for pid in new_ids:
@@ -644,6 +656,7 @@ def _tab_month_preview():
     cur_c = get_contractor(cid) or {}
     is_prod = (cur_c.get("payment_type") or "") == PAYMENT_PRODUCTION_QTY
     is_lu = (cur_c.get("payment_type") or "") == PAYMENT_LOADING_UNLOADING
+    is_purchase = (cur_c.get("payment_type") or "") == PAYMENT_PURCHASE_QTY
 
     if is_lu:
         st.caption(
@@ -659,18 +672,24 @@ def _tab_month_preview():
             "**SF* base powder: Sold qty × Rate**. "
             "Save stores one record per contractor per month."
         )
+    elif is_purchase:
+        st.caption(
+            "**Purchase-quantity contractor** (e.g. Salt Stone) — monthly worksheet. "
+            "**Billable** = approved purchase qty in the month · **Amount** = Purchased × Rate. "
+            "Assign only the product(s) they handle (e.g. **RM187**)."
+        )
     else:
         st.caption(
             "**SKU / carton contractor** — monthly worksheet. "
             "**Closing (billable)** = Sold − Opening − Sale return + Physical Manual · "
             "**Amount** = Closing × Rate "
-            "(SF* can use Sold × Rate if set on Products). "
+            "(SF* can use Sold × Rate; salt stone can use Purchased × Rate if set on Products). "
             "Save stores one record per contractor per month."
         )
 
     saved = get_contractor_month_run(cid, ym)
     mk = f"cl_manual_{cid}_{ym}"
-    if mk not in st.session_state and saved and not is_prod and not is_lu:
+    if mk not in st.session_state and saved and not is_prod and not is_lu and not is_purchase:
         st.session_state[mk] = {
             int(ln["product_id"]): float(ln.get("manual_qty") or 0)
             for ln in (saved.get("lines") or [])
@@ -806,6 +825,7 @@ def _tab_month_preview():
 
     # Prefer loaded result payment type
     is_prod = bool(result.get("is_production_qty"))
+    is_purchase = bool(result.get("is_purchase_qty"))
     is_lu = bool(result.get("is_loading_unloading"))
     c = result["contractor"]
     lines = result.get("lines") or []
@@ -1431,24 +1451,32 @@ def _tab_month_preview():
             "Gross Amount": round(gross, 2),
         }
 
-    elif is_prod:
+    elif is_prod or is_purchase:
         has_sold = bool(result.get("has_sold_basis"))
         has_close = bool(result.get("has_closing_basis"))
-        st.markdown(
-            "**Worksheet** — "
-            + (
-                "mixed basis: production for finished goods, "
-                "**sold qty × rate** for SF*; Amount = Billable × Rate."
-                if (has_sold or has_close) else
-                "production qty from completed orders; Amount = Production × Rate."
+        has_purchased = bool(result.get("has_purchased_basis")) or is_purchase
+        if is_purchase:
+            st.markdown(
+                "**Worksheet** — approved purchase invoices in the month; "
+                "Amount = Purchased × Rate."
             )
-        )
+        else:
+            st.markdown(
+                "**Worksheet** — "
+                + (
+                    "mixed basis: production for finished goods, "
+                    "**sold qty × rate** for SF*; Amount = Billable × Rate."
+                    if (has_sold or has_close or has_purchased) else
+                    "production qty from completed orders; Amount = Production × Rate."
+                )
+            )
         out_rows = []
-        sum_prod = sum_batches = sum_sold = sum_bill = 0.0
+        sum_prod = sum_batches = sum_sold = sum_bill = sum_purchased = 0.0
         for ln in lines:
             pid = int(ln["product_id"])
             prod = _f(ln.get("production_qty"))
             sold = _f(ln.get("sold_qty"))
+            purchased = _f(ln.get("purchased_qty"))
             billable = _f(ln.get("quantity"))
             rate = _f(ln.get("rate"))
             amount = round(billable * rate, 2)
@@ -1457,15 +1485,19 @@ def _tab_month_preview():
             sum_prod += prod
             sum_batches += batches
             sum_sold += sold
+            sum_purchased += purchased
             sum_bill += billable
             gross += amount
             row = {
                 "Code": ln.get("product_code"),
                 "Product": ln.get("product_name"),
                 "Basis": basis,
-                "Batches": batches,
-                "Production Qty": prod,
             }
+            if is_prod and not is_purchase:
+                row["Batches"] = batches
+                row["Production Qty"] = prod
+            if has_purchased or is_purchase:
+                row["Purchased Qty"] = purchased
             if has_sold or has_close:
                 row["Sold Qty"] = sold
             row["Billable Qty"] = billable
@@ -1476,7 +1508,7 @@ def _tab_month_preview():
                 "product_id": pid,
                 "product_code": ln.get("product_code"),
                 "product_name": ln.get("product_name"),
-                "sold_qty": sold,
+                "sold_qty": purchased if (is_purchase or (ln.get("billing_basis") or "") == "purchased") else sold,
                 "stock_qty": _f(ln.get("stock_qty")),
                 "sale_return_qty": _f(ln.get("sale_return_qty")),
                 "manual_qty": _f(ln.get("manual_qty")),
@@ -1494,8 +1526,13 @@ def _tab_month_preview():
             unsafe_allow_html=True,
         )
         k2.markdown(
-            f"<div class='txn-kpi-card'><p class='txn-kpi'>Batches</p>"
-            f"<p class='txn-kpi-val'>{int(sum_batches):,}</p></div>",
+            (
+                f"<div class='txn-kpi-card'><p class='txn-kpi'>Purchased Qty</p>"
+                f"<p class='txn-kpi-val'>{sum_purchased:,.2f}</p></div>"
+                if is_purchase else
+                f"<div class='txn-kpi-card'><p class='txn-kpi'>Batches</p>"
+                f"<p class='txn-kpi-val'>{int(sum_batches):,}</p></div>"
+            ),
             unsafe_allow_html=True,
         )
         k3.markdown(
@@ -1514,12 +1551,15 @@ def _tab_month_preview():
             "Code": "",
             "Product": "GROSS TOTAL",
             "Basis": "",
-            "Batches": int(sum_batches),
-            "Production Qty": round(sum_prod, 2),
             "Billable Qty": round(sum_bill, 2),
             "Rate": "",
             "Amount": round(gross, 2),
         }
+        if is_prod and not is_purchase:
+            footer["Batches"] = int(sum_batches)
+            footer["Production Qty"] = round(sum_prod, 2)
+        if has_purchased or is_purchase:
+            footer["Purchased Qty"] = round(sum_purchased, 2)
         if has_sold or has_close:
             footer["Sold Qty"] = round(sum_sold, 2)
         show = pd.concat([out_df, pd.DataFrame([footer])], ignore_index=True)
@@ -1529,10 +1569,12 @@ def _tab_month_preview():
         summary = {
             "Month": ym,
             "Items": len(display_rows),
-            "Batches": int(sum_batches),
+            "Purchased Qty": round(sum_purchased, 2) if (has_purchased or is_purchase) else None,
+            "Batches": int(sum_batches) if is_prod and not is_purchase else None,
             "Billable Qty": round(sum_bill, 2),
             "Gross Amount": round(gross, 2),
         }
+        summary = {k: v for k, v in summary.items() if v is not None}
     else:
         st.markdown(
             "**Worksheet** — edit **Physical Manual Added Stock** only; "
@@ -1613,6 +1655,11 @@ def _tab_month_preview():
             elif basis == "production":
                 billable = next(
                     (_f(ln.get("production_qty")) for ln in lines if int(ln["product_id"]) == pid),
+                    0.0,
+                )
+            elif basis == "purchased":
+                billable = next(
+                    (_f(ln.get("purchased_qty")) for ln in lines if int(ln["product_id"]) == pid),
                     0.0,
                 )
             else:
