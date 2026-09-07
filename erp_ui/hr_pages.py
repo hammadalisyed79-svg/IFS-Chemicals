@@ -893,6 +893,153 @@ def _payroll_period_label(month, year):
     return f"{month}/{year}" if month or year else "—"
 
 
+def _payroll_run_ym(run) -> str | None:
+    try:
+        y = int((run or {}).get("payroll_year") or 0)
+        m = int((run or {}).get("payroll_month") or 0)
+    except (TypeError, ValueError):
+        return None
+    if y and 1 <= m <= 12:
+        return f"{y:04d}-{m:02d}"
+    return None
+
+
+def _ym_period_label(ym: str | None) -> str:
+    if not ym or len(ym) < 7:
+        return "—"
+    try:
+        return _payroll_period_label(int(ym[5:7]), int(ym[:4]))
+    except (TypeError, ValueError):
+        return ym
+
+
+def _filter_runs_by_working_month(runs, *, allow_unset: bool = True):
+    """If a working salary month is locked, keep only matching runs."""
+    from erp_ui.user_prefs import get_hr_working_salary_month
+
+    locked = get_hr_working_salary_month()
+    if not locked:
+        return list(runs or []), None
+    matched = [r for r in (runs or []) if _payroll_run_ym(r) == locked]
+    if matched:
+        return matched, locked
+    if allow_unset:
+        # Locked month has no matching run in this list — show empty + warn upstream
+        return [], locked
+    return list(runs or []), locked
+
+
+def _sync_payroll_run_select_key(key: str, runs, label_fn) -> None:
+    """Keep Streamlit selectbox on a valid option after filter / refresh."""
+    if not runs:
+        st.session_state.pop(key, None)
+        return
+    labels = [label_fn(r) for r in runs]
+    cur = st.session_state.get(key)
+    if cur not in labels:
+        st.session_state[key] = labels[0]
+
+
+def _render_working_salary_month_bar(runs) -> None:
+    """Lock payroll work to one salary month (persists across page refresh)."""
+    from erp_ui.user_prefs import (
+        clear_hr_working_salary_month,
+        get_hr_working_salary_month,
+        set_hr_working_salary_month,
+    )
+
+    locked = get_hr_working_salary_month()
+    # Unique months from available runs (newest first)
+    seen = []
+    for r in runs or []:
+        ym = _payroll_run_ym(r)
+        if ym and ym not in seen:
+            seen.append(ym)
+    if not seen and not locked:
+        return
+
+    opt_labels = []
+    opt_map = {}
+    for ym in seen:
+        lbl = _ym_period_label(ym)
+        # Prefer draft doc hint when available
+        draft = next(
+            (
+                r for r in (runs or [])
+                if _payroll_run_ym(r) == ym and (r.get("status") or "") == "draft"
+            ),
+            None,
+        )
+        if draft:
+            tip = f"{lbl} — {draft.get('document_no')} [DRAFT]"
+        else:
+            any_r = next((r for r in (runs or []) if _payroll_run_ym(r) == ym), None)
+            tip = f"{lbl} — {(any_r or {}).get('document_no') or ym}"
+        opt_labels.append(tip)
+        opt_map[tip] = ym
+
+    if locked and locked not in seen:
+        orphan = f"{_ym_period_label(locked)} (locked — no open run)"
+        opt_labels.insert(0, orphan)
+        opt_map[orphan] = locked
+
+    default_ix = 0
+    if locked:
+        for i, tip in enumerate(opt_labels):
+            if opt_map.get(tip) == locked:
+                default_ix = i
+                break
+
+    # Align widget before render if we just set lock elsewhere
+    wkey = "hr_working_salary_pick"
+    if opt_labels and st.session_state.get(wkey) not in opt_labels:
+        st.session_state[wkey] = opt_labels[default_ix]
+
+    bg = "#fef3c7" if locked else "#f8fafc"
+    border = "#f59e0b" if locked else "#e2e8f0"
+    st.markdown(
+        f"<div style='margin:0 0 12px 0;padding:12px 14px;background:{bg};"
+        f"border:1px solid {border};border-radius:8px'>"
+        f"<div style='font-size:0.95rem;font-weight:700;color:#0f172a;margin:0 0 2px 0'>"
+        f"Working salary month</div>"
+        f"<div style='font-size:0.8rem;color:#64748b;line-height:1.35;margin:0 0 8px 0'>"
+        f"Lock the month you are paying so a page refresh cannot switch you to another "
+        f"open draft (e.g. Aug vs Sep). Saved to your account."
+        f"</div></div>",
+        unsafe_allow_html=True,
+    )
+    c1, c2, c3 = st.columns([2.4, 1.0, 1.0])
+    if not opt_labels:
+        c1.caption("No payroll periods available.")
+        return
+    pick = c1.selectbox(
+        "Salary month",
+        opt_labels,
+        index=min(default_ix, len(opt_labels) - 1),
+        key=wkey,
+        label_visibility="collapsed",
+    )
+    if c2.button("Set / Lock", type="primary", key="hr_working_salary_set", use_container_width=True):
+        ym = opt_map.get(pick)
+        set_hr_working_salary_month(ym)
+        # Force draft selectors onto this month after lock
+        for k in ("pr_sep_run", "pr_edit_run", "hr_pay_process_sel", "hr_pay_slips_sel"):
+            st.session_state.pop(k, None)
+        st.rerun()
+    if c3.button("Clear lock", key="hr_working_salary_clear", use_container_width=True):
+        clear_hr_working_salary_month()
+        for k in ("pr_sep_run", "pr_edit_run", "hr_pay_process_sel", "hr_pay_slips_sel", wkey):
+            st.session_state.pop(k, None)
+        st.rerun()
+
+    if locked:
+        st.info(
+            f"Locked to **{_ym_period_label(locked)}** — "
+            f"Edit Lines / Single employee pay / Process show this month only. "
+            f"Click **Clear lock** to work another open month."
+        )
+
+
 def _payroll_status_badge(status: str) -> str:
     from html import escape
     s = (status or "").strip().lower()
@@ -1956,8 +2103,13 @@ def page_payroll():
         ],
         "hr_pay_tab",
     )
+    # Working month lock — visible on all payroll tabs when any runs exist
+    _all_pay_runs = db.get_payroll_runs() or []
+    if _all_pay_runs:
+        _render_working_salary_month_bar(_all_pay_runs)
+
     if tab == "Payroll Runs":
-        runs = db.get_payroll_runs() or []
+        runs = _all_pay_runs
         if not runs:
             st.markdown(
                 '<div class="erp-empty-state"><p>No payroll runs yet.</p></div>',
@@ -2168,7 +2320,13 @@ def page_payroll():
             st.info("You need HR add permission to generate payroll.")
     elif tab == "Process / Pay":
         runs = [r for r in (db.get_payroll_runs() or []) if r["status"] in ("draft", "approved", "posted", "paid", "closed")]
-        if not runs:
+        runs, locked_ym = _filter_runs_by_working_month(runs)
+        if locked_ym and not runs:
+            st.warning(
+                f"No payroll run for locked month **{_ym_period_label(locked_ym)}**. "
+                "Clear the lock or generate that month’s payroll."
+            )
+        elif not runs:
             st.info("No payroll runs to process.")
         else:
             runs_sorted = sorted(
@@ -2176,13 +2334,17 @@ def page_payroll():
                 key=lambda r: (int(r.get("payroll_year") or 0), int(r.get("payroll_month") or 0), int(r.get("id") or 0)),
                 reverse=True,
             )
-            sel = st.selectbox(
-                "Payroll run",
-                [
+
+            def _proc_lbl(r):
+                return (
                     f"{r['document_no']} — {_payroll_period_label(r['payroll_month'], r['payroll_year'])} "
                     f"[{(r.get('status') or '').upper()}]"
-                    for r in runs_sorted
-                ],
+                )
+
+            _sync_payroll_run_select_key("hr_pay_process_sel", runs_sorted, _proc_lbl)
+            sel = st.selectbox(
+                "Payroll run",
+                [_proc_lbl(r) for r in runs_sorted],
                 key="hr_pay_process_sel",
             )
             pid = next(r["id"] for r in runs_sorted if r["document_no"] in sel)
@@ -2340,7 +2502,13 @@ def page_payroll():
                                 st.error(str(e))
     elif tab == "Edit Lines":
         runs = [r for r in db.get_payroll_runs() if r["status"] == "draft"]
-        if not runs:
+        runs, locked_ym = _filter_runs_by_working_month(runs)
+        if locked_ym and not runs:
+            st.warning(
+                f"No draft payroll for locked month **{_ym_period_label(locked_ym)}**. "
+                "Clear the lock, unapprove that month, or generate it."
+            )
+        elif not runs:
             st.info(
                 "No draft payroll to edit. **Unapprove** an approved payroll on **Process / Pay**, "
                 "or generate a new payroll run."
@@ -2348,12 +2516,15 @@ def page_payroll():
         elif not db.user_can_hr(st.session_state.user, "edit"):
             st.info("You need HR edit permission to modify payroll lines.")
         else:
+            def _edit_lbl(r):
+                return (
+                    f"{r['document_no']} — {_payroll_period_label(r['payroll_month'], r['payroll_year'])}"
+                )
+
+            _sync_payroll_run_select_key("pr_edit_run", runs, _edit_lbl)
             sel = st.selectbox(
                 "Draft Payroll",
-                [
-                    f"{r['document_no']} — {_payroll_period_label(r['payroll_month'], r['payroll_year'])}"
-                    for r in runs
-                ],
+                [_edit_lbl(r) for r in runs],
                 key="pr_edit_run",
             )
             pid = next(r["id"] for r in runs if r["document_no"] in sel)
@@ -3182,7 +3353,13 @@ def page_payroll():
 
     elif tab == "Single employee pay":
         runs = [r for r in db.get_payroll_runs() if r["status"] == "draft"]
-        if not runs:
+        runs, locked_ym = _filter_runs_by_working_month(runs)
+        if locked_ym and not runs:
+            st.warning(
+                f"No draft payroll for locked month **{_ym_period_label(locked_ym)}**. "
+                "Clear the lock, unapprove that month, or generate it."
+            )
+        elif not runs:
             st.info(
                 "No draft payroll. **Unapprove** on **Process / Pay**, or generate a new run. "
                 "Department-wise grids stay on **Edit Lines**."
@@ -3190,12 +3367,15 @@ def page_payroll():
         elif not db.user_can_hr(st.session_state.user, "edit"):
             st.info("You need HR edit permission to modify payroll lines.")
         else:
+            def _sep_lbl(r):
+                return (
+                    f"{r['document_no']} — {_payroll_period_label(r['payroll_month'], r['payroll_year'])}"
+                )
+
+            _sync_payroll_run_select_key("pr_sep_run", runs, _sep_lbl)
             sel = st.selectbox(
                 "Draft Payroll",
-                [
-                    f"{r['document_no']} — {_payroll_period_label(r['payroll_month'], r['payroll_year'])}"
-                    for r in runs
-                ],
+                [_sep_lbl(r) for r in runs],
                 key="pr_sep_run",
             )
             pid = next(r["id"] for r in runs if r["document_no"] in sel)
@@ -3279,19 +3459,29 @@ def page_payroll():
 
     elif tab == "Salary Slips":
         runs = db.get_payroll_runs() or []
-        if runs:
+        runs, locked_ym = _filter_runs_by_working_month(runs)
+        if locked_ym and not runs:
+            st.warning(
+                f"No payroll for locked month **{_ym_period_label(locked_ym)}**. "
+                "Clear the lock to browse other periods."
+            )
+        elif runs:
             runs_sorted = sorted(
                 runs,
                 key=lambda r: (int(r.get("payroll_year") or 0), int(r.get("payroll_month") or 0), int(r.get("id") or 0)),
                 reverse=True,
             )
-            sel = st.selectbox(
-                "Payroll for slips",
-                [
+
+            def _slip_lbl(r):
+                return (
                     f"{r['document_no']} — {_payroll_period_label(r['payroll_month'], r['payroll_year'])} "
                     f"[{(r.get('status') or '').upper()}]"
-                    for r in runs_sorted
-                ],
+                )
+
+            _sync_payroll_run_select_key("hr_pay_slips_sel", runs_sorted, _slip_lbl)
+            sel = st.selectbox(
+                "Payroll for slips",
+                [_slip_lbl(r) for r in runs_sorted],
                 key="hr_pay_slips_sel",
             )
             pid = next(r["id"] for r in runs_sorted if r["document_no"] in sel)

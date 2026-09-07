@@ -276,3 +276,91 @@ def render_home_layout_controls() -> None:
             })
             st.rerun()
         st.caption("Saved to your account — stays after sign-out until you change it.")
+
+
+# --- HR working salary month (survives page refresh) ---
+
+_HR_WORKING_SALARY_PREF = "hr_working_salary_month"
+_HR_WORKING_SALARY_KEY = "hr_working_salary_ym"
+_HR_WORKING_SALARY_LOADED_KEY = "hr_working_salary_ym_loaded_uid"
+
+
+def _load_ui_pref(user_id: int, pref_key: str) -> str | None:
+    from database import get_connection
+
+    try:
+        with get_connection() as conn:
+            _ensure_ui_prefs_table(conn)
+            row = conn.execute(
+                """SELECT pref_value FROM user_ui_prefs
+                   WHERE user_id=? AND pref_key=?""",
+                (int(user_id), pref_key),
+            ).fetchone()
+        if not row or row[0] is None:
+            return None
+        val = str(row[0]).strip()
+        return val or None
+    except Exception:
+        return None
+
+
+def _save_ui_pref(user_id: int, pref_key: str, value: str | None) -> None:
+    from database import get_connection
+    from datetime import datetime
+
+    ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    with get_connection() as conn:
+        _ensure_ui_prefs_table(conn)
+        if value is None or not str(value).strip():
+            conn.execute(
+                "DELETE FROM user_ui_prefs WHERE user_id=? AND pref_key=?",
+                (int(user_id), pref_key),
+            )
+        else:
+            conn.execute(
+                """INSERT INTO user_ui_prefs(user_id, pref_key, pref_value, updated_at)
+                   VALUES(?,?,?,?)
+                   ON CONFLICT(user_id, pref_key) DO UPDATE SET
+                     pref_value=excluded.pref_value,
+                     updated_at=excluded.updated_at""",
+                (int(user_id), pref_key, str(value).strip(), ts),
+            )
+
+
+def _normalize_salary_ym(raw) -> str | None:
+    s = (str(raw or "").strip())[:7]
+    if len(s) == 7 and s[4] == "-" and s[:4].isdigit() and s[5:7].isdigit():
+        m = int(s[5:7])
+        if 1 <= m <= 12:
+            return f"{int(s[:4]):04d}-{m:02d}"
+    return None
+
+
+def get_hr_working_salary_month() -> str | None:
+    """Return locked YYYY-MM for payroll work, or None if not set."""
+    uid = _current_user_id()
+    loaded_for = st.session_state.get(_HR_WORKING_SALARY_LOADED_KEY)
+    if uid and loaded_for != uid:
+        saved = _normalize_salary_ym(_load_ui_pref(uid, _HR_WORKING_SALARY_PREF))
+        st.session_state[_HR_WORKING_SALARY_KEY] = saved
+        st.session_state[_HR_WORKING_SALARY_LOADED_KEY] = uid
+    raw = st.session_state.get(_HR_WORKING_SALARY_KEY)
+    return _normalize_salary_ym(raw)
+
+
+def set_hr_working_salary_month(ym: str | None) -> str | None:
+    """Persist working salary month (YYYY-MM) or clear when None/empty."""
+    cleaned = _normalize_salary_ym(ym)
+    st.session_state[_HR_WORKING_SALARY_KEY] = cleaned
+    uid = _current_user_id()
+    if uid:
+        st.session_state[_HR_WORKING_SALARY_LOADED_KEY] = uid
+        try:
+            _save_ui_pref(uid, _HR_WORKING_SALARY_PREF, cleaned)
+        except Exception:
+            pass
+    return cleaned
+
+
+def clear_hr_working_salary_month() -> None:
+    set_hr_working_salary_month(None)
