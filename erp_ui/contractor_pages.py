@@ -837,7 +837,6 @@ def _tab_month_preview():
         load_rate = float(rates.get("loading") or 0)
         unload_rate = float(rates.get("unloading") or 0)
         slips = list(result.get("slips") or [])
-        products = list(result.get("products") or [])
         if not slips:
             st.warning("Click **Load / refresh month** to load product and slip detail.")
 
