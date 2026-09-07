@@ -405,10 +405,17 @@ def _tab_products():
         elif not matched:
             st.warning(f"No active products found for prefix **{prefix}***.")
         else:
-            st.info(
-                f"**{prefix}*** → {len(matched)} product(s), "
-                f"**{len(new_matches)}** not yet in your selection."
-            )
+            if len(matched) == 1:
+                one = matched[0]
+                st.info(
+                    f"**{one.get('code')}** — {one.get('name') or '(no name)'} · "
+                    f"{'already in selection' if not new_matches else 'ready to add'}."
+                )
+            else:
+                st.info(
+                    f"**{prefix}*** → {len(matched)} product(s), "
+                    f"**{len(new_matches)}** not yet in your selection."
+                )
 
     # Shortcut chips (wrap in rows of 4)
     hints = list(BULK_PREFIX_HINTS)
@@ -724,6 +731,9 @@ def _tab_month_preview():
                 )
                 # Reset slip editor so Include matches current exclusions
                 st.session_state.pop(f"cl_lu_slip_ed_{cid}_{ym}", None)
+                st.session_state.pop(f"cl_lu_slip_seed_{cid}_{ym}", None)
+                st.session_state.pop(f"cl_lu_excl_draft_{cid}_{ym}", None)
+                st.session_state.pop(f"cl_lu_slip_filt_prev_{cid}_{ym}", None)
             else:
                 prior = {}
                 if not is_prod:
@@ -819,8 +829,9 @@ def _tab_month_preview():
     if is_lu:
         st.markdown(
             "**Worksheet** — weighbridge completed slips. "
-            "Uncheck slips that should not be billed (e.g. tankers). "
-            "Use the product summary + filter to find them quickly."
+            "Uncheck slips freely, then **Apply include selection** "
+            "(Sale/Purchase kg do not change until you apply). "
+            "Bulk Include/Exclude buttons apply immediately."
         )
         rates = st.session_state.get(rate_key) or {}
         load_rate = float(rates.get("loading") or 0)
@@ -829,7 +840,39 @@ def _tab_month_preview():
         products = list(result.get("products") or [])
         if not slips:
             st.warning("Click **Load / refresh month** to load product and slip detail.")
+
+        draft_key = f"cl_lu_excl_draft_{cid}_{ym}"
+        seed_key = f"cl_lu_slip_seed_{cid}_{ym}"
+        ed_key = f"cl_lu_slip_ed_{cid}_{ym}"
+        filt_prev_key = f"cl_lu_slip_filt_prev_{cid}_{ym}"
+        if draft_key not in st.session_state:
+            st.session_state[draft_key] = list(st.session_state.get(excl_key) or [])
+
+        def _lu_remount_slip_editor():
+            st.session_state.pop(ed_key, None)
+            st.session_state.pop(seed_key, None)
+
+        def _lu_excl_from_edited(edited_df, all_slips, base_excl):
+            """Merge visible Include ticks into exclusion set (keep hidden exclusions)."""
+            out = set(int(x) for x in (base_excl or []))
+            if edited_df is None or getattr(edited_df, "empty", True):
+                return out
+            visible = set()
+            for _, row in edited_df.iterrows():
+                sid = int(row["_id"])
+                visible.add(sid)
+                if bool(row.get("Include")):
+                    out.discard(sid)
+                else:
+                    out.add(sid)
+            for s in all_slips:
+                sid = int(s["id"])
+                if sid not in visible and sid in set(int(x) for x in (base_excl or [])):
+                    out.add(sid)
+            return out
+
         excl = set(int(x) for x in (st.session_state.get(excl_key) or []))
+        draft_excl = set(int(x) for x in (st.session_state.get(draft_key) or []))
 
         slip_filter = st.text_input(
             "Filter (product / vehicle / party / slip no)",
@@ -837,16 +880,36 @@ def _tab_month_preview():
             placeholder="e.g. LPG, SILICATE, tanker plate…",
         ).strip().lower()
 
+        # Filter change: keep pending ticks, remount visible rows
+        if st.session_state.get(filt_prev_key) != slip_filter:
+            prev_ed = st.session_state.get(ed_key)
+            if prev_ed is not None:
+                try:
+                    ed_df = prev_ed if hasattr(prev_ed, "iterrows") else pd.DataFrame(prev_ed)
+                    draft_excl = _lu_excl_from_edited(ed_df, slips, draft_excl)
+                    st.session_state[draft_key] = sorted(draft_excl)
+                except Exception:
+                    pass
+            st.session_state[filt_prev_key] = slip_filter
+            _lu_remount_slip_editor()
+
         qa1, qa2, qa3, qa4 = st.columns(4)
         if qa1.button("Include all", key=f"cl_lu_incl_all_{cid}_{ym}"):
+            draft_excl = set()
             excl = set()
-            st.session_state.pop(f"cl_lu_slip_ed_{cid}_{ym}", None)
+            st.session_state[draft_key] = []
+            st.session_state[excl_key] = []
+            _lu_remount_slip_editor()
         if qa2.button("Exclude no-product", key=f"cl_lu_excl_none_{cid}_{ym}"):
-            excl.update(
+            add = {
                 int(s["id"]) for s in slips
                 if (s.get("product_code") or "(none)") == "(none)"
-            )
-            st.session_state.pop(f"cl_lu_slip_ed_{cid}_{ym}", None)
+            }
+            draft_excl |= add
+            excl |= add
+            st.session_state[draft_key] = sorted(draft_excl)
+            st.session_state[excl_key] = sorted(excl)
+            _lu_remount_slip_editor()
         if qa3.button("Exclude filtered", key=f"cl_lu_excl_filt_{cid}_{ym}"):
             if slip_filter:
                 for s in slips:
@@ -858,8 +921,11 @@ def _tab_month_preview():
                         str(s.get("vehicle_no") or ""),
                     ]).lower()
                     if slip_filter in blob:
+                        draft_excl.add(int(s["id"]))
                         excl.add(int(s["id"]))
-                st.session_state.pop(f"cl_lu_slip_ed_{cid}_{ym}", None)
+                st.session_state[draft_key] = sorted(draft_excl)
+                st.session_state[excl_key] = sorted(excl)
+                _lu_remount_slip_editor()
         if qa4.button("Include filtered", key=f"cl_lu_incl_filt_{cid}_{ym}"):
             if slip_filter:
                 for s in slips:
@@ -871,10 +937,13 @@ def _tab_month_preview():
                         str(s.get("vehicle_no") or ""),
                     ]).lower()
                     if slip_filter in blob:
+                        draft_excl.discard(int(s["id"]))
                         excl.discard(int(s["id"]))
-                st.session_state.pop(f"cl_lu_slip_ed_{cid}_{ym}", None)
+                st.session_state[draft_key] = sorted(draft_excl)
+                st.session_state[excl_key] = sorted(excl)
+                _lu_remount_slip_editor()
 
-        # --- Product summary (read-only; use filter / slip Include to exclude) ---
+        # --- Product summary (committed exclusions only) ---
         st.markdown("#### Products this month")
         if products:
             prod_view = []
@@ -901,12 +970,12 @@ def _tab_month_preview():
             hlp.render_dataframe_html_table(pd.DataFrame(prod_view))
             st.caption(
                 "To drop a product (e.g. tanker LPG): type its code in the filter → "
-                "**Exclude filtered**. Or uncheck individual slips below."
+                "**Exclude filtered**. Or uncheck slips below and **Apply include selection**."
             )
         else:
             st.caption("No completed weighbridge slips in this month.")
 
-        # --- Individual slips ---
+        # --- Individual slips (edit freely; Apply commits) ---
         st.markdown("#### Weighbridge slips")
         slip_rows = []
         for s in slips:
@@ -920,7 +989,7 @@ def _tab_month_preview():
             if slip_filter and slip_filter not in blob:
                 continue
             slip_rows.append({
-                "Include": int(s["id"]) not in excl,
+                "Include": int(s["id"]) not in draft_excl,
                 "Side": s.get("side_label") or s.get("side"),
                 "Date": s.get("slip_date"),
                 "Slip": s.get("document_no"),
@@ -931,21 +1000,25 @@ def _tab_month_preview():
                 "Net kg": float(s.get("net_weight") or 0),
                 "_id": int(s["id"]),
             })
+        edited_slips = None
         if slip_rows:
-            slip_df = pd.DataFrame(slip_rows)
+            if seed_key not in st.session_state:
+                st.session_state[seed_key] = pd.DataFrame(slip_rows)
             edited_slips = st.data_editor(
-                slip_df,
+                st.session_state[seed_key],
                 hide_index=True,
                 use_container_width=True,
                 num_rows="fixed",
-                height=min(480, 48 + 35 * min(len(slip_df), 12)),
+                height=min(480, 48 + 35 * min(len(st.session_state[seed_key]), 12)),
                 disabled=[
                     "Side", "Date", "Slip", "Code", "Product", "Party", "Vehicle",
                     "Net kg", "_id",
                 ],
                 column_config={
                     "Include": st.column_config.CheckboxColumn(
-                        "Include", help="Uncheck to exclude from billed kg", default=True,
+                        "Include",
+                        help="Uncheck freely, then click Apply include selection",
+                        default=True,
                     ),
                     "Side": st.column_config.TextColumn("Side", width="medium"),
                     "Date": st.column_config.TextColumn("Date", width="small"),
@@ -957,29 +1030,36 @@ def _tab_month_preview():
                     "Net kg": st.column_config.NumberColumn("Net kg", format="%.2f"),
                     "_id": None,
                 },
-                key=f"cl_lu_slip_ed_{cid}_{ym}",
+                key=ed_key,
             )
-            visible_ids = set(int(r["_id"]) for _, r in edited_slips.iterrows())
-            for _, row in edited_slips.iterrows():
-                sid = int(row["_id"])
-                if bool(row.get("Include")):
-                    excl.discard(sid)
-                else:
-                    excl.add(sid)
-            # Preserve exclusions for slips hidden by the filter
-            prev = set(int(x) for x in (st.session_state.get(excl_key) or []))
-            for s in slips:
-                sid = int(s["id"])
-                if sid not in visible_ids and sid in prev:
-                    excl.add(sid)
+            pending_excl = _lu_excl_from_edited(edited_slips, slips, draft_excl)
+            pending = pending_excl != excl
+            ap1, ap2 = st.columns([1.4, 2.6])
+            if ap1.button(
+                "Apply include selection",
+                type="primary",
+                key=f"cl_lu_apply_incl_{cid}_{ym}",
+                use_container_width=True,
+            ):
+                st.session_state[draft_key] = sorted(pending_excl)
+                st.session_state[excl_key] = sorted(pending_excl)
+                _lu_remount_slip_editor()
+                st.rerun()
+            if pending:
+                ap2.warning(
+                    "Include ticks changed — click **Apply include selection** "
+                    "to update Sale/Purchase kg and Gross."
+                )
+            else:
+                ap2.caption("Selection matches billed totals. Uncheck slips, then Apply.")
+            # Keep draft aligned with editor for filter remounts
+            st.session_state[draft_key] = sorted(pending_excl)
         elif slips:
             st.caption("No slips match the filter.")
         else:
             st.caption("No slips to list.")
 
-        st.session_state[excl_key] = sorted(excl)
-
-        # Recalculate billed kg from inclusions
+        # Recalculate billed kg from committed inclusions only
         sale_kg = purch_kg = 0.0
         sale_n = purch_n = 0
         for s in slips:
