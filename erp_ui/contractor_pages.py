@@ -558,7 +558,8 @@ def _tab_products():
     else:
         st.info(
             "No products selected yet. Bulk-add **SF*** for base powder (sold × rate), "
-            "or **DT3*** for detergent (production × rate)."
+            "**DT3*** for detergent (production × rate), or search **RM187** for Salt Stone "
+            "(purchased × rate)."
         )
 
     a1, a2, a3, a4 = st.columns(4)

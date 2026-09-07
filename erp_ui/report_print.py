@@ -715,7 +715,7 @@ table.data td.wrap { white-space: nowrap !important; }
     {summary_html}
     {extra_html}
     <table class="data report-grid"><colgroup>{colgroup}</colgroup><thead><tr>{thead}</tr></thead><tbody>{tbody}</tbody></table>
-    {_report_signatures_html(report_key or title)}
+    {_report_signatures_html("report", report_key=report_key or title)}
     {_report_footer_html(report_key or title)}
     <p class="no-print"><button class="print-btn" onclick="doPrint()">Print Report</button></p>
     </div></body></html>"""
@@ -731,7 +731,17 @@ def _report_signatures_html(doc_label: str = "report", report_key: str | None = 
     key = report_key or doc_label
     if key in CASH_TRANSACTION_REPORTS:
         return signature_block_html(style=PRINT_STYLE_CASH)
-    return signature_block_html(doc_label=doc_label, style=PRINT_STYLE_SYSTEM)
+    # Prefer short label — full titles (e.g. Contract Labour — …) make a clumsy sentence
+    label = "report"
+    dl = str(doc_label or "").strip()
+    if (
+        dl
+        and "—" not in dl
+        and len(dl) <= 32
+        and not dl.lower().startswith("contract labour")
+    ):
+        label = dl
+    return signature_block_html(doc_label=label, style=PRINT_STYLE_SYSTEM)
 
 
 def _report_footer_html(report_key: str | None = None) -> str:
@@ -1331,6 +1341,22 @@ def build_report_pdf(title, df, period="", filters=None, summary=None, layout="l
                 _pdf_clip(f"Closing Balance: {led_sum.get('Closing', '-')}"),
                 ln=True,
             )
+
+    # System-generated disclaimer (contract labour + other non-cash reports)
+    from erp_ui.document_print import CASH_TRANSACTION_REPORTS
+    rk = report_key or title or ""
+    is_contract = str(title or "").strip().lower().startswith("contract labour")
+    if is_contract or (rk and rk not in CASH_TRANSACTION_REPORTS):
+        if pdf.get_y() + 16 > pdf.h - pdf.b_margin:
+            pdf.add_page()
+        pdf.ln(6)
+        pdf.set_draw_color(50, 50, 50)
+        pdf.set_font("Helvetica", "B", 9)
+        notice = (
+            "This is a system-generated report. "
+            "It does not require any signature or stamp."
+        )
+        pdf.multi_cell(0, 5, _pdf_safe_text(notice), align="C", border=1)
 
     return bytes(pdf.output())
 
