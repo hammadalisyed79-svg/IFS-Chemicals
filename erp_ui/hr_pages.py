@@ -418,10 +418,20 @@ def _render_single_employee_edit_pay(
     period_end = date(py, pm, mdays) if py and pm else date.today()
     period_start = date(py, pm, 1) if py and pm else date.today()
     is_partial = bool(leave_default and leave_default < period_end)
+
+    def _clamp_in_month(d: date) -> date:
+        if d < period_start:
+            return period_start
+        if d > period_end:
+            return period_end
+        return d
+
+    # Default must stay inside payroll month (today may be next month).
+    leave_ui_default = _clamp_in_month(leave_default or min(date.today(), period_end))
     lw1, lw2, lw3 = st.columns([1.4, 1.2, 1.4])
     leaving_pick = lw1.date_input(
         "Last working day (resign / final pay)",
-        value=leave_default or date.today(),
+        value=leave_ui_default,
         min_value=period_start,
         max_value=period_end,
         key=f"pr_sep_leaving_{pid}_{sel_id}",
