@@ -337,9 +337,22 @@ def _render_single_employee_edit_pay(
     )
 
     pick_key = f"pr_sep_line_id_{pid}"
-    # Keep selection stable across save (options are line ids, not labels with changing Net)
-    if pick_key not in st.session_state or st.session_state.get(pick_key) not in line_by_id:
-        st.session_state[pick_key] = id_order[0]
+    keep_key = f"pr_sep_keep_line_{pid}"
+
+    def _coerce_line_id(raw):
+        try:
+            return int(raw)
+        except (TypeError, ValueError):
+            return None
+
+    # Prefer explicit keep-id after save/pay (survives form remount / type quirks)
+    preferred = _coerce_line_id(st.session_state.get(keep_key))
+    if preferred is None or preferred not in line_by_id:
+        preferred = _coerce_line_id(st.session_state.get(pick_key))
+    if preferred is None or preferred not in line_by_id:
+        preferred = id_order[0]
+    st.session_state[pick_key] = preferred
+    st.session_state[keep_key] = preferred
 
     sel_id = st.selectbox(
         "Employee list",
@@ -348,6 +361,8 @@ def _render_single_employee_edit_pay(
         key=pick_key,
         help="Edit and pay one person. Department grids stay on Edit Lines.",
     )
+    sel_id = _coerce_line_id(sel_id) or preferred
+    st.session_state[keep_key] = sel_id
     line = line_by_id[int(sel_id)]
     line_paid = (line.get("paid_status") or "") == "paid"
     eid = int(line.get("employee_id") or 0)
@@ -507,9 +522,15 @@ def _render_single_employee_edit_pay(
             }, uid())
             db.refresh_payroll_attendance_days(pid, user_id=uid())
             _payroll_clear_edit_live_state(pid)
+            keep_sel = {
+                pick_key: int(sel_id),
+                keep_key: int(sel_id),
+                "hr_pay_tab": "Single employee pay",
+            }
             if do_mark_left:
                 ff.action_done(
-                    f"Final settlement complete through **{leaving_pick}** — ledger NIL, marked left."
+                    f"Final settlement complete through **{leaving_pick}** — ledger NIL, marked left.",
+                    retain=keep_sel,
                 )
             else:
                 msg = f"Last working day set to **{leaving_pick}** (pro-rata refreshed). "
@@ -520,7 +541,7 @@ def _render_single_employee_edit_pay(
                     )
                 else:
                     msg += "Ledger is NIL — tick **Mark employment as left** to close."
-                ff.action_done(msg)
+                ff.action_done(msg, retain=keep_sel)
         except Exception as e:
             st.error(str(e))
     if is_partial or leave_default:
@@ -766,9 +787,7 @@ def _render_single_employee_edit_pay(
                     uid(),
                     sync_ot=("from_amount" if derive_hrs else None),
                 )
-                # Remount form fields from DB. Do not retain widget keys
-                # (hr_pay_tab / pr_sep_run / pick) — already set and Streamlit
-                # forbids writing them after the widgets exist on this run.
+                # Remount form fields from DB. Keep employee picker via retain.
                 form_prefixes = (
                     f"pr_sep_basic_{pid}",
                     f"pr_sep_allw_{pid}",
@@ -782,6 +801,11 @@ def _render_single_employee_edit_pay(
                     f"pr_sep_oth_{pid}",
                     f"pr_sep_derive_{pid}",
                 )
+                keep_sel = {
+                    pick_key: int(line["id"]),
+                    keep_key: int(line["id"]),
+                    "hr_pay_tab": "Single employee pay",
+                }
                 if do_pay:
                     if pmode_edit == "bank" and not bank_id_edit:
                         raise ValueError("Select bank account.")
@@ -812,6 +836,7 @@ def _render_single_employee_edit_pay(
                         f"{res['employee']} saved & paid. "
                         "Still on this pay desk — voucher ready below.",
                         prefixes=form_prefixes,
+                        retain=keep_sel,
                     )
                 else:
                     _payroll_clear_edit_live_state(pid)
@@ -819,6 +844,7 @@ def _render_single_employee_edit_pay(
                         "Payroll line updated — still on this employee. "
                         "Adjust more or use **Save & post voucher** when ready.",
                         prefixes=form_prefixes,
+                        retain=keep_sel,
                     )
             except Exception as e:
                 err = str(e)
