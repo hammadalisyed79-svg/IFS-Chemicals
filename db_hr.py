@@ -2557,6 +2557,7 @@ def refresh_payroll_attendance_days(payroll_id, user_id=None):
         ).fetchall()
         n = 0
         no_att = []
+        date_skipped_with_att = []
         for row in lines:
             ln = dict(row)
             eid = int(ln["employee_id"])
@@ -2564,15 +2565,71 @@ def refresh_payroll_attendance_days(payroll_id, user_id=None):
                 conn, eid, period_start, period_end,
             )
             att_lo, att_hi = emp_start, emp_end
+            # Master joining/leaving may exclude the month, but attendance was saved —
+            # still pull those marks so "Refresh Present from attendance" works.
             if emp_start > emp_end:
-                att = {"days_present": 0.0, "days_absent": 0.0, "days_leave": 0.0, "overtime_hrs": 0.0}
-                att_n = 0
-            else:
-                att_n = conn.execute(
+                att_n_full = conn.execute(
                     "SELECT COUNT(*) FROM attendance WHERE employee_id=? AND att_date>=? AND att_date<=?",
-                    (eid, att_lo, att_hi),
+                    (eid, period_start, period_end),
                 ).fetchone()[0]
-                att = _attendance_days_for_period(conn, eid, att_lo, att_hi)
+                if att_n_full:
+                    att_lo, att_hi = period_start, period_end
+                    partial = True
+                    emp = conn.execute(
+                        "SELECT code, full_name, joining_date FROM employees WHERE id=?",
+                        (eid,),
+                    ).fetchone()
+                    if emp:
+                        date_skipped_with_att.append(
+                            f"{emp[0]} {emp[1]} (join {emp[2] or '—'})"
+                        )
+                else:
+                    att = {
+                        "days_present": 0.0,
+                        "days_absent": 0.0,
+                        "days_leave": 0.0,
+                        "overtime_hrs": 0.0,
+                    }
+                    att_n = 0
+                    emp = conn.execute(
+                        "SELECT code, full_name FROM employees WHERE id=?", (eid,)
+                    ).fetchone()
+                    if emp:
+                        no_att.append(f"{emp[0]} {emp[1]}")
+                    basic = float(ln.get("basic_salary") or 0)
+                    overtime = calc_overtime_amount(basic, year, month, 0)
+                    merged = {
+                        **ln,
+                        "days_present": 0.0,
+                        "days_absent": 0.0,
+                        "days_leave": 0.0,
+                        "overtime_hrs": 0.0,
+                        "overtime": overtime,
+                    }
+                    calc = _recalc_payroll_line_fields(
+                        merged, year=year, month=month, sync_ot=None, partial_month=True,
+                        days_leave=0.0,
+                    )
+                    conn.execute(
+                        """UPDATE payroll_lines SET
+                           days_present=?, days_absent=?, overtime_hrs=?, overtime=?,
+                           absent_deduction=?, gross_salary=?, total_deductions=?, net_salary=?
+                           WHERE id=?""",
+                        (
+                            0.0, 0.0, 0.0, overtime,
+                            calc.get("absent_deduction", 0),
+                            calc["gross_salary"], calc["total_deductions"], calc["net_salary"],
+                            ln["id"],
+                        ),
+                    )
+                    n += 1
+                    continue
+
+            att_n = conn.execute(
+                "SELECT COUNT(*) FROM attendance WHERE employee_id=? AND att_date>=? AND att_date<=?",
+                (eid, att_lo, att_hi),
+            ).fetchone()[0]
+            att = _attendance_days_for_period(conn, eid, att_lo, att_hi)
             if not att_n:
                 emp = conn.execute(
                     "SELECT code, full_name FROM employees WHERE id=?", (eid,)
@@ -2611,6 +2668,8 @@ def refresh_payroll_attendance_days(payroll_id, user_id=None):
             "updated": n,
             "no_attendance": len(no_att),
             "no_attendance_names": no_att[:15],
+            "date_skipped_with_att": len(date_skipped_with_att),
+            "date_skipped_with_att_names": date_skipped_with_att[:10],
             "period_start": period_start,
             "period_end": period_end,
         }

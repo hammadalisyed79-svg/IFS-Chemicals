@@ -500,6 +500,16 @@ def _render_single_employee_edit_pay(
         f"<p style='margin:0;font-weight:700;color:#0f172a'>{escape(join_show)}</p></div>",
         unsafe_allow_html=True,
     )
+    try:
+        join_d_chk = date.fromisoformat(join_show) if join_show and join_show != "—" else None
+    except ValueError:
+        join_d_chk = None
+    if join_d_chk and py and pm and join_d_chk > period_end:
+        st.warning(
+            f"Joining date **{join_show}** is after this payroll month "
+            f"({period_start}–{period_end}). Attendance refresh still pulls saved marks, "
+            "but fix **Joining Date** on the employee master so pro-rata is correct."
+        )
     leaving_pick = lw2.date_input(
         "Last working day (resign / final pay)",
         value=leave_ui_default,
@@ -612,36 +622,38 @@ def _render_single_employee_edit_pay(
         st.markdown("</div>", unsafe_allow_html=True)
         return
 
-    with st.form(f"payroll_sep_edit_{pid}"):
+    with st.form(f"payroll_sep_edit_{pid}_{sel_id}"):
         st.markdown("<p class='sep-section-lbl'>Earnings</p>", unsafe_allow_html=True)
         e1, e2, e3, e4 = st.columns(4)
+        # Keys include line id so switching employees / attendance refresh remount from DB
+        _fk = f"{pid}_{sel_id}"
         with e1:
             basic = money_input(
                 "Basic Salary",
                 value=float(line.get("basic_salary") or 0),
                 min_value=0.0,
-                key=f"pr_sep_basic_{pid}",
+                key=f"pr_sep_basic_{_fk}",
             )
         with e2:
             allowances = money_input(
                 "Allowances",
                 value=float(line.get("allowances") or 0),
                 min_value=0.0,
-                key=f"pr_sep_allw_{pid}",
+                key=f"pr_sep_allw_{_fk}",
             )
         with e3:
             overtime = money_input(
                 "Overtime",
                 value=float(line.get("overtime") or 0),
                 min_value=0.0,
-                key=f"pr_sep_ot_{pid}",
+                key=f"pr_sep_ot_{_fk}",
             )
         with e4:
             bonus = money_input(
                 "Bonus",
                 value=float(line.get("bonus") or 0),
                 min_value=0.0,
-                key=f"pr_sep_bonus_{pid}",
+                key=f"pr_sep_bonus_{_fk}",
             )
 
         st.markdown(
@@ -655,7 +667,7 @@ def _render_single_employee_edit_pay(
                 "Advance recovery (this month)",
                 value=float(line.get("advance_recovery") or 0),
                 min_value=0.0,
-                key=f"pr_sep_adv_{pid}",
+                key=f"pr_sep_adv_{_fk}",
                 help=f"Total advance outstanding: {fmt(adv_out)}",
             )
         with d2:
@@ -663,7 +675,7 @@ def _render_single_employee_edit_pay(
                 "Loan recovery (this month)",
                 value=float(line.get("loan_recovery") or 0),
                 min_value=0.0,
-                key=f"pr_sep_loan_{pid}",
+                key=f"pr_sep_loan_{_fk}",
                 help=f"Total loan outstanding: {fmt(loan_out)}",
             )
         with d3:
@@ -671,7 +683,7 @@ def _render_single_employee_edit_pay(
                 "Other deductions",
                 value=float(line.get("other_deductions") or 0),
                 min_value=0.0,
-                key=f"pr_sep_other_{pid}",
+                key=f"pr_sep_other_{_fk}",
             )
         with d4:
             leave_ded_saved = float(line.get("absent_deduction") or 0)
@@ -701,14 +713,14 @@ def _render_single_employee_edit_pay(
             min_value=0.0,
             value=float(line.get("days_present") or 0),
             step=0.5,
-            key=f"pr_sep_dp_{pid}",
+            key=f"pr_sep_dp_{_fk}",
         )
         days_absent = a2.number_input(
             "Days Absent",
             min_value=0.0,
             value=float(line.get("days_absent") or 0),
             step=0.5,
-            key=f"pr_sep_da_{pid}",
+            key=f"pr_sep_da_{_fk}",
             help="Unpaid days (LWP). Paid leave must be marked Leave in attendance, not Absent.",
         )
         ot_hrs = a3.number_input(
@@ -716,13 +728,13 @@ def _render_single_employee_edit_pay(
             min_value=0.0,
             value=float(line.get("overtime_hrs") or 0),
             step=0.5,
-            key=f"pr_sep_oth_{pid}",
+            key=f"pr_sep_oth_{_fk}",
         )
         derive_hrs = a4.checkbox(
             "Derive hrs from OT amt",
             value=False,
             help="Keep Overtime amount and reverse-calculate hours",
-            key=f"pr_sep_derive_{pid}",
+            key=f"pr_sep_derive_{_fk}",
         )
 
         preview_gross = round(
@@ -824,6 +836,7 @@ def _render_single_employee_edit_pay(
                     sync_ot=("from_amount" if derive_hrs else None),
                 )
                 # Remount form fields from DB. Keep employee picker via retain.
+                # Prefixes clear all line-specific keys (pr_sep_dp_{pid}_{sel_id}, …).
                 form_prefixes = (
                     f"pr_sep_basic_{pid}",
                     f"pr_sep_allw_{pid}",
@@ -2782,6 +2795,20 @@ def page_payroll():
                     ):
                         try:
                             res = db.refresh_payroll_attendance_days(pid, user_id=uid())
+                            # Remount single-employee pay fields from refreshed DB values
+                            att_form_prefixes = (
+                                f"pr_sep_basic_{pid}",
+                                f"pr_sep_allw_{pid}",
+                                f"pr_sep_ot_{pid}",
+                                f"pr_sep_bonus_{pid}",
+                                f"pr_sep_adv_{pid}",
+                                f"pr_sep_loan_{pid}",
+                                f"pr_sep_other_{pid}",
+                                f"pr_sep_dp_{pid}",
+                                f"pr_sep_da_{pid}",
+                                f"pr_sep_oth_{pid}",
+                                f"pr_sep_derive_{pid}",
+                            )
                             if isinstance(res, dict):
                                 n = res.get("updated", 0)
                                 miss = int(res.get("no_attendance") or 0)
@@ -2795,9 +2822,20 @@ def page_payroll():
                                         f"in this period (Present=0): {sample}{more}. "
                                         "Open **HR → Attendance → Employee Wise**, then **Save period**."
                                     )
-                                ff.action_done(msg)
+                                skipped = int(res.get("date_skipped_with_att") or 0)
+                                if skipped:
+                                    sn = ", ".join(res.get("date_skipped_with_att_names") or [])
+                                    msg += (
+                                        f" **{skipped}** had attendance but joining/leaving "
+                                        f"outside this month — pulled marks anyway: {sn}. "
+                                        "Fix **Joining Date** on the employee master if wrong."
+                                    )
+                                ff.action_done(msg, prefixes=att_form_prefixes)
                             else:
-                                ff.action_done(f"Refreshed attendance for **{res}** line(s).")
+                                ff.action_done(
+                                    f"Refreshed attendance for **{res}** line(s).",
+                                    prefixes=att_form_prefixes,
+                                )
                         except Exception as e:
                             st.error(str(e))
                     if b3.button(
