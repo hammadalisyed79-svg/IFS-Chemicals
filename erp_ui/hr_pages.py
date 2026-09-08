@@ -558,8 +558,8 @@ def _render_single_employee_edit_pay(
             }, uid())
             db.refresh_payroll_attendance_days(pid, user_id=uid())
             _payroll_clear_edit_live_state(pid)
+            # Never write pick_key after the selectbox exists — Streamlit forbids it.
             keep_sel = {
-                pick_key: int(sel_id),
                 keep_key: int(sel_id),
                 "hr_pay_tab": "Single employee pay",
             }
@@ -837,8 +837,9 @@ def _render_single_employee_edit_pay(
                     f"pr_sep_oth_{pid}",
                     f"pr_sep_derive_{pid}",
                 )
+                # Never write pick_key after the selectbox exists — Streamlit forbids it.
+                # keep_key alone restores selection on the next run (before the widget).
                 keep_sel = {
-                    pick_key: int(line["id"]),
                     keep_key: int(line["id"]),
                     "hr_pay_tab": "Single employee pay",
                 }
