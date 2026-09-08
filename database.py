@@ -6414,6 +6414,16 @@ from db_stock_costing import (  # noqa: F401,E402
     refresh_bom_costs,
     save_stock_revaluation,
 )
+from db_production_stock import (  # noqa: F401,E402
+    apply_production_stock,
+    calculate_production_month,
+    get_production_month_run,
+    list_production_month_runs,
+    post_production_month_run,
+    production_qty_formula,
+    save_production_month_run,
+    unlock_production_month_run,
+)
 from db_audit import log_event, search_audit_log  # noqa: F401,F403,E402
 from product_rates_legacy import (  # noqa: F401,E402
     clear_rate_cache,

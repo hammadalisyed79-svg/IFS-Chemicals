@@ -453,6 +453,10 @@ def page_stock_adjustments():
     return _page()
 
 
+def page_production_from_physical():
+    from erp_ui.production_stock_pages import page_production_from_physical as _page
+    return _page()
+
 
 def page_stock_transfers():
     from erp_ui.inventory_pages import page_stock_transfers as _page
@@ -498,6 +502,7 @@ PAGES = {
     "Stock": page_stock,
     "Inventory": page_inventory,
     "Stock Adjustments": page_stock_adjustments,
+    "Production from Physical": page_production_from_physical,
     "Stock Revaluation": srv.page_stock_revaluation,
     "Download App": dl.page_download_app,
     "Stock Transfers": page_stock_transfers,

@@ -279,6 +279,8 @@ def apply_v3(conn, db_module):
     db_v17_3.migrate_v17_3_certification(conn, db_module)
     db_stock_costing = _safe_import("db_stock_costing")
     db_stock_costing.apply_stock_costing(conn, db_module)
+    db_production_stock = _safe_import("db_production_stock")
+    db_production_stock.apply_production_stock(conn, db_module)
     _ensure_expense_bills_schema(conn)
     _ensure_cash_advances_schema(conn)
     _ensure_cash_borrows_schema(conn)
