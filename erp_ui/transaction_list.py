@@ -421,12 +421,15 @@ def _pagination(key_prefix, result):
 
 
 def _search_kw_from_filters(filters, page, party_kw=None):
-    """Build search_fn kwargs; non-empty q searches all dates (not Today-only)."""
+    """Build search_fn kwargs. Date range always applies when From/To are set.
+
+    Use Period **All Time** (no From/To) to search across every date.
+    """
     q = filters.get("q")
     kw = {
         "q": q,
-        "from_date": None if q else filters.get("from_date"),
-        "to_date": None if q else filters.get("to_date"),
+        "from_date": filters.get("from_date"),
+        "to_date": filters.get("to_date"),
         "status": filters.get("status"),
         "page": page,
         "page_size": filters.get("page_size"),
@@ -463,8 +466,8 @@ def _register_core(
     st.session_state[f"{key_prefix}_fsig"] = filter_sig
     page = st.session_state.get(f"{key_prefix}_page", 1)
     kw = _search_kw_from_filters(filters, page, party_kw)
-    if filters.get("q"):
-        st.caption("Search active — matching **all dates** (change Period to Today to limit by date again).")
+    if filters.get("q") and not filters.get("from_date") and not filters.get("to_date"):
+        st.caption("Search active across **all dates** (Period = All Time).")
     try:
         result = search_fn(**kw)
     except TypeError:
@@ -1058,8 +1061,8 @@ def weight_slip_register_list():
     st.session_state["ws_reg_fsig"] = filter_sig
     page = st.session_state.get("ws_reg_page", 1)
     kw = _search_kw_from_filters(filters, page)
-    if filters.get("q"):
-        st.caption("Search active — matching **all dates**.")
+    if filters.get("q") and not filters.get("from_date") and not filters.get("to_date"):
+        st.caption("Search active across **all dates** (Period = All Time).")
     result = db.search_weight_slips(
         q=kw["q"], from_date=kw["from_date"], to_date=kw["to_date"],
         status=status, page=page, page_size=filters["page_size"],
@@ -1132,8 +1135,8 @@ def gate_pass_register_list():
     type_map = {"Material In": "material_in", "Material Out": "material_out", "FG Dispatch": "fg_dispatch"}
     pass_type = type_map.get(type_lbl)
     kw = _search_kw_from_filters(filters, page)
-    if filters.get("q"):
-        st.caption("Search active — matching **all dates**.")
+    if filters.get("q") and not filters.get("from_date") and not filters.get("to_date"):
+        st.caption("Search active across **all dates** (Period = All Time).")
     result = db.search_gate_passes(
         q=kw["q"], pass_type=pass_type, from_date=kw["from_date"], to_date=kw["to_date"],
         status=status, page=page, page_size=filters["page_size"],
