@@ -105,7 +105,7 @@ def _tab_worksheet():
     st.caption(
         "**Production** = Phy − OS − Return + Sale − Adj · "
         "**Closing** = Phy (physical count). "
-        "Tick products below, then **Load / refresh month**. "
+        "Tick products, choose **Include / Exclude / Replace**, then **Load**. "
         "Enter **Phy** only; production posts as stock-in (excluded from Adj on reload)."
     )
 
@@ -437,48 +437,142 @@ def _tab_worksheet():
         else:
             st.session_state[phy_key] = {}
 
-    load = st.button("Load / refresh month", type="primary", key="prod_phy_load")
     result_key = f"prod_phy_result_{wh_id}_{ym}"
     meta_key = f"prod_phy_meta_{wh_id}_{ym}"
+    existing_meta = st.session_state.get(meta_key) or {}
+    existing_loaded = [
+        int(x) for x in (existing_meta.get("product_ids") or [])
+        if existing_meta.get("ym") == ym and existing_meta.get("wh_id") == wh_id
+    ]
+
+    lm1, lm2 = st.columns([2.2, 1.4])
+    load_mode = lm1.radio(
+        "Load mode",
+        ["Include selected", "Exclude selected", "Replace worksheet"],
+        index=0,
+        horizontal=True,
+        key=f"prod_phy_load_mode_{wh_id}_{ym}",
+        help=(
+            "**Include** — add ticked products to the worksheet (keep existing Phy). "
+            "**Exclude** — remove ticked products from the worksheet. "
+            "**Replace** — worksheet becomes only the current selection."
+        ),
+    )
+    load = lm2.button("Load / refresh month", type="primary", key="prod_phy_load", use_container_width=True)
+    if existing_loaded:
+        st.caption(
+            f"Worksheet has **{len(existing_loaded)}** product(s). "
+            f"Selection now: **{len(product_ids)}**. "
+            "Use **Include** to add more without discarding previous rows."
+        )
 
     if load:
-        if not product_ids:
-            st.warning("Select at least one product (tick the Select column).")
+        sel_set = set(int(x) for x in product_ids)
+        loaded_set = set(existing_loaded)
+        if load_mode == "Exclude selected":
+            if not sel_set:
+                st.warning("Tick products to exclude from the worksheet.")
+            elif not loaded_set:
+                st.warning("Worksheet is empty — nothing to exclude.")
+            else:
+                new_ids = sorted(loaded_set - sel_set)
+                if not new_ids:
+                    st.warning("Exclude would remove every worksheet line. Clear selection or use Replace.")
+                else:
+                    calc = db.calculate_production_month(
+                        wh_id,
+                        fd,
+                        td,
+                        new_ids,
+                        physical_map=st.session_state.get(phy_key) or {},
+                    )
+                    st.session_state[result_key] = calc
+                    st.session_state[meta_key] = {
+                        "wh_id": wh_id,
+                        "ym": ym,
+                        "fd": fd,
+                        "td": td,
+                        "product_ids": list(new_ids),
+                    }
+                    for k in list(st.session_state.keys()):
+                        if str(k).startswith(f"prod_phy_editor_{wh_id}_{ym}"):
+                            st.session_state.pop(k, None)
+                    st.session_state.pop(f"prod_phy_seed_{wh_id}_{ym}", None)
+                    st.toast(f"Excluded {len(sel_set & loaded_set)} · worksheet now {len(new_ids)}")
+                    st.rerun()
         else:
-            calc = db.calculate_production_month(
-                wh_id,
-                fd,
-                td,
-                product_ids,
-                physical_map=st.session_state.get(phy_key) or {},
-            )
-            st.session_state[result_key] = calc
-            st.session_state[meta_key] = {
-                "wh_id": wh_id,
-                "ym": ym,
-                "fd": fd,
-                "td": td,
-                "product_ids": list(product_ids),
-            }
-            for k in list(st.session_state.keys()):
-                if str(k).startswith(f"prod_phy_editor_{wh_id}_{ym}"):
-                    st.session_state.pop(k, None)
-            st.session_state.pop(f"prod_phy_seed_{wh_id}_{ym}", None)
-            st.rerun()
+            if load_mode == "Include selected":
+                if not sel_set and not loaded_set:
+                    st.warning("Select at least one product (tick the Select column).")
+                    new_ids = None
+                else:
+                    new_ids = sorted(loaded_set | sel_set)
+            else:
+                # Replace worksheet
+                if not sel_set:
+                    st.warning("Select at least one product (tick the Select column).")
+                    new_ids = None
+                else:
+                    new_ids = sorted(sel_set)
+
+            if new_ids is not None:
+                # Drop Phy for products no longer on the sheet (replace / exclude path)
+                phy_keep = {
+                    int(pid): float(qty)
+                    for pid, qty in (st.session_state.get(phy_key) or {}).items()
+                    if int(pid) in set(new_ids)
+                }
+                st.session_state[phy_key] = phy_keep
+                calc = db.calculate_production_month(
+                    wh_id,
+                    fd,
+                    td,
+                    new_ids,
+                    physical_map=phy_keep,
+                )
+                st.session_state[result_key] = calc
+                st.session_state[meta_key] = {
+                    "wh_id": wh_id,
+                    "ym": ym,
+                    "fd": fd,
+                    "td": td,
+                    "product_ids": list(new_ids),
+                }
+                for k in list(st.session_state.keys()):
+                    if str(k).startswith(f"prod_phy_editor_{wh_id}_{ym}"):
+                        st.session_state.pop(k, None)
+                st.session_state.pop(f"prod_phy_seed_{wh_id}_{ym}", None)
+                added = len(set(new_ids) - loaded_set)
+                if load_mode == "Include selected" and loaded_set:
+                    st.toast(
+                        f"Included +{added} · worksheet now {len(new_ids)} "
+                        f"(kept {len(loaded_set & set(new_ids))} previous)"
+                    )
+                else:
+                    st.toast(f"Worksheet loaded — {len(new_ids)} product(s)")
+                st.rerun()
 
     calc = st.session_state.get(result_key)
     meta = st.session_state.get(meta_key) or {}
     if not calc or meta.get("ym") != ym or meta.get("wh_id") != wh_id:
-        st.info("Select products (tick **Select**), then click **Load / refresh month**.")
+        st.info(
+            "Tick products, then **Include selected** + **Load** to build the worksheet. "
+            "Add another prefix later with Include — previous Phy rows stay."
+        )
         return
 
-    # If selection changed since last load, prompt to reload
+    # If selection differs from worksheet, remind include/exclude (not an error)
     loaded_ids = set(int(x) for x in (meta.get("product_ids") or []))
-    if set(product_ids) != loaded_ids:
-        st.warning(
-            "Selection changed since last load — click **Load / refresh month** "
-            "to rebuild the worksheet."
-        )
+    sel_ids = set(int(x) for x in product_ids)
+    only_sel = sel_ids - loaded_ids
+    only_ws = loaded_ids - sel_ids
+    if only_sel or only_ws:
+        bits = []
+        if only_sel:
+            bits.append(f"**{len(only_sel)}** ticked not yet on worksheet (Include to add)")
+        if only_ws:
+            bits.append(f"**{len(only_ws)}** on worksheet but not ticked (Exclude to remove)")
+        st.info(" · ".join(bits) + ".")
 
     lines = calc.get("lines") or []
     if not lines:
