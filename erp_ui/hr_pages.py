@@ -3795,6 +3795,7 @@ def page_advances():
     st.caption(
         "**Salary Advance** — cash on **posting date**, recovered **100%** from the chosen "
         "**salary month** payroll (dates can differ — e.g. cash 6 Sep, salary month August). "
+        "If cash is **returned next day**, settle under **Approve / Issue → Settle cash return**. "
         "For installment loans use **HR → Loan**."
     )
     tab = sticky_page_tabs(["Advance List", "New Request", "Approve / Issue"], "hr_adv_tab")
@@ -4053,6 +4054,105 @@ def page_advances():
                             "adv_no": row.get("document_no"),
                         }
                         st.rerun()
+
+            # Cash returned next day — close without payroll recovery
+            open_issued = []
+            if hasattr(db, "list_advances_for_cash_return"):
+                open_issued = db.list_advances_for_cash_return() or []
+            else:
+                open_issued = [
+                    r for r in (db.get_advances(status="issued") or [])
+                    if float(r.get("effective_outstanding") or r.get("outstanding_amount") or 0) > 0.01
+                ]
+            if open_issued:
+                st.subheader("Settle cash return")
+                st.caption(
+                    "Employee returned the advance cash (same/next day). "
+                    "Posts a **Cash Receipt**, clears Employee Advance GL, closes the advance, "
+                    "and removes it from draft payroll recovery. "
+                    "Cash day for the return date must be **open**."
+                )
+                settle_pick = {
+                    f"{r['document_no']} · {r['employee_name']} · "
+                    f"out {fmt(r.get('effective_outstanding') or r.get('outstanding_amount'))}"
+                    + (f" · {r.get('status')}" if (r.get('status') or '') != 'issued' else ""): r
+                    for r in open_issued
+                }
+                settle_sel = st.selectbox(
+                    "Issued advance to settle",
+                    list(settle_pick.keys()),
+                    key="hr_adv_settle_sel",
+                )
+                s1, s2, s3 = st.columns([1.1, 1.0, 1.4])
+                ret_date = s1.date_input(
+                    "Return date",
+                    value=date.today(),
+                    key="hr_adv_settle_date",
+                )
+                settle_mode = s2.radio(
+                    "Receive as", ["cash", "bank"], horizontal=True,
+                    key="hr_adv_settle_mode",
+                )
+                settle_bank_id = None
+                if settle_mode == "bank":
+                    bank_accts = [
+                        a for a in db.get_accounts()
+                        if (a.get("account_type") or "").lower() in ("bank", "asset")
+                        and str(a.get("code") or "").startswith("11")
+                    ] or [a for a in db.get_accounts() if a.get("is_active")]
+                    bank_opts = {f"{a['code']} - {a['name']}": a["id"] for a in bank_accts}
+                    if bank_opts:
+                        settle_bank_id = bank_opts[st.selectbox(
+                            "Bank account", list(bank_opts.keys()), key="hr_adv_settle_bank",
+                        )]
+                settle_notes = s3.text_input(
+                    "Notes (optional)",
+                    value="Cash returned next day",
+                    key="hr_adv_settle_notes",
+                )
+                if st.button(
+                    "Settle cash return & close",
+                    type="primary",
+                    key="hr_adv_settle_btn",
+                    use_container_width=True,
+                ):
+                    try:
+                        if settle_mode == "bank" and not settle_bank_id:
+                            raise ValueError("Select bank account.")
+                        row = settle_pick[settle_sel]
+                        res = db.settle_advance_cash_return(
+                            row["id"],
+                            uid(),
+                            return_date=str(ret_date),
+                            payment_mode=settle_mode,
+                            bank_account_id=settle_bank_id,
+                            notes=settle_notes,
+                        )
+                        retain = None
+                        if res.get("receipt_id"):
+                            retain = {
+                                "last_adv_print": {
+                                    "id": res["receipt_id"],
+                                    "vch_source": res.get("vch_source"),
+                                    "document_no": res.get("settlement_document_no"),
+                                    "adv_no": res.get("document_no"),
+                                }
+                            }
+                        msg = (
+                            f"**{res['document_no']}** settled — "
+                            f"receipt **{res['settlement_document_no']}** "
+                            f"({fmt(res['amount'])}) on {res.get('return_date')}. "
+                            "Advance closed."
+                        )
+                        sync = res.get("payroll_sync") or {}
+                        if sync.get("synced"):
+                            msg += (
+                                f" Draft **{sync.get('payroll_no')}** recovery updated "
+                                f"(advance now **{fmt(sync.get('advance_recovery'))}**)."
+                            )
+                        ff.action_done(msg, retain=retain)
+                    except Exception as e:
+                        st.error(str(e))
 
 
 def page_loans():

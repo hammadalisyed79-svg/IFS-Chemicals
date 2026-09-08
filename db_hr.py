@@ -127,6 +127,13 @@ def apply_hr(conn, db_module):
             "ON CONFLICT(key) DO UPDATE SET value='8'"
         )
         ver = 8
+    if ver < 9:
+        _apply_hr_v9(conn)
+        conn.execute(
+            "INSERT INTO schema_meta(key,value) VALUES('hr_version','9') "
+            "ON CONFLICT(key) DO UPDATE SET value='9'"
+        )
+        ver = 9
     # Idempotent: ensure Cash & HR role exists (do not re-assign users)
     try:
         aid = conn.execute("SELECT id FROM users WHERE username='admin'").fetchone()
@@ -184,6 +191,13 @@ def _apply_hr_v8(conn):
     """Last working day for mid-month resign / final salary pro-rata."""
     _add_col(conn, "employees", "leaving_date", "TEXT")
 
+
+def _apply_hr_v9(conn):
+    """Cash return settlement for issued salary advances (returned next day)."""
+    _add_col(conn, "employee_advances", "settlement_document_no", "TEXT")
+    _add_col(conn, "employee_advances", "settled_at", "TEXT")
+    _add_col(conn, "employee_advances", "settled_by", "INTEGER")
+    _add_col(conn, "employee_advances", "settlement_notes", "TEXT")
 
 def _col_exists(conn, table, col):
     return col in [r[1] for r in conn.execute(f"PRAGMA table_info({table})").fetchall()]
@@ -3915,6 +3929,218 @@ def issue_advance(advance_id, user_id, payment_mode="cash", bank_account_id=None
         if sync:
             out["payroll_sync"] = sync
         return out
+
+
+def list_advances_for_cash_return(limit: int = 50):
+    """Issued advances, plus closed ones recovered only on a draft payroll (cash return still needed)."""
+    from database import get_connection, rows_to_list
+    with get_connection() as conn:
+        apply_hr(conn, __import__("database"))
+        rows = rows_to_list(conn.execute(
+            """SELECT a.*, e.full_name AS employee_name, e.code AS employee_code,
+                      COALESCE(a.outstanding_amount,0) AS outstanding_amount
+               FROM employee_advances a
+               JOIN employees e ON e.id=a.employee_id
+               WHERE (
+                   (a.status='issued' AND COALESCE(a.outstanding_amount,0)>0.01)
+                   OR (
+                       a.status='closed'
+                       AND TRIM(COALESCE(a.settlement_document_no,''))=''
+                       AND EXISTS (
+                           SELECT 1 FROM advance_recovery_schedule s
+                           JOIN payroll_runs pr ON pr.id=s.payroll_id
+                           WHERE s.advance_id=a.id
+                             AND COALESCE(s.recovered,0)=1
+                             AND pr.status='draft'
+                       )
+                   )
+               )
+               ORDER BY a.id DESC
+               LIMIT ?""",
+            (int(limit),),
+        ).fetchall())
+    for r in rows:
+        code = (r.get("employee_code") or "").strip()
+        name = (r.get("employee_name") or "").strip()
+        if code and name:
+            r["employee_name"] = f"{code} - {name}"
+        out = float(r.get("outstanding_amount") or 0)
+        if out <= 0.01:
+            # Draft-closed: show original amount as still due until cash settled
+            out = round(float(r.get("amount") or 0) - float(r.get("recovered_amount") or 0), 2)
+            if out <= 0.01:
+                out = round(float(r.get("amount") or 0), 2)
+            r["outstanding_amount"] = out
+        r["effective_outstanding"] = out
+    return rows
+
+
+def settle_advance_cash_return(
+    advance_id,
+    user_id,
+    *,
+    return_date=None,
+    payment_mode="cash",
+    bank_account_id=None,
+    notes=None,
+):
+    """Employee returned salary-advance cash (same/next day) — close without payroll.
+
+    GL: Dr Cash/Bank, Cr Employee Advance (100180).
+    Cash/Bank Book: CR/BR receipt. Advance status → closed; draft payroll recovery cleared.
+    """
+    import database as db
+    from db_v3 import post_gl, post_gl_account_id, AC
+
+    mode = (payment_mode or "cash").lower()
+    if mode not in ("cash", "bank"):
+        raise ValueError("Payment mode must be cash or bank.")
+    if mode == "bank" and not bank_account_id:
+        raise ValueError("Select a bank account for bank receipt.")
+
+    with db.get_connection() as conn:
+        apply_hr(conn, db)
+        adv = conn.execute(
+            """SELECT a.*, e.full_name AS employee_name, e.code AS emp_code
+               FROM employee_advances a
+               JOIN employees e ON e.id=a.employee_id
+               WHERE a.id=?""",
+            (int(advance_id),),
+        ).fetchone()
+        if not adv:
+            raise ValueError("Advance not found.")
+        adv = dict(adv)
+        status = (adv.get("status") or "").lower()
+        if status not in ("issued", "closed"):
+            raise ValueError("Only issued (or draft-recovered) advances can be settled by cash return.")
+
+        # Revert draft-only payroll recoveries so outstanding is the cash still due
+        draft_rows = conn.execute(
+            """SELECT s.id, s.amount, s.payroll_id, pr.document_no, pr.status
+               FROM advance_recovery_schedule s
+               LEFT JOIN payroll_runs pr ON pr.id=s.payroll_id
+               WHERE s.advance_id=? AND COALESCE(s.recovered,0)=1""",
+            (int(advance_id),),
+        ).fetchall()
+        if status == "closed" and not draft_rows:
+            raise ValueError(
+                "Advance is already closed with no draft payroll recovery to reverse. "
+                "Cash return is only for advances still open or recovered only on a draft payroll."
+            )
+        for row in draft_rows:
+            pr_status = str((row["status"] if row else "") or "").lower()
+            if pr_status and pr_status not in ("draft", ""):
+                raise ValueError(
+                    f"Advance already recovered on payroll {row['document_no'] or row['payroll_id']} "
+                    f"({pr_status}). Cannot settle by cash return."
+                )
+            amt = round(float(row["amount"] or 0), 2)
+            if amt > 0:
+                cur = conn.execute(
+                    "SELECT recovered_amount, outstanding_amount, amount FROM employee_advances WHERE id=?",
+                    (int(advance_id),),
+                ).fetchone()
+                if cur:
+                    new_rec = max(0.0, float(cur[0] or 0) - amt)
+                    new_out = min(float(cur[2] or 0), float(cur[1] or 0) + amt)
+                    conn.execute(
+                        """UPDATE employee_advances
+                           SET recovered_amount=?, outstanding_amount=?, status='issued'
+                           WHERE id=?""",
+                        (new_rec, new_out, int(advance_id)),
+                    )
+            conn.execute(
+                """UPDATE advance_recovery_schedule
+                   SET recovered=0, recovered_date=NULL, payroll_id=NULL WHERE id=?""",
+                (int(row["id"]),),
+            )
+
+        adv = dict(conn.execute(
+            """SELECT a.*, e.full_name AS employee_name, e.code AS emp_code
+               FROM employee_advances a
+               JOIN employees e ON e.id=a.employee_id
+               WHERE a.id=?""",
+            (int(advance_id),),
+        ).fetchone())
+        out_amt = round(float(adv.get("outstanding_amount") or 0), 2)
+        if out_amt <= 0.01:
+            raise ValueError("Advance outstanding is already NIL.")
+
+        post_date = str(return_date or date.today())[:10]
+        emp_lbl = f"{adv.get('employee_name') or ''} ({adv.get('emp_code') or ''})".strip()
+        label = f"Advance return {adv['document_no']} - {emp_lbl}"
+        if notes:
+            label = f"{label} — {str(notes).strip()[:80]}"
+        ref = adv["document_no"]
+        adv_acct = conn.execute(
+            "SELECT id FROM chart_of_accounts WHERE code=?", (HR_AC["employee_advance"],)
+        ).fetchone()
+        adv_acct_id = int(adv_acct[0]) if adv_acct else None
+        if not adv_acct_id:
+            raise ValueError("Employee Advance account (100180) not found.")
+
+        if mode == "cash":
+            entry_id, doc_no = db._add_cash_receipt(
+                conn, post_date, label, ref, out_amt, user_id,
+                account_id=adv_acct_id,
+                party_type="account", party_id=adv_acct_id,
+            )
+            asset_id = conn.execute(
+                "SELECT id FROM chart_of_accounts WHERE code=?", (AC["cash"],)
+            ).fetchone()
+            asset_id = asset_id[0] if asset_id else None
+        else:
+            entry_id, doc_no = db._add_bank_receipt(
+                conn, post_date, label, ref, out_amt, bank_account_id, user_id,
+                party_type="account", party_id=adv_acct_id,
+            )
+            asset_id = bank_account_id
+
+        if not asset_id:
+            raise ValueError("Cash/bank account not found for settlement receipt.")
+
+        # Reverse the advance receivable: Dr Cash/Bank, Cr Employee Advance
+        post_gl_account_id(
+            conn, post_date, asset_id, out_amt, 0,
+            label, "employee_advance_return", int(advance_id), doc_no, user_id,
+        )
+        post_gl(
+            conn, post_date, HR_AC["employee_advance"], 0, out_amt,
+            label, "employee_advance_return", int(advance_id), doc_no, user_id,
+        )
+
+        new_rec = round(float(adv.get("recovered_amount") or 0) + out_amt, 2)
+        conn.execute(
+            """UPDATE employee_advances
+               SET recovered_amount=?, outstanding_amount=0, status='closed',
+                   settlement_document_no=?, settled_at=?, settled_by=?,
+                   settlement_notes=?
+               WHERE id=?""",
+            (
+                new_rec, doc_no, now(), user_id,
+                (str(notes).strip() if notes else None),
+                int(advance_id),
+            ),
+        )
+        conn.execute(
+            "DELETE FROM advance_recovery_schedule WHERE advance_id=?",
+            (int(advance_id),),
+        )
+
+        sync = _sync_employee_recoveries_on_draft_payroll(
+            conn, adv["employee_id"], adv.get("salary_month"),
+        )
+        return {
+            "document_no": adv["document_no"],
+            "settlement_document_no": doc_no,
+            "receipt_id": entry_id,
+            "vch_source": "cash_receipt" if mode == "cash" else "bank_receipt",
+            "amount": out_amt,
+            "payment_mode": mode,
+            "employee": adv.get("employee_name"),
+            "return_date": post_date,
+            "payroll_sync": sync,
+        }
 
 
 def backfill_advance_cash_voucher(advance_id, user_id=None):
