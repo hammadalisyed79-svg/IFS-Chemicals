@@ -65,6 +65,11 @@ def _tab_history():
     st.dataframe(df, use_container_width=True, hide_index=True)
 
 
+def _bump_pick_editor(wh_id: int, ym: str) -> None:
+    ver_key = f"prod_phy_pick_ver_{wh_id}_{ym}"
+    st.session_state[ver_key] = int(st.session_state.get(ver_key, 0) or 0) + 1
+
+
 def _tab_worksheet():
     wh_opts = hlp.warehouse_opts()
     if not wh_opts:
@@ -100,8 +105,8 @@ def _tab_worksheet():
     st.caption(
         "**Production** = Phy − OS − Return + Sale − Adj · "
         "**Closing** = Phy (physical count). "
-        "Enter physical stock only; production posts as stock-in "
-        "(excluded from Adj on reload)."
+        "Tick products below, then **Load / refresh month**. "
+        "Enter **Phy** only; production posts as stock-in (excluded from Adj on reload)."
     )
 
     saved = db.get_production_month_run(wh_id, ym)
@@ -122,7 +127,11 @@ def _tab_worksheet():
         db.get_items(active_only=True) or [],
         key=lambda r: hlp.natural_code_sort_key(r.get("code")),
     )
-    code_to_id = {str(r.get("code") or "").strip(): int(r["id"]) for r in items if r.get("id")}
+    code_to_id = {
+        str(r.get("code") or "").strip(): int(r["id"])
+        for r in items
+        if r.get("id") and str(r.get("code") or "").strip()
+    }
     id_to_item = {int(r["id"]): r for r in items if r.get("id")}
 
     filter_q = st.text_input(
@@ -131,67 +140,136 @@ def _tab_worksheet():
         placeholder="e.g. DW or DISHWASH…",
     ).strip()
     filtered = hlp.filter_master_records(items, filter_q) if filter_q else items
+    shown_codes = [
+        str(r.get("code") or "").strip()
+        for r in filtered
+        if str(r.get("code") or "").strip() in code_to_id
+    ]
 
     default_codes = []
     if saved and saved.get("lines"):
         default_codes = [
-            str(ln.get("product_code") or "")
+            str(ln.get("product_code") or "").strip()
             for ln in saved["lines"]
-            if ln.get("product_code")
+            if str(ln.get("product_code") or "").strip() in code_to_id
         ]
 
     sel_key = f"prod_phy_sel_{wh_id}_{ym}"
+    ver_key = f"prod_phy_pick_ver_{wh_id}_{ym}"
+    filt_key = f"prod_phy_filt_applied_{wh_id}_{ym}"
     if sel_key not in st.session_state:
-        st.session_state[sel_key] = [c for c in default_codes if c in code_to_id]
+        st.session_state[sel_key] = list(default_codes)
+    if ver_key not in st.session_state:
+        st.session_state[ver_key] = 0
 
-    shown_codes = [str(r.get("code") or "") for r in filtered]
-    b1, b2, b3 = st.columns([1, 1, 2])
+    # Remount picker when filter text changes (row set changes)
+    if st.session_state.get(filt_key) != filter_q:
+        st.session_state[filt_key] = filter_q
+        st.session_state[ver_key] = int(st.session_state.get(ver_key, 0) or 0) + 1
+
+    b1, b2, b3, b4 = st.columns([1, 1, 1, 2])
     if b1.button("Select all shown", key="prod_phy_sel_all"):
-        st.session_state[sel_key] = list(shown_codes)
+        # Keep off-filter picks; add every visible code
+        keep = [
+            c for c in (st.session_state.get(sel_key) or [])
+            if c not in shown_codes and c in code_to_id
+        ]
+        st.session_state[sel_key] = sorted(
+            set(keep) | set(shown_codes),
+            key=lambda c: hlp.natural_code_sort_key(c),
+        )
+        _bump_pick_editor(wh_id, ym)
         st.rerun()
-    if b2.button("Clear selection", key="prod_phy_sel_clr"):
+    if b2.button("Clear shown", key="prod_phy_sel_clr_shown"):
+        # Uncheck only visible rows; keep selections hidden by filter
+        st.session_state[sel_key] = [
+            c for c in (st.session_state.get(sel_key) or [])
+            if c not in shown_codes and c in code_to_id
+        ]
+        _bump_pick_editor(wh_id, ym)
+        st.rerun()
+    if b3.button("Clear all", key="prod_phy_sel_clr_all"):
         st.session_state[sel_key] = []
+        _bump_pick_editor(wh_id, ym)
         st.rerun()
-    b3.caption(f"Selected: **{len(st.session_state[sel_key])}** of {len(items)} items")
+
+    selected_now = [
+        c for c in (st.session_state.get(sel_key) or []) if c in code_to_id
+    ]
+    b4.caption(f"Selected: **{len(selected_now)}** of {len(items)} items")
+    if selected_now:
+        preview = ", ".join(selected_now[:12])
+        more = f" (+{len(selected_now) - 12} more)" if len(selected_now) > 12 else ""
+        st.caption(f"Current selection: `{preview}{more}`")
 
     pick_df = pd.DataFrame([
         {
-            "Select": str(r.get("code") or "") in st.session_state[sel_key],
-            "Code": r.get("code"),
-            "Product": r.get("name"),
-            "Category": r.get("category") or "",
-            "Stock": float(r.get("stock_qty") or 0),
+            "Select": code in selected_now,
+            "Code": code,
+            "Product": (id_to_item.get(code_to_id[code]) or {}).get("name") or "",
+            "Category": (id_to_item.get(code_to_id[code]) or {}).get("category") or "",
+            "Stock": float(
+                (id_to_item.get(code_to_id[code]) or {}).get("stock_qty") or 0
+            ),
         }
-        for r in filtered[:500]
+        for code in shown_codes[:500]
     ])
-    if len(filtered) > 500:
-        st.caption(f"Showing first 500 of {len(filtered)} filtered products — narrow the filter.")
+    if len(shown_codes) > 500:
+        st.caption(
+            f"Showing first 500 of {len(shown_codes)} filtered products — narrow the filter."
+        )
 
-    edited_pick = st.data_editor(
-        pick_df,
-        hide_index=True,
-        use_container_width=True,
-        disabled=["Code", "Product", "Category", "Stock"],
-        column_config={
-            "Select": st.column_config.CheckboxColumn("Select", default=False),
-            "Stock": st.column_config.NumberColumn(format="%.2f"),
-        },
-        key=f"prod_phy_pick_{wh_id}_{ym}_{filter_q}",
-        height=220,
+    pick_editor_key = (
+        f"prod_phy_pick_{wh_id}_{ym}_v{int(st.session_state.get(ver_key, 0))}"
     )
-    prior = set(st.session_state.get(sel_key) or [])
-    selected_shown = {
-        str(row["Code"])
-        for _, row in edited_pick.iterrows()
-        if bool(row.get("Select")) and str(row.get("Code") or "") in code_to_id
-    }
-    off_filter = {c for c in prior if c not in shown_codes and c in code_to_id}
-    st.session_state[sel_key] = sorted(
-        selected_shown | off_filter,
-        key=lambda c: hlp.natural_code_sort_key(c),
-    )
+    if pick_df.empty:
+        st.info("No products match this filter.")
+        edited_pick = pick_df
+    else:
+        edited_pick = st.data_editor(
+            pick_df,
+            hide_index=True,
+            use_container_width=True,
+            disabled=["Code", "Product", "Category", "Stock"],
+            column_config={
+                "Select": st.column_config.CheckboxColumn(
+                    "Select",
+                    help="Tick to include in the worksheet",
+                    default=False,
+                    width="small",
+                ),
+                "Stock": st.column_config.NumberColumn(format="%.2f"),
+            },
+            key=pick_editor_key,
+            height=260,
+        )
 
-    product_ids = [code_to_id[c] for c in st.session_state[sel_key] if c in code_to_id]
+    # Apply checkbox edits: shown rows from editor; keep off-filter selection
+    if not edited_pick.empty:
+        selected_shown = set()
+        for _, row in edited_pick.iterrows():
+            code = str(row.get("Code") or "").strip()
+            flag = row.get("Select")
+            checked = bool(flag) if not isinstance(flag, float) else False
+            # pandas may use numpy.bool_
+            try:
+                checked = bool(flag)
+            except Exception:
+                checked = False
+            if checked and code in code_to_id:
+                selected_shown.add(code)
+        off_filter = {
+            c for c in selected_now if c not in shown_codes and c in code_to_id
+        }
+        new_sel = sorted(
+            selected_shown | off_filter,
+            key=lambda c: hlp.natural_code_sort_key(c),
+        )
+        if new_sel != selected_now:
+            st.session_state[sel_key] = new_sel
+            selected_now = new_sel
+
+    product_ids = [code_to_id[c] for c in selected_now if c in code_to_id]
 
     phy_key = f"prod_phy_map_{wh_id}_{ym}"
     if phy_key not in st.session_state:
@@ -210,7 +288,7 @@ def _tab_worksheet():
 
     if load:
         if not product_ids:
-            st.warning("Select at least one product.")
+            st.warning("Select at least one product (tick the Select column).")
         else:
             calc = db.calculate_production_month(
                 wh_id,
@@ -225,9 +303,8 @@ def _tab_worksheet():
                 "ym": ym,
                 "fd": fd,
                 "td": td,
-                "product_ids": product_ids,
+                "product_ids": list(product_ids),
             }
-            # Remount editor
             for k in list(st.session_state.keys()):
                 if str(k).startswith(f"prod_phy_editor_{wh_id}_{ym}"):
                     st.session_state.pop(k, None)
@@ -237,8 +314,16 @@ def _tab_worksheet():
     calc = st.session_state.get(result_key)
     meta = st.session_state.get(meta_key) or {}
     if not calc or meta.get("ym") != ym or meta.get("wh_id") != wh_id:
-        st.info("Select products, then click **Load / refresh month**.")
+        st.info("Select products (tick **Select**), then click **Load / refresh month**.")
         return
+
+    # If selection changed since last load, prompt to reload
+    loaded_ids = set(int(x) for x in (meta.get("product_ids") or []))
+    if set(product_ids) != loaded_ids:
+        st.warning(
+            "Selection changed since last load — click **Load / refresh month** "
+            "to rebuild the worksheet."
+        )
 
     lines = calc.get("lines") or []
     if not lines:
@@ -326,6 +411,15 @@ def _tab_worksheet():
         sum_close += closing
 
     st.session_state[phy_key] = phy_map
+    # Keep seed in sync with Phy edits so remounts don't wipe typing
+    try:
+        seed = st.session_state[seed_key].copy()
+        for i, ln in enumerate(out_lines):
+            if i < len(seed):
+                seed.at[seed.index[i], "Phy"] = ln["physical_qty"]
+        st.session_state[seed_key] = seed
+    except Exception:
+        pass
 
     k1, k2, k3, k4, k5, k6 = st.columns(6)
     k1.metric("Items", len(out_lines))
@@ -350,7 +444,8 @@ def _tab_worksheet():
         for ln in out_lines
     ])
     st.caption(
-        "Computed — Production = Phy − OS − Return + Sale − Adj; Closing = Phy."
+        "Computed — Production = Phy − OS − Return + Sale − Adj; Closing = Phy. "
+        "Negative Production means Phy is below book movement (post blocked unless allowed)."
     )
     st.dataframe(result_df, use_container_width=True, hide_index=True)
 
