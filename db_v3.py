@@ -4014,7 +4014,7 @@ def record_customer_receipt(customer_id, receipt_date, amount, reference_no="", 
 
 def record_supplier_payment(supplier_id, payment_date, amount, reference_no="", description="", user_id=None,
                             payment_mode="cash", bank_account_id=None):
-    """Record supplier payment: cash/bank book, AP GL, and reduce supplier balance."""
+    """Record supplier payment: cash/bank book, AP GL, and reduce supplier payable (+Dr)."""
     import database as db
     if amount <= 0:
         raise ValueError("Amount must be greater than zero.")
@@ -4041,8 +4041,9 @@ def record_supplier_payment(supplier_id, payment_date, amount, reference_no="", 
                 party_type="supplier", party_id=supplier_id,
             )
             asset_id = bank_account_id
+        # +Dr/−Cr: payment debits AP → balance moves up (less payable)
         conn.execute(
-            "UPDATE suppliers SET current_balance=current_balance-?, modified_at=? WHERE id=?",
+            "UPDATE suppliers SET current_balance=current_balance+?, modified_at=? WHERE id=?",
             (amount, now(), supplier_id),
         )
         gl_ref = doc_no
@@ -4051,8 +4052,15 @@ def record_supplier_payment(supplier_id, payment_date, amount, reference_no="", 
             label, "supplier_payment", supplier_id, gl_ref, user_id,
         )
         post_gl_account_id(conn, payment_date, asset_id, 0, amount, label, "supplier_payment", entry_id, gl_ref, user_id)
-        return {"id": entry_id, "document_no": doc_no, "payment_mode": mode,
-                "vch_source": "cash_payment" if mode == "cash" else "bank_payment"}
+        result = {"id": entry_id, "document_no": doc_no, "payment_mode": mode,
+                  "vch_source": "cash_payment" if mode == "cash" else "bank_payment"}
+    # Align master to own-book ledger (guards against incremental drift)
+    db.sync_party_current_balance("supplier", supplier_id)
+    try:
+        db.invalidate("suppliers")
+    except Exception:
+        pass
+    return result
 
 
 def _void_cash_bank_book_effects(conn, *, book, entry_id, entry_type, row):
@@ -4068,8 +4076,9 @@ def _void_cash_bank_book_effects(conn, *, book, entry_id, entry_type, row):
             (amt, now(), int(pid)),
         )
     elif pt == "supplier" and pid and amt:
+        # record_supplier_payment added balance (+Dr); reverse by subtracting
         conn.execute(
-            "UPDATE suppliers SET current_balance=current_balance+?, modified_at=? WHERE id=?",
+            "UPDATE suppliers SET current_balance=current_balance-?, modified_at=? WHERE id=?",
             (amt, now(), int(pid)),
         )
     if doc:
@@ -4273,8 +4282,9 @@ def update_cash_bank_book_entry(
                     f"UPDATE {('cash_payments' if book=='cash' else 'bank_payments')} SET description=? WHERE id=?",
                     (label, new_id),
                 )
+            # +Dr/−Cr: payment debits AP → balance moves up (less payable)
             conn.execute(
-                "UPDATE suppliers SET current_balance=current_balance-?, modified_at=? WHERE id=?",
+                "UPDATE suppliers SET current_balance=current_balance+?, modified_at=? WHERE id=?",
                 (amount, now(), pid),
             )
             post_gl(

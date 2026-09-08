@@ -1260,7 +1260,10 @@ def page_customer_receipt():
             c1, c2 = st.columns([2.4, 1.2])
             cust_lbl = c1.selectbox("Customer *", list(cust_opts.keys()), key=wk("cust"))
             cust = cust_opts[cust_lbl]
-            c2.metric("Current Balance", fmt_money(cust.get("current_balance")))
+            live_bal = db.party_ledger_closing_balance("customer", cust["id"])
+            c2.metric("Current Balance", fmt_money(live_bal))
+            if db.find_linked_counterparty("customer", cust["id"]):
+                c2.caption("Combined ledger closing (+Dr / −Cr)")
             r1, r2 = st.columns([1.2, 1.6])
             rdate = r1.date_input("Receipt Date", value=date.today(), key=wk("date"))
             mode = r2.radio("Payment Mode", ["Cash", "Bank"], horizontal=True, key=wk("mode"))
@@ -1344,7 +1347,10 @@ def page_supplier_payment():
             c1, c2 = st.columns([2.4, 1.2])
             sup_lbl = c1.selectbox("Supplier *", list(sup_opts.keys()), key=wk("sup"))
             sup = sup_opts[sup_lbl]
-            c2.metric("Current Balance", fmt_money(sup.get("current_balance")))
+            live_bal = db.party_ledger_closing_balance("supplier", sup["id"])
+            c2.metric("Current Balance", fmt_money(live_bal))
+            if db.find_linked_counterparty("supplier", sup["id"]):
+                c2.caption("Combined ledger closing (+Dr / −Cr)")
             r1, r2 = st.columns([1.2, 1.6])
             pdate = r1.date_input("Payment Date", value=date.today(), key=wk("date"))
             mode = r2.radio("Payment Mode", ["Cash", "Bank"], horizontal=True, key=wk("mode"))

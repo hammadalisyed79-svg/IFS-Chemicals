@@ -4300,6 +4300,22 @@ def sync_party_current_balance(party_type, party_id):
             )
 
 
+def party_ledger_closing_balance(party_type, party_id, *, include_linked=True):
+    """Closing balance matching Customer/Supplier Ledger (combined when dual-role)."""
+    if not party_type or not party_id:
+        return 0.0
+    party_type = str(party_type).strip().lower()
+    if party_type == "customer":
+        party, entries = get_customer_ledger(int(party_id), include_linked=include_linked)
+    elif party_type == "supplier":
+        party, entries = get_supplier_ledger(int(party_id), include_linked=include_linked)
+    else:
+        return 0.0
+    if entries:
+        return float(entries[-1].get("balance") or 0)
+    return float((party or {}).get("balance") or (party or {}).get("current_balance") or 0)
+
+
 def _is_withholding_tax_voucher(description) -> bool:
     return "HOLDING TAX ON CHQ" in str(description or "").upper()
 
