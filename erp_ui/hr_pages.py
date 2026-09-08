@@ -336,8 +336,9 @@ def _render_single_employee_edit_pay(
         unsafe_allow_html=True,
     )
 
-    pick_key = f"pr_sep_line_id_{pid}"
-    keep_key = f"pr_sep_keep_line_{pid}"
+    pick_key = f"pr_sep_line_id_v3_{pid}"
+    keep_key = f"pr_sep_keep_line_v3_{pid}"
+    search_key = f"pr_sep_emp_q_{pid}"
 
     def _coerce_line_id(raw):
         try:
@@ -345,24 +346,59 @@ def _render_single_employee_edit_pay(
         except (TypeError, ValueError):
             return None
 
-    # Prefer explicit keep-id after save/pay (survives form remount / type quirks)
-    preferred = _coerce_line_id(st.session_state.get(keep_key))
-    if preferred is None or preferred not in line_by_id:
-        preferred = _coerce_line_id(st.session_state.get(pick_key))
-    if preferred is None or preferred not in line_by_id:
-        preferred = id_order[0]
-    st.session_state[pick_key] = preferred
-    st.session_state[keep_key] = preferred
+    q = st.text_input(
+        "Find employee",
+        key=search_key,
+        placeholder="Type name, code, or department…",
+        help="Filters the list below. Selection stays on the same person after save.",
+    )
+    needle = (q or "").strip().lower()
+
+    def _match(lid: int) -> bool:
+        if not needle:
+            return True
+        l = line_by_id.get(int(lid)) or {}
+        blob = " ".join(
+            [
+                str(l.get("employee_name") or ""),
+                str(l.get("emp_code") or ""),
+                str(l.get("department_name") or ""),
+            ]
+        ).lower()
+        return needle in blob
+
+    filtered = [lid for lid in id_order if _match(lid)]
+    widget_val = _coerce_line_id(st.session_state.get(pick_key))
+    kept_val = _coerce_line_id(st.session_state.get(keep_key))
+    # Trust the live dropdown first; keep_key is only a fallback after save remount
+    if widget_val in line_by_id:
+        current = widget_val
+    elif kept_val in line_by_id:
+        current = kept_val
+    else:
+        current = None
+
+    # Keep current employee visible even if the search filter would hide them
+    if current is not None and current not in filtered:
+        filtered = [current] + filtered
+    if not filtered:
+        filtered = list(id_order)
+
+    # Seed widget only when missing/invalid — never overwrite a valid user choice
+    if _coerce_line_id(st.session_state.get(pick_key)) not in filtered:
+        st.session_state[pick_key] = current if current in filtered else filtered[0]
 
     sel_id = st.selectbox(
         "Employee list",
-        id_order,
+        filtered,
         format_func=_emp_label,
         key=pick_key,
         help="Edit and pay one person. Department grids stay on Edit Lines.",
     )
-    sel_id = _coerce_line_id(sel_id) or preferred
-    st.session_state[keep_key] = sel_id
+    sel_id = _coerce_line_id(sel_id)
+    if sel_id not in line_by_id:
+        sel_id = filtered[0]
+    st.session_state[keep_key] = int(sel_id)
     line = line_by_id[int(sel_id)]
     line_paid = (line.get("paid_status") or "") == "paid"
     eid = int(line.get("employee_id") or 0)
