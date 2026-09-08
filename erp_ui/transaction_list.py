@@ -174,53 +174,64 @@ def _build_df(items, columns):
     return pd.DataFrame(rows)
 
 
+def _date_key(row: dict) -> int:
+    """Numeric YYYYMMDD for stable date sorting."""
+    d = str(_row_date(row) or "")
+    try:
+        return int(d[0:4]) * 10000 + int(d[5:7]) * 100 + int(d[8:10])
+    except (TypeError, ValueError, IndexError):
+        return 0
+
+
 def _sort_items_client(items: list, sort_key: str | None) -> list:
-    """Sort register rows (current page / export batch) when SQL sort is unavailable."""
+    """Sort register rows to match SQL register order (safety net + non-SQL sources)."""
     key = (sort_key or "workflow").strip().lower()
-    if not items or key == "workflow":
-        status_rank = {
-            "pending_approval": 0,
-            "draft": 1,
-            "rejected": 2,
-            "open": 3,
-            "partial": 4,
-        }
+    if not items:
+        return items
+
+    def amount(r):
+        return float(r.get("total") or r.get("subtotal") or r.get("net_weight") or 0)
+
+    status_rank = {
+        "pending_approval": 0,
+        "first_weigh": 0,
+        "draft": 1,
+        "open": 1,
+        "partial": 2,
+        "rejected": 3,
+        "cancelled": 4,
+        "canceled": 4,
+    }
+
+    if key == "workflow":
         return sorted(
             items,
             key=lambda r: (
                 status_rank.get((r.get("status") or "draft").lower(), 9),
-                str(_row_date(r)),
-                int(r.get("id") or 0),
+                -_date_key(r),
+                -int(r.get("id") or 0),
             ),
         )
-
-    def amount(r):
-        return float(r.get("total") or 0)
-
     if key == "date_asc":
-        return sorted(items, key=lambda r: (str(_row_date(r)), int(r.get("id") or 0)))
+        return sorted(items, key=lambda r: (_date_key(r), int(r.get("id") or 0)))
     if key == "date_desc":
-        return sorted(
-            items,
-            key=lambda r: (str(_row_date(r)), int(r.get("id") or 0)),
-            reverse=True,
-        )
+        return sorted(items, key=lambda r: (-_date_key(r), -int(r.get("id") or 0)))
     if key == "amount_desc":
-        return sorted(items, key=lambda r: (amount(r), int(r.get("id") or 0)), reverse=True)
+        return sorted(items, key=lambda r: (-amount(r), -int(r.get("id") or 0)))
     if key == "amount_asc":
         return sorted(items, key=lambda r: (amount(r), int(r.get("id") or 0)))
     if key == "party":
         return sorted(
             items,
-            key=lambda r: (_row_party(r).lower(), str(_row_date(r)), int(r.get("id") or 0)),
+            key=lambda r: (_row_party(r).lower(), -_date_key(r), -int(r.get("id") or 0)),
         )
     if key == "status":
         return sorted(
             items,
             key=lambda r: (
                 str(r.get("status") or "").lower(),
-                str(_row_date(r)),
-                int(r.get("id") or 0),
+                -_date_key(r),
+                -int(r.get("id") or 0),
             ),
         )
     return items
@@ -230,6 +241,7 @@ def _row_date(row: dict) -> str:
     for field in (
         "sale_date", "purchase_date", "order_date", "invoice_date",
         "document_date", "dn_date", "grn_date", "quotation_date",
+        "return_date", "req_date", "quote_date", "slip_date", "pass_date",
     ):
         val = row.get(field)
         if val:
@@ -544,10 +556,43 @@ def _register_core(
                 st.caption(f"Showing quick open for first {quick_n} rows — use selector below for others.")
     _pagination(key_prefix, result)
 
-    labels = [row_label_fn(r) for r in items]
-    id_map = {labels[i]: items[i] for i in range(len(labels))}
-    sel = st.selectbox("Select record for actions", labels, key=f"{key_prefix}_sel")
-    selected = id_map.get(sel)
+    # Select by record id so Sort/filter reorders do not jump to the first row
+    id_key = f"{key_prefix}_sel_id_v2"
+    id_order = []
+    label_by_id = {}
+    for r in items:
+        try:
+            rid = int(r.get("id") or 0)
+        except (TypeError, ValueError):
+            rid = 0
+        if not rid:
+            continue
+        id_order.append(rid)
+        label_by_id[rid] = row_label_fn(r)
+    if not id_order:
+        return None
+
+    def _coerce_sel(raw):
+        try:
+            return int(raw)
+        except (TypeError, ValueError):
+            return None
+
+    cur = _coerce_sel(st.session_state.get(id_key))
+    if cur not in label_by_id:
+        st.session_state[id_key] = id_order[0]
+
+    sel_id = st.selectbox(
+        "Select record for actions",
+        id_order,
+        format_func=lambda i: label_by_id.get(int(i), str(i)),
+        key=id_key,
+    )
+    sel_id = _coerce_sel(sel_id)
+    selected = next(
+        (r for r in items if int(r.get("id") or 0) == sel_id),
+        items[0],
+    )
 
     if selected:
         from erp_ui.invoice_status_ui import status_badge_html
@@ -1018,6 +1063,7 @@ def weight_slip_register_list():
     result = db.search_weight_slips(
         q=kw["q"], from_date=kw["from_date"], to_date=kw["to_date"],
         status=status, page=page, page_size=filters["page_size"],
+        sort=filters.get("sort"),
     )
     st.session_state["ws_reg_page"] = result["page"]
     cols = [
@@ -1037,7 +1083,9 @@ def weight_slip_register_list():
         f"<p class='txn-kpi-val'>{result['total']:,}</p></div>",
         unsafe_allow_html=True,
     )
-    items = result["items"]
+    items = _sort_items_client(result["items"], filters.get("sort"))
+    result = dict(result)
+    result["items"] = items
     if not items:
         st.info("No weight slips match your filters.")
         return None
@@ -1051,11 +1099,12 @@ def weight_slip_register_list():
     if st.button("Export filtered (all pages)", key="ws_reg_export"):
         full = db.search_weight_slips(
             q=kw["q"], from_date=kw["from_date"], to_date=kw["to_date"],
-            status=status, export_all=True,
+            status=status, export_all=True, sort=filters.get("sort"),
         )
-        for r in full["items"]:
+        full_items = _sort_items_client(full["items"], filters.get("sort"))
+        for r in full_items:
             r["party_name"] = slip_party_display(r)
-        _export_df(_build_df(full["items"], cols), "weight_slips", "Weight Slips Register")
+        _export_df(_build_df(full_items, cols), "weight_slips", "Weight Slips Register")
     if st.button("Sync item from linked invoices", key="ws_reg_sync_item", help="Updates slip item/party from invoice lines for old links"):
         try:
             n = db.backfill_slip_items_from_linked_invoices(None)
@@ -1088,6 +1137,7 @@ def gate_pass_register_list():
     result = db.search_gate_passes(
         q=kw["q"], pass_type=pass_type, from_date=kw["from_date"], to_date=kw["to_date"],
         status=status, page=page, page_size=filters["page_size"],
+        sort=filters.get("sort"),
     )
     st.session_state["gp_reg_page"] = result["page"]
     cols = [
@@ -1107,7 +1157,9 @@ def gate_pass_register_list():
         f"<p class='txn-kpi-val'>{result['total']:,}</p></div>",
         unsafe_allow_html=True,
     )
-    items = result["items"]
+    items = _sort_items_client(result["items"], filters.get("sort"))
+    result = dict(result)
+    result["items"] = items
     if not items:
         st.info("No gate passes match your filters.")
         return None
@@ -1117,9 +1169,10 @@ def gate_pass_register_list():
     if st.button("Export filtered (all pages)", key="gp_reg_export"):
         full = db.search_gate_passes(
             q=kw["q"], pass_type=pass_type, from_date=kw["from_date"], to_date=kw["to_date"],
-            status=status, export_all=True,
+            status=status, export_all=True, sort=filters.get("sort"),
         )
-        _export_df(_build_df(full["items"], cols), "gate_pass_register", "Gate Pass Register")
+        full_items = _sort_items_client(full["items"], filters.get("sort"))
+        _export_df(_build_df(full_items, cols), "gate_pass_register", "Gate Pass Register")
     return items
 
 

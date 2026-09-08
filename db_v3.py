@@ -2242,9 +2242,9 @@ def get_quotations():
 
 def search_quotations(
     q=None, from_date=None, to_date=None, customer_id=None, status=None,
-    page=1, page_size=50, export_all=False, **_ignored,
+    page=1, page_size=50, export_all=False, sort=None, **_ignored,
 ):
-    from database import run_paginated_list
+    from database import run_paginated_list, _invoice_register_order_by
     where, params = ["1=1"], []
     if q:
         like = f"%{q.strip()}%"
@@ -2258,10 +2258,18 @@ def search_quotations(
         where.append("q.customer_id = ?"); params.append(customer_id)
     if status and status != "All":
         where.append("COALESCE(q.status,'draft') = ?"); params.append(status)
+    order_by = _invoice_register_order_by(
+        sort,
+        date_col="q.quote_date",
+        party_col="c.name",
+        status_col="q.status",
+        id_col="q.id",
+        amount_col="q.total",
+    )
     return run_paginated_list(
         "quotations q JOIN customers c ON q.customer_id=c.id",
         "q.*, c.name AS customer_name, c.code AS customer_code",
-        where, params, "q.quote_date DESC, q.id DESC", page, page_size, export_all,
+        where, params, order_by, page, page_size, export_all,
         sum_exprs=["COALESCE(SUM(q.total),0)"],
     )
 
@@ -2387,10 +2395,10 @@ def get_sales_orders_list():
 
 def search_sales_orders(
     q=None, from_date=None, to_date=None, customer_id=None, status=None,
-    page=1, page_size=50, export_all=False, **_ignored,
+    page=1, page_size=50, export_all=False, sort=None, **_ignored,
 ):
     """List sales orders. Pending (open/partial / Active) stay visible even when a date period is set."""
-    from database import run_paginated_list
+    from database import run_paginated_list, _invoice_register_order_by
     where, params = ["1=1"], []
     if q:
         like = f"%{q.strip()}%"
@@ -2431,19 +2439,28 @@ def search_sales_orders(
             where.append(f"({date_sql})")
             params.extend(date_params)
 
-    return run_paginated_list(
-        "sales_orders so JOIN customers c ON so.customer_id=c.id",
-        "so.*, c.name AS customer_name, c.code AS customer_code, COALESCE(c.city, '') AS customer_city",
-        where, params,
-        """CASE LOWER(COALESCE(so.status,'open'))
+    so_workflow = """CASE LOWER(COALESCE(so.status,'open'))
                WHEN 'open' THEN 0
                WHEN 'partial' THEN 1
                WHEN 'closed' THEN 2
                WHEN 'cancelled' THEN 3
                WHEN 'canceled' THEN 3
                ELSE 4
-           END,
-           so.order_date DESC, so.id DESC""",
+           END"""
+    order_by = _invoice_register_order_by(
+        sort,
+        date_col="so.order_date",
+        party_col="c.name",
+        status_col="so.status",
+        id_col="so.id",
+        amount_col="so.total",
+        workflow_case=so_workflow,
+    )
+    return run_paginated_list(
+        "sales_orders so JOIN customers c ON so.customer_id=c.id",
+        "so.*, c.name AS customer_name, c.code AS customer_code, COALESCE(c.city, '') AS customer_city",
+        where, params,
+        order_by,
         page, page_size, export_all,
         sum_exprs=["COALESCE(SUM(so.total),0)"],
     )
@@ -2796,9 +2813,9 @@ def get_delivery_notes():
 
 def search_delivery_notes(
     q=None, from_date=None, to_date=None, customer_id=None, status=None,
-    page=1, page_size=50, export_all=False, **_ignored,
+    page=1, page_size=50, export_all=False, sort=None, **_ignored,
 ):
-    from database import run_paginated_list
+    from database import run_paginated_list, _invoice_register_order_by
     where, params = ["1=1"], []
     if q:
         like = f"%{q.strip()}%"
@@ -2812,10 +2829,18 @@ def search_delivery_notes(
         where.append("d.customer_id = ?"); params.append(customer_id)
     if status and status != "All":
         where.append("COALESCE(d.status,'draft') = ?"); params.append(status)
+    order_by = _invoice_register_order_by(
+        sort,
+        date_col="d.dn_date",
+        party_col="c.name",
+        status_col="d.status",
+        id_col="d.id",
+        amount_col="d.total",
+    )
     return run_paginated_list(
         "delivery_notes d JOIN customers c ON d.customer_id=c.id",
         "d.*, c.name AS customer_name, c.code AS customer_code",
-        where, params, "d.dn_date DESC, d.id DESC", page, page_size, export_all,
+        where, params, order_by, page, page_size, export_all,
         sum_exprs=["COALESCE(SUM(d.total),0)"],
     )
 
@@ -2882,9 +2907,9 @@ def get_purchase_requisitions():
 
 def search_purchase_requisitions(
     q=None, from_date=None, to_date=None, status=None,
-    page=1, page_size=50, export_all=False, **_ignored,
+    page=1, page_size=50, export_all=False, sort=None, **_ignored,
 ):
-    from database import run_paginated_list
+    from database import run_paginated_list, _invoice_register_order_by
     where, params = ["1=1"], []
     if q:
         like = f"%{q.strip()}%"
@@ -2896,10 +2921,18 @@ def search_purchase_requisitions(
         where.append("req_date <= ?"); params.append(to_date)
     if status and status != "All":
         where.append("COALESCE(status,'draft') = ?"); params.append(status)
+    order_by = _invoice_register_order_by(
+        sort,
+        date_col="req_date",
+        party_col="document_no",
+        status_col="status",
+        id_col="id",
+        amount_col="subtotal",
+    )
     return run_paginated_list(
         "purchase_requisitions",
         "*",
-        where, params, "req_date DESC, id DESC", page, page_size, export_all,
+        where, params, order_by, page, page_size, export_all,
         sum_exprs=["COALESCE(SUM(subtotal),0)"],
     )
 
@@ -2930,10 +2963,10 @@ def get_purchase_orders_list():
 
 def search_purchase_orders(
     q=None, from_date=None, to_date=None, supplier_id=None, status=None,
-    page=1, page_size=50, export_all=False, **_ignored,
+    page=1, page_size=50, export_all=False, sort=None, **_ignored,
 ):
     """List purchase orders. Pending (open/partial) stay visible even when a date period is set."""
-    from database import run_paginated_list
+    from database import run_paginated_list, _invoice_register_order_by
     where, params = ["1=1"], []
     if q:
         like = f"%{q.strip()}%"
@@ -2976,19 +3009,28 @@ def search_purchase_orders(
         FROM purchase_order_items poi
         WHERE poi.order_id = po.id
     ), 0)"""
-    return run_paginated_list(
-        "purchase_orders po JOIN suppliers s ON po.supplier_id=s.id",
-        f"po.*, s.name AS supplier_name, s.code AS supplier_code, {pending_expr} AS pending_qty",
-        where, params,
-        """CASE LOWER(COALESCE(po.status,'open'))
+    po_workflow = """CASE LOWER(COALESCE(po.status,'open'))
                WHEN 'open' THEN 0
                WHEN 'partial' THEN 1
                WHEN 'closed' THEN 2
                WHEN 'cancelled' THEN 3
                WHEN 'canceled' THEN 3
                ELSE 4
-           END,
-           po.order_date DESC, po.id DESC""",
+           END"""
+    order_by = _invoice_register_order_by(
+        sort,
+        date_col="po.order_date",
+        party_col="s.name",
+        status_col="po.status",
+        id_col="po.id",
+        amount_col="po.total",
+        workflow_case=po_workflow,
+    )
+    return run_paginated_list(
+        "purchase_orders po JOIN suppliers s ON po.supplier_id=s.id",
+        f"po.*, s.name AS supplier_name, s.code AS supplier_code, {pending_expr} AS pending_qty",
+        where, params,
+        order_by,
         page, page_size, export_all,
         sum_exprs=["COALESCE(SUM(po.total),0)"],
     )
@@ -3276,9 +3318,9 @@ def get_grns():
 
 def search_grns(
     q=None, from_date=None, to_date=None, supplier_id=None, status=None,
-    page=1, page_size=50, export_all=False, **_ignored,
+    page=1, page_size=50, export_all=False, sort=None, **_ignored,
 ):
-    from database import run_paginated_list
+    from database import run_paginated_list, _invoice_register_order_by
     where, params = ["1=1"], []
     if q:
         like = f"%{q.strip()}%"
@@ -3292,10 +3334,18 @@ def search_grns(
         where.append("g.supplier_id = ?"); params.append(supplier_id)
     if status and status != "All":
         where.append("COALESCE(g.status,'draft') = ?"); params.append(status)
+    order_by = _invoice_register_order_by(
+        sort,
+        date_col="g.grn_date",
+        party_col="s.name",
+        status_col="g.status",
+        id_col="g.id",
+        amount_col="g.total",
+    )
     return run_paginated_list(
         "goods_receipt_notes g JOIN suppliers s ON g.supplier_id=s.id",
         "g.*, s.name AS supplier_name, s.code AS supplier_code",
-        where, params, "g.grn_date DESC, g.id DESC", page, page_size, export_all,
+        where, params, order_by, page, page_size, export_all,
         sum_exprs=["COALESCE(SUM(g.total),0)"],
     )
 

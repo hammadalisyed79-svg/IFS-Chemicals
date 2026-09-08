@@ -2046,6 +2046,7 @@ def search_purchases(
             party_col="s.name",
             status_col="p.status",
             id_col="p.id",
+            amount_col="p.total",
         )
         if export_all:
             rows = conn.execute(
@@ -2353,22 +2354,26 @@ def _invoice_register_order_by(
     party_col: str,
     status_col: str,
     id_col: str,
+    amount_col: str = "total",
+    workflow_case: str | None = None,
 ) -> str:
-    """SQL ORDER BY for sales/purchase registers."""
+    """SQL ORDER BY for transaction registers (sales, purchases, orders, etc.)."""
     key = (sort or "workflow").strip().lower()
     if key == "date_asc":
         return f"{date_col} ASC, {id_col} ASC"
     if key == "amount_desc":
-        return f"total DESC, {id_col} DESC"
+        return f"{amount_col} DESC, {id_col} DESC"
     if key == "amount_asc":
-        return f"total ASC, {id_col} ASC"
+        return f"{amount_col} ASC, {id_col} ASC"
     if key == "party":
         return f"{party_col} ASC, {date_col} DESC, {id_col} DESC"
     if key == "status":
         return f"{status_col} ASC, {date_col} DESC, {id_col} DESC"
     if key == "date_desc":
         return f"{date_col} DESC, {id_col} DESC"
-    # workflow — pending/draft first (sales/purchase approval queues)
+    # workflow — pending/draft (or custom case) first, then newest date
+    if workflow_case:
+        return f"{workflow_case}, {date_col} DESC, {id_col} DESC"
     return (
         f"CASE COALESCE({status_col},'draft') "
         "WHEN 'pending_approval' THEN 0 "
@@ -2440,6 +2445,7 @@ def search_sales_invoices(
             party_col="c.name",
             status_col="s.status",
             id_col="s.id",
+            amount_col="s.total",
         )
         if export_all:
             rows = conn.execute(
@@ -2792,6 +2798,7 @@ def search_purchase_returns(
     page=1,
     page_size=50,
     export_all=False,
+    sort=None,
     **_ignored,
 ):
     where, params = ["1=1"], []
@@ -2811,6 +2818,14 @@ def search_purchase_returns(
     if supplier_id:
         where.append("pr.supplier_id = ?")
         params.append(supplier_id)
+    order_by = _invoice_register_order_by(
+        sort or "date_desc",
+        date_col="pr.return_date",
+        party_col="s.name",
+        status_col="'approved'",
+        id_col="pr.id",
+        amount_col="pr.total",
+    )
     return run_paginated_list(
         """purchase_returns pr
            JOIN suppliers s ON pr.supplier_id=s.id
@@ -2819,7 +2834,7 @@ def search_purchase_returns(
            pr.supplier_id, pr.subtotal, pr.total, pr.notes, pr.created_at,
            s.name AS supplier_name, s.code AS supplier_code,
            pi.document_no AS invoice_no""",
-        where, params, "pr.return_date DESC, pr.id DESC", page, page_size, export_all,
+        where, params, order_by, page, page_size, export_all,
         sum_exprs=["COALESCE(SUM(pr.total),0)"],
     )
 
@@ -2932,6 +2947,7 @@ def search_sale_returns(
     page=1,
     page_size=50,
     export_all=False,
+    sort=None,
     **_ignored,
 ):
     where, params = ["1=1"], []
@@ -2951,6 +2967,14 @@ def search_sale_returns(
     if customer_id:
         where.append("sr.customer_id = ?")
         params.append(customer_id)
+    order_by = _invoice_register_order_by(
+        sort or "date_desc",
+        date_col="sr.return_date",
+        party_col="c.name",
+        status_col="'approved'",
+        id_col="sr.id",
+        amount_col="sr.total",
+    )
     return run_paginated_list(
         """sales_returns sr
            JOIN customers c ON sr.customer_id=c.id
@@ -2959,7 +2983,7 @@ def search_sale_returns(
            sr.customer_id, sr.subtotal, sr.total, sr.notes, sr.created_at,
            c.name AS customer_name, c.code AS customer_code,
            si.document_no AS invoice_no""",
-        where, params, "sr.return_date DESC, sr.id DESC", page, page_size, export_all,
+        where, params, order_by, page, page_size, export_all,
         sum_exprs=["COALESCE(SUM(sr.total),0)"],
     )
 

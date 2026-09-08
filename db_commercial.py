@@ -1751,8 +1751,9 @@ def get_gate_passes(pass_type=None, from_date=None, to_date=None, sales_invoice_
 
 
 def search_weight_slips(q=None, from_date=None, to_date=None, customer_id=None, supplier_id=None,
-                        status=None, statuses=None, page=1, page_size=50, export_all=False):
-    from database import run_paginated_list
+                        status=None, statuses=None, page=1, page_size=50, export_all=False,
+                        sort=None):
+    from database import run_paginated_list, _invoice_register_order_by
     from_clause = f"""
         (
             SELECT ws.id, ws.document_no, ws.slip_date, ws.slip_time, ws.created_at, ws.status, ws.vehicle_no, ws.driver_name,
@@ -1802,12 +1803,32 @@ def search_weight_slips(q=None, from_date=None, to_date=None, customer_id=None, 
             "OR product_name LIKE ? OR sales_invoice_no LIKE ? OR purchase_invoice_no LIKE ?)"
         )
         params.extend([like] * 7)
-    order_by = "slip_date DESC, id DESC"
-    if status_list and "first_weigh" in status_list:
-        # Pending first for Edit / Delete pickers
-        order_by = (
-            "CASE status WHEN 'first_weigh' THEN 0 WHEN 'completed' THEN 1 "
-            "WHEN 'cancelled' THEN 2 ELSE 9 END, slip_date DESC, id DESC"
+    ws_workflow = (
+        "CASE status WHEN 'first_weigh' THEN 0 WHEN 'completed' THEN 1 "
+        "WHEN 'cancelled' THEN 2 ELSE 9 END"
+    )
+    # Legacy: pending first_weigh picker forced workflow; honor explicit sort when set
+    if sort:
+        order_by = _invoice_register_order_by(
+            sort,
+            date_col="slip_date",
+            party_col="COALESCE(customer_name, supplier_name, '')",
+            status_col="status",
+            id_col="id",
+            amount_col="COALESCE(net_weight,0)",
+            workflow_case=ws_workflow,
+        )
+    elif status_list and "first_weigh" in status_list:
+        order_by = f"{ws_workflow}, slip_date DESC, id DESC"
+    else:
+        order_by = _invoice_register_order_by(
+            "date_desc",
+            date_col="slip_date",
+            party_col="COALESCE(customer_name, supplier_name, '')",
+            status_col="status",
+            id_col="id",
+            amount_col="COALESCE(net_weight,0)",
+            workflow_case=ws_workflow,
         )
     return run_paginated_list(
         from_clause,
@@ -1823,8 +1844,8 @@ def search_weight_slips(q=None, from_date=None, to_date=None, customer_id=None, 
 
 
 def search_gate_passes(q=None, pass_type=None, from_date=None, to_date=None, status=None,
-                       page=1, page_size=50, export_all=False):
-    from database import run_paginated_list
+                       page=1, page_size=50, export_all=False, sort=None):
+    from database import run_paginated_list, _invoice_register_order_by
     ensure_gate_pass_schema()
     from_clause = """
         (
@@ -1857,6 +1878,14 @@ def search_gate_passes(q=None, pass_type=None, from_date=None, to_date=None, sta
             "OR supplier_name LIKE ? OR sales_invoice_no LIKE ? OR purchase_invoice_no LIKE ?)"
         )
         params.extend([like] * 7)
+    order_by = _invoice_register_order_by(
+        sort or "date_desc",
+        date_col="pass_date",
+        party_col="COALESCE(party_name, customer_name, supplier_name, '')",
+        status_col="status",
+        id_col="id",
+        amount_col="COALESCE(weight, quantity, 0)",
+    )
     return run_paginated_list(
         from_clause,
         "id, document_no, pass_date, pass_time, created_at, pass_type, party_name, vehicle_no, quantity, weight, status, "
@@ -1864,7 +1893,7 @@ def search_gate_passes(q=None, pass_type=None, from_date=None, to_date=None, sta
         "customer_name, supplier_name",
         where or None,
         params,
-        "pass_date DESC, id DESC",
+        order_by,
         page,
         page_size,
         export_all=export_all,

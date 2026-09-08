@@ -297,7 +297,7 @@ def page_stock_report():
                 ).lower()
             ]
         sort_key = {
-            "Code": lambda r: str(r.get("code") or ""),
+            "Code": lambda r: hlp.natural_code_sort_key(r.get("code")),
             "Name": lambda r: str(r.get("name") or "").lower(),
             "Stock qty": lambda r: float(r.get("stock_qty") or 0),
             "Stock value": lambda r: float(r.get("stock_value") or 0),
@@ -368,7 +368,7 @@ def page_stock_report():
                 if q in f"{r.get('group_code')} {r.get('group_name')}".lower()
             ]
         sort_key = {
-            "Group code": lambda r: str(r.get("group_code") or ""),
+            "Group code": lambda r: hlp.natural_code_sort_key(r.get("group_code")),
             "Group name": lambda r: str(r.get("group_name") or "").lower(),
             "Items": lambda r: int(r.get("items") or 0),
             "Stock value": lambda r: float(r.get("stock_value") or 0),
@@ -448,10 +448,10 @@ def page_stock_report():
                 ).lower()
             ]
         sort_key = {
-            "BOM": lambda r: str(r.get("bom_no") or ""),
-            "Finished code": lambda r: str(r.get("finished_code") or ""),
+            "BOM": lambda r: hlp.natural_code_sort_key(r.get("bom_no")),
+            "Finished code": lambda r: hlp.natural_code_sort_key(r.get("finished_code")),
             "Role": lambda r: str(r.get("role") or ""),
-            "Item code": lambda r: str(r.get("code") or ""),
+            "Item code": lambda r: hlp.natural_code_sort_key(r.get("code")),
             "Stock qty": lambda r: float(r.get("stock_qty") or 0),
             "Stock value": lambda r: float(r.get("stock_value") or 0),
         }[sort_by]
@@ -463,7 +463,7 @@ def page_stock_report():
                 key=lambda r: (
                     sort_key(r),
                     0 if r.get("role") == "Finished" else 1,
-                    str(r.get("code") or ""),
+                    hlp.natural_code_sort_key(r.get("code")),
                 ),
                 reverse=reverse,
             )
