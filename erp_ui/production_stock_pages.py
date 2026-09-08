@@ -167,24 +167,134 @@ def _tab_worksheet():
         st.session_state[filt_key] = filter_q
         st.session_state[ver_key] = int(st.session_state.get(ver_key, 0) or 0) + 1
 
+    def _merge_codes(extra: list[str], *, replace: bool = False) -> None:
+        if replace:
+            merged = [c for c in extra if c in code_to_id]
+        else:
+            merged = list(
+                set(st.session_state.get(sel_key) or [])
+                | {c for c in extra if c in code_to_id}
+            )
+        st.session_state[sel_key] = sorted(
+            merged, key=lambda c: hlp.natural_code_sort_key(c)
+        )
+        _bump_pick_editor(wh_id, ym)
+
+    categories = sorted({
+        str(r.get("category") or "").strip()
+        for r in items
+        if str(r.get("category") or "").strip()
+    })
+
+    with st.expander("Bulk selection", expanded=True):
+        st.caption(
+            "Select many products at once by **code prefix** (e.g. `DW`), "
+            "**category**, or everything currently filtered."
+        )
+        bc1, bc2, bc3 = st.columns([1.4, 1.6, 1.2])
+        prefix = bc1.text_input(
+            "Code prefix",
+            key=f"prod_phy_bulk_prefix_{wh_id}_{ym}",
+            placeholder="DW",
+            help="Selects all product codes that start with this text (ignores spaces/case).",
+        ).strip()
+        scope = bc1.radio(
+            "Prefix scope",
+            ["All products", "Filtered list only"],
+            horizontal=True,
+            key=f"prod_phy_bulk_scope_{wh_id}_{ym}",
+            label_visibility="collapsed",
+        )
+        cat_pick = bc2.multiselect(
+            "Categories",
+            options=categories,
+            key=f"prod_phy_bulk_cats_{wh_id}_{ym}",
+            placeholder="Choose category…",
+        )
+        replace_mode = bc3.checkbox(
+            "Replace selection",
+            value=False,
+            key=f"prod_phy_bulk_replace_{wh_id}_{ym}",
+            help="On = only these products. Off = add to current selection.",
+        )
+
+        p1, p2, p3, p4 = st.columns(4)
+        if p1.button("Select by prefix", type="primary", key="prod_phy_bulk_prefix_btn"):
+            needle = "".join(ch for ch in prefix.lower() if ch.isalnum())
+            if not needle:
+                st.warning("Enter a code prefix (e.g. DW).")
+            else:
+                pool = filtered if scope == "Filtered list only" else items
+                matched = []
+                for r in pool:
+                    code = str(r.get("code") or "").strip()
+                    compact = "".join(ch for ch in code.lower() if ch.isalnum())
+                    if compact.startswith(needle) and code in code_to_id:
+                        matched.append(code)
+                if not matched:
+                    st.warning(f"No products start with **{prefix}**.")
+                else:
+                    _merge_codes(matched, replace=replace_mode)
+                    st.toast(f"Selected {len(matched)} product(s) by prefix {prefix}.")
+                    st.rerun()
+
+        if p2.button("Select categories", key="prod_phy_bulk_cat_btn"):
+            if not cat_pick:
+                st.warning("Choose at least one category.")
+            else:
+                want = {c.lower() for c in cat_pick}
+                matched = [
+                    str(r.get("code") or "").strip()
+                    for r in items
+                    if str(r.get("category") or "").strip().lower() in want
+                    and str(r.get("code") or "").strip() in code_to_id
+                ]
+                if not matched:
+                    st.warning("No products in those categories.")
+                else:
+                    _merge_codes(matched, replace=replace_mode)
+                    st.toast(f"Selected {len(matched)} product(s) by category.")
+                    st.rerun()
+
+        if p3.button("Select all filtered", key="prod_phy_bulk_filt_btn"):
+            if not shown_codes:
+                st.warning("Nothing in the filtered list.")
+            else:
+                # Full filtered set (not only first 500 shown in the grid)
+                full_filt = [
+                    str(r.get("code") or "").strip()
+                    for r in filtered
+                    if str(r.get("code") or "").strip() in code_to_id
+                ]
+                _merge_codes(full_filt, replace=replace_mode)
+                st.toast(f"Selected {len(full_filt)} filtered product(s).")
+                st.rerun()
+
+        if p4.button("Select all products", key="prod_phy_bulk_all_btn"):
+            all_codes = list(code_to_id.keys())
+            _merge_codes(all_codes, replace=True)
+            st.toast(f"Selected all {len(all_codes)} products.")
+            st.rerun()
+
     b1, b2, b3, b4 = st.columns([1, 1, 1, 2])
     if b1.button("Select all shown", key="prod_phy_sel_all"):
-        # Keep off-filter picks; add every visible code
+        # Keep off-filter picks; add every visible code (grid page, max 500)
         keep = [
             c for c in (st.session_state.get(sel_key) or [])
-            if c not in shown_codes and c in code_to_id
+            if c not in shown_codes[:500] and c in code_to_id
         ]
         st.session_state[sel_key] = sorted(
-            set(keep) | set(shown_codes),
+            set(keep) | set(shown_codes[:500]),
             key=lambda c: hlp.natural_code_sort_key(c),
         )
         _bump_pick_editor(wh_id, ym)
         st.rerun()
     if b2.button("Clear shown", key="prod_phy_sel_clr_shown"):
         # Uncheck only visible rows; keep selections hidden by filter
+        shown_set = set(shown_codes[:500])
         st.session_state[sel_key] = [
             c for c in (st.session_state.get(sel_key) or [])
-            if c not in shown_codes and c in code_to_id
+            if c not in shown_set and c in code_to_id
         ]
         _bump_pick_editor(wh_id, ym)
         st.rerun()
