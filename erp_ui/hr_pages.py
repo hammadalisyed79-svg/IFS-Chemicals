@@ -2006,8 +2006,9 @@ def _render_employee_cash_payments(pid, pr):
     c1, c2, c3 = st.columns([1.2, 1.2, 2])
     pay_date = c1.date_input(
         "Payment date",
-        value=date.fromisoformat(str(pr["run_date"])[:10]) if pr.get("run_date") else date.today(),
-        key=f"pr_pay_date_{pid}",
+        value=date.today(),
+        key=f"pr_pay_date_v2_{pid}",
+        help="Cash/bank voucher date — defaults to today (not payroll run date).",
     )
     pmode = c2.radio("Mode", ["cash", "bank"], horizontal=True, key=f"pr_pay_mode_{pid}")
     pay_filter = c3.selectbox(
@@ -3073,9 +3074,9 @@ def page_payroll():
                     pc1, pc2, pc3 = st.columns([1.1, 1.0, 2.2], gap="small")
                     pay_date_edit = pc1.date_input(
                         "Payment date",
-                        value=date.fromisoformat(str(pr["run_date"])[:10])
-                        if pr.get("run_date") else date.today(),
-                        key=f"pr_edit_pay_date_{pid}",
+                        value=date.today(),
+                        key=f"pr_edit_pay_date_v2_{pid}",
+                        help="Cash/bank voucher date — defaults to today (not payroll run date).",
                     )
                     pmode_edit = pc2.radio(
                         "Mode", ["cash", "bank"], horizontal=True, key=f"pr_edit_pay_mode_{pid}",
@@ -3550,9 +3551,9 @@ def page_payroll():
                     pc1, pc2, pc3 = st.columns([1.1, 1.0, 2.2], gap="small")
                     pay_date_edit = pc1.date_input(
                         "Payment date",
-                        value=date.fromisoformat(str(pr["run_date"])[:10])
-                        if pr.get("run_date") else date.today(),
-                        key=f"pr_sep_pay_date_{pid}",
+                        value=date.today(),
+                        key=f"pr_sep_pay_date_v2_{pid}",
+                        help="Cash/bank voucher date — defaults to today (not payroll run date).",
                     )
                     pmode_edit = pc2.radio(
                         "Mode", ["cash", "bank"], horizontal=True, key=f"pr_sep_pay_mode_{pid}",
