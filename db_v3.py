@@ -3554,7 +3554,7 @@ def _apply_journal_line_to_party_balance(conn, account_id, debit, credit, *, rev
         )
 
 
-def _delete_gl_reference(conn, ref_type, ref_id=None, ref_no=None):
+def _delete_gl_reference(conn, ref_type, ref_id=None, ref_no=None, *, reverse_party=None):
     """Remove GL rows and reverse chart_of_accounts balances."""
     q = "SELECT id, account_id, debit, credit FROM general_ledger WHERE reference_type=?"
     params: list = [ref_type]
@@ -3565,6 +3565,9 @@ def _delete_gl_reference(conn, ref_type, ref_id=None, ref_no=None):
         q += " AND reference_no=?"
         params.append(ref_no)
     rows = conn.execute(q, params).fetchall()
+    rt = str(ref_type or "").lower()
+    if reverse_party is None:
+        reverse_party = rt in ("journal", "journal_voucher", "jv")
     for row in rows:
         aid, dr, cr = row["account_id"], float(row["debit"] or 0), float(row["credit"] or 0)
         if dr:
@@ -3577,7 +3580,7 @@ def _delete_gl_reference(conn, ref_type, ref_id=None, ref_no=None):
                 "UPDATE chart_of_accounts SET current_balance=current_balance+? WHERE id=?",
                 (cr, aid),
             )
-        if str(ref_type or "").lower() in ("journal", "journal_voucher", "jv"):
+        if reverse_party:
             _apply_journal_line_to_party_balance(conn, aid, dr, cr, reverse=True)
     if not rows:
         return 0
@@ -3587,6 +3590,29 @@ def _delete_gl_reference(conn, ref_type, ref_id=None, ref_no=None):
         ids,
     )
     return len(rows)
+
+
+def _purge_document_fmye_side_effects(conn, document_no):
+    """Remove FMYE import companions for a JV document (ledger overlay + orphan GL).
+
+    Journal unpost already reverses party for ``reference_type=journal`` rows.
+    FMYE GL must not reverse party again (would double-adjust). Party balances
+    are refreshed from ledgers by the caller when needed.
+    """
+    doc = (document_no or "").strip()
+    if not doc:
+        return {"gl": 0, "party_entries": 0}
+    gl_n = _delete_gl_reference(conn, "fmye_voucher", ref_no=doc, reverse_party=False)
+    party_n = 0
+    try:
+        from database import _ensure_fmye_party_entries_table
+
+        _ensure_fmye_party_entries_table(conn)
+        cur = conn.execute("DELETE FROM fmye_party_entries WHERE document_no=?", (doc,))
+        party_n = cur.rowcount or 0
+    except Exception:
+        party_n = 0
+    return {"gl": gl_n, "party_entries": party_n}
 
 
 def reverse_journal_voucher(vid, user_id, reason=""):
@@ -3603,6 +3629,8 @@ def reverse_journal_voucher(vid, user_id, reason=""):
             _delete_gl_reference(conn, "journal", ref_id=int(vid))
             # Legacy/import rows sometimes key only by document no
             _delete_gl_reference(conn, "journal", ref_no=jv.get("document_no"))
+        # FMYE import kept parallel fmye_voucher GL + fmye_party_entries by document_no
+        _purge_document_fmye_side_effects(conn, jv.get("document_no"))
         conn.execute(
             """UPDATE journal_vouchers
                SET status='draft', posted_by=NULL, posted_at=NULL,

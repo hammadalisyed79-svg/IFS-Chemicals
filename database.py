@@ -3892,11 +3892,18 @@ def _fmye_party_ledger_rows(conn, party_type, party_id, from_date=None, to_date=
         params.append(to_date)
     rows = []
     for r in conn.execute(q, params).fetchall():
-        vt = r["voucher_type"] or ""
+        ref = (r["ref"] or "").strip()
+        vt = (r["voucher_type"] or "").strip().upper()
+        # Skip orphan JVR overlays after the journal voucher header was deleted
+        if ref.upper().startswith("JVR-") or vt == "JVR":
+            if ref and not conn.execute(
+                "SELECT 1 FROM journal_vouchers WHERE document_no=? LIMIT 1", (ref,),
+            ).fetchone():
+                continue
         desc = r["description"] or f"{vt} Voucher".strip()
         rows.append({
             "date": r["dt"],
-            "ref": r["ref"] or "",
+            "ref": ref,
             "description": desc,
             "voucher_type": (vt or "JVR").strip(),
             "debit": float(r["debit"] or 0),
