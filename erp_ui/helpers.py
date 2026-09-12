@@ -2212,6 +2212,18 @@ def export_buttons(df, filename="report", title="Export"):
 
 
 MIN_LINE_ROWS = 5
+def parse_packing_units(packing_size, product_name: str | None = None) -> float:
+    """Units (pcs) per carton from product packing_size or name like 500/24."""
+    from erp_core.packing_units import parse_packing_units as _parse
+    return _parse(packing_size, product_name)
+
+
+def packing_units_for_product(product) -> float:
+    """Resolve pcs/carton for a product dict."""
+    from erp_core.packing_units import packing_units_for_product as _pack
+    return _pack(product)
+
+
 LINE_PRODUCT_PLACEHOLDER = "— Select any product —"
 
 
@@ -2263,24 +2275,41 @@ def _init_line_items_session(sk, default_lines=None):
         st.session_state[sk] = _pad_line_rows(st.session_state[sk])
 
 
-def _line_item_col_widths(show_weight):
+def _line_item_col_widths(show_weight, show_pcs=False):
     # Product … Amount | Prev Rate | ✕
+    if show_pcs and show_weight:
+        # Product, Qty(Ctn), Pcs, NetWt, UnitWt, Rate/Ctn, Rate/Pc, Disc, Amt, Prev, X
+        return [2.2, 0.55, 0.55, 0.6, 0.6, 0.6, 0.55, 0.45, 0.6, 0.85, 0.28]
+    if show_pcs:
+        # Product, Qty(Ctn), Pcs, Rate/Ctn, Rate/Pc, Disc, Amt, Prev, X
+        return [2.5, 0.65, 0.65, 0.7, 0.65, 0.5, 0.7, 0.95, 0.3]
     if show_weight:
         return [2.85, 0.6, 0.65, 0.7, 0.65, 0.5, 0.65, 0.95, 0.3]
     return [3.1, 0.7, 0.7, 0.55, 0.7, 1.0, 0.3]
 
 
 _LINE_ITEM_NUM_COLS = frozenset({
-    "Qty", "Rate", "Disc %", "Amount", "Prev Rate", "Net Wt (kg)", "Unit Wt (kg)",
+    "Qty", "Qty (Ctn)", "Pcs", "Rate", "Rate/Ctn", "Rate/Pc", "Disc %", "Amount",
+    "Prev Rate", "Net Wt (kg)", "Unit Wt (kg)",
 })
 
 
-def _line_items_table_header(show_weight):
+def _line_items_table_header(show_weight, show_pcs=False):
     """Header row — same st.columns ratios as data rows (HTML table caused misalignment)."""
     from html import escape
 
-    widths = _line_item_col_widths(show_weight)
-    if show_weight:
+    widths = _line_item_col_widths(show_weight, show_pcs=show_pcs)
+    if show_pcs and show_weight:
+        cols_hdr = [
+            "Product", "Qty (Ctn)", "Pcs", "Net Wt (kg)", "Unit Wt (kg)",
+            "Rate/Ctn", "Rate/Pc", "Disc %", "Amount", "Prev Rate", "",
+        ]
+    elif show_pcs:
+        cols_hdr = [
+            "Product", "Qty (Ctn)", "Pcs", "Rate/Ctn", "Rate/Pc",
+            "Disc %", "Amount", "Prev Rate", "",
+        ]
+    elif show_weight:
         cols_hdr = [
             "Product", "Qty", "Net Wt (kg)", "Unit Wt (kg)",
             "Rate", "Disc %", "Amount", "Prev Rate", "",
@@ -2560,19 +2589,41 @@ def _net_weight_input(cols, col_idx, product, qty, line, key_prefix, row_index):
     )
 
 
-def _line_items_totals_footer(valid, show_weight):
+def _line_items_totals_footer(valid, show_weight, show_pcs=False):
     if not valid:
         return
     tqty = sum(float(l.get("quantity") or 0) for l in valid)
     tamt = sum(float(l.get("amount") or 0) for l in valid)
+    bits = [f"Qty (Ctn) **{tqty:,.2f}**" if show_pcs else f"Qty **{tqty:,.2f}**"]
+    if show_pcs:
+        tpcs = sum(float(l.get("pcs_qty") or 0) for l in valid)
+        bits.append(f"Pcs **{tpcs:,.0f}**")
+    bits.append(f"Unit lines **{len(valid)}**")
     if show_weight:
         tnw = sum(float(l.get("net_weight") or 0) for l in valid)
-        st.markdown(
-            f"**Line totals:** Qty **{tqty:,.2f}** · Unit lines **{len(valid)}** · "
-            f"Net weight **{tnw:,.3f} kg** · Amount **{tamt:,.2f}**"
+        bits.append(f"Net weight **{tnw:,.3f} kg**")
+    bits.append(f"Amount **{tamt:,.2f}**")
+    st.markdown("**Line totals:** " + " · ".join(bits))
+
+
+def _pcs_display_markdown(qty, pack_units) -> str:
+    pcs = round(float(qty or 0) * float(pack_units or 0), 4)
+    if pack_units and pack_units > 0:
+        return (
+            f'<div class="txn-line-num" title="Pcs = Qty × packing {pack_units:g}">'
+            f"{pcs:,.0f}</div>"
         )
-    else:
-        st.markdown(f"**Line totals:** Qty **{tqty:,.2f}** · Amount **{tamt:,.2f}**")
+    return '<div class="txn-line-num" title="Set Packing Size on product">—</div>'
+
+
+def _rate_pc_display_markdown(rate, pack_units) -> str:
+    if pack_units and pack_units > 0:
+        rpc = float(rate or 0) / float(pack_units)
+        return (
+            f'<div class="txn-line-num" title="Rate/Pc = Rate/Ctn ÷ packing {pack_units:g}">'
+            f"{rpc:,.4f}</div>"
+        )
+    return '<div class="txn-line-num">—</div>'
 
 
 def _disc_pct_input(cols, col_idx, line, key_prefix, row_index, default_discount_pct=0.0):
@@ -2698,7 +2749,7 @@ def line_items_editor(
 
 def smart_line_item_editor(
     items_dict, key_prefix, default_lines=None, show_weight=False, party_id=None,
-    default_discount_pct=0.0, max_product_options=500,
+    default_discount_pct=0.0, max_product_options=500, show_pcs=False,
 ):
     """Tabular line editor with product filter, unit weight, and padded rows for edits."""
     # Full Product dropdown stays searchable until catalogs get very large.
@@ -2708,6 +2759,12 @@ def smart_line_item_editor(
     sk = f"{key_prefix}_lines"
     _init_line_items_session(sk, default_lines)
     section_header("Line Items")
+    if show_pcs:
+        st.caption(
+            "**Pcs mode:** enter **Qty (Ctn)** and **Rate/Ctn**. "
+            "**Pcs** = Qty x packing size · **Rate/Pc** = Rate / packing size. "
+            "Stock and amount still use cartons."
+        )
     id_to_label = {
         p["id"]: label
         for label, p in (items_dict or {}).items()
@@ -2782,9 +2839,9 @@ def smart_line_item_editor(
         filtered_dict[label] = p
     labels, display_to_key = _product_option_labels(filtered_dict, key_prefix, party_id)
     updated, to_remove = [], []
-    widths = _line_item_col_widths(show_weight)
+    widths = _line_item_col_widths(show_weight, show_pcs=show_pcs)
     with st.container(key=f"{key_prefix}_lines_blk"):
-        _line_items_table_header(show_weight)
+        _line_items_table_header(show_weight, show_pcs=show_pcs)
         for i, line in enumerate(st.session_state[sk]):
             cols = st.columns(widths, gap="small")
             pid = line.get("item_id") or line.get("product_id")
@@ -2823,6 +2880,10 @@ def smart_line_item_editor(
             net_wt = 0.0
             raw_key = display_to_key.get(sel) if sel else None
             prod = filtered_dict.get(raw_key) if raw_key and raw_key != LINE_PRODUCT_PLACEHOLDER else None
+            pack_u = packing_units_for_product(prod) if prod else float(line.get("packing_units") or 0)
+            if show_pcs:
+                cols[ci].markdown(_pcs_display_markdown(qty, pack_u), unsafe_allow_html=True)
+                ci += 1
             if show_weight:
                 net_wt = _net_weight_input(cols, ci, prod, qty, line, key_prefix, i)
                 ci += 1
@@ -2830,6 +2891,10 @@ def smart_line_item_editor(
                 ci += 1
             rate_ci = ci
             ci += 1
+            rate_pc_ci = None
+            if show_pcs:
+                rate_pc_ci = ci
+                ci += 1
             disc_ci = ci
             ci += 1
             rate, disc_pct = _rate_disc_number_inputs(
@@ -2837,6 +2902,10 @@ def smart_line_item_editor(
                 party_id=party_id, default_discount_pct=default_discount_pct,
                 rate_key_suffix="ir", disc_key_suffix="d",
             )
+            if show_pcs and rate_pc_ci is not None:
+                cols[rate_pc_ci].markdown(
+                    _rate_pc_display_markdown(rate, pack_u), unsafe_allow_html=True,
+                )
             effective_disc = disc_pct if disc_pct > 0 else float(default_discount_pct or 0)
             amount = _line_amount_after_discount(qty, rate, effective_disc)
             cols[ci].markdown(
@@ -2848,9 +2917,15 @@ def smart_line_item_editor(
             if cols[-1].button("✕", key=f"{key_prefix}_id_{i}"):
                 to_remove.append(i)
             elif sel and raw_key and raw_key != LINE_PRODUCT_PLACEHOLDER and prod:
+                pcs_qty = round(float(qty or 0) * float(pack_u or 0), 4) if pack_u else 0.0
+                rate_pc = (float(rate or 0) / float(pack_u)) if pack_u else 0.0
                 row = {
                     "item_id": prod["id"], "quantity": qty, "rate": rate,
                     "amount": amount, "discount_pct": disc_pct,
+                    "packing_size": prod.get("packing_size") or "",
+                    "packing_units": pack_u,
+                    "pcs_qty": pcs_qty,
+                    "rate_pc": rate_pc,
                 }
                 if show_weight:
                     row["net_weight"] = net_wt
@@ -2867,7 +2942,7 @@ def smart_line_item_editor(
         st.session_state[sk].append(blank)
         st.rerun()
     valid = [l for l in updated if l.get("item_id")]
-    _line_items_totals_footer(valid, show_weight)
+    _line_items_totals_footer(valid, show_weight, show_pcs=show_pcs)
     if party_id:
         st.caption(
             "**Prev Rate** = last invoice rate + date (+ doc no) for this customer/supplier. "

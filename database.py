@@ -1547,15 +1547,35 @@ def get_customer(customer_id):
 def add_customer(data, created_by=None):
     with get_connection() as conn:
         ob = data.get("opening_balance", 0)
-        cur = conn.execute(
-            """INSERT INTO customers (code, name, contact_person, phone, email, address, city, province,
-               ntn, strn, credit_limit, opening_balance, current_balance, group_id, created_by)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-            (data["code"], data["name"], data.get("contact_person"), data.get("phone"),
-             data.get("email"), data.get("address"), data.get("city"), data.get("province"),
-             data.get("ntn"), data.get("strn"),
-             data.get("credit_limit", 0), ob, ob, data.get("group_id"), created_by),
-        )
+        # Ensure optional columns exist
+        try:
+            from db_v3 import _add_col
+            _add_col(conn, "customers", "invoice_pcs_mode", "INTEGER DEFAULT 0")
+        except Exception:
+            pass
+        cols = [r[1] for r in conn.execute("PRAGMA table_info(customers)").fetchall()]
+        has_pcs = "invoice_pcs_mode" in cols
+        if has_pcs:
+            cur = conn.execute(
+                """INSERT INTO customers (code, name, contact_person, phone, email, address, city, province,
+                   ntn, strn, credit_limit, opening_balance, current_balance, group_id, invoice_pcs_mode, created_by)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (data["code"], data["name"], data.get("contact_person"), data.get("phone"),
+                 data.get("email"), data.get("address"), data.get("city"), data.get("province"),
+                 data.get("ntn"), data.get("strn"),
+                 data.get("credit_limit", 0), ob, ob, data.get("group_id"),
+                 int(data.get("invoice_pcs_mode") or 0), created_by),
+            )
+        else:
+            cur = conn.execute(
+                """INSERT INTO customers (code, name, contact_person, phone, email, address, city, province,
+                   ntn, strn, credit_limit, opening_balance, current_balance, group_id, created_by)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (data["code"], data["name"], data.get("contact_person"), data.get("phone"),
+                 data.get("email"), data.get("address"), data.get("city"), data.get("province"),
+                 data.get("ntn"), data.get("strn"),
+                 data.get("credit_limit", 0), ob, ob, data.get("group_id"), created_by),
+            )
         rid = cur.lastrowid
         try:
             from db_audit import log_event
@@ -1577,22 +1597,45 @@ def update_customer(customer_id, data, modified_by=None):
             ensure_distributor_catalog_schema(conn)
         except Exception:
             pass
+        try:
+            from db_v3 import _add_col
+            _add_col(conn, "customers", "invoice_pcs_mode", "INTEGER DEFAULT 0")
+        except Exception:
+            pass
         old = conn.execute("SELECT opening_balance, current_balance FROM customers WHERE id=?", (customer_id,)).fetchone()
         diff = data.get("opening_balance", 0) - (old["opening_balance"] if old else 0)
         new_balance = (old["current_balance"] if old else 0) + diff
-        conn.execute(
-            """UPDATE customers SET code=?, name=?, contact_person=?, phone=?, email=?, address=?, city=?,
-               province=?, ntn=?, strn=?,
-               dispatch_phone=?, accounts_phone=?, owner_phone=?,
-               credit_limit=?, opening_balance=?, current_balance=?, group_id=?,
-               is_active=?, modified_by=?, modified_at=? WHERE id=?""",
-            (data["code"], data["name"], data.get("contact_person"), data.get("phone"),
-             data.get("email"), data.get("address"), data.get("city"), data.get("province"),
-             data.get("ntn"), data.get("strn"),
-             data.get("dispatch_phone"), data.get("accounts_phone"), data.get("owner_phone"),
-             data.get("credit_limit", 0), data.get("opening_balance", 0), new_balance,
-             data.get("group_id"), data.get("is_active", 1), modified_by, _now(), customer_id),
-        )
+        cols = [r[1] for r in conn.execute("PRAGMA table_info(customers)").fetchall()]
+        if "invoice_pcs_mode" in cols:
+            conn.execute(
+                """UPDATE customers SET code=?, name=?, contact_person=?, phone=?, email=?, address=?, city=?,
+                   province=?, ntn=?, strn=?,
+                   dispatch_phone=?, accounts_phone=?, owner_phone=?,
+                   credit_limit=?, opening_balance=?, current_balance=?, group_id=?,
+                   invoice_pcs_mode=?,
+                   is_active=?, modified_by=?, modified_at=? WHERE id=?""",
+                (data["code"], data["name"], data.get("contact_person"), data.get("phone"),
+                 data.get("email"), data.get("address"), data.get("city"), data.get("province"),
+                 data.get("ntn"), data.get("strn"),
+                 data.get("dispatch_phone"), data.get("accounts_phone"), data.get("owner_phone"),
+                 data.get("credit_limit", 0), data.get("opening_balance", 0), new_balance,
+                 data.get("group_id"), int(data.get("invoice_pcs_mode") or 0),
+                 data.get("is_active", 1), modified_by, _now(), customer_id),
+            )
+        else:
+            conn.execute(
+                """UPDATE customers SET code=?, name=?, contact_person=?, phone=?, email=?, address=?, city=?,
+                   province=?, ntn=?, strn=?,
+                   dispatch_phone=?, accounts_phone=?, owner_phone=?,
+                   credit_limit=?, opening_balance=?, current_balance=?, group_id=?,
+                   is_active=?, modified_by=?, modified_at=? WHERE id=?""",
+                (data["code"], data["name"], data.get("contact_person"), data.get("phone"),
+                 data.get("email"), data.get("address"), data.get("city"), data.get("province"),
+                 data.get("ntn"), data.get("strn"),
+                 data.get("dispatch_phone"), data.get("accounts_phone"), data.get("owner_phone"),
+                 data.get("credit_limit", 0), data.get("opening_balance", 0), new_balance,
+                 data.get("group_id"), data.get("is_active", 1), modified_by, _now(), customer_id),
+            )
         try:
             from db_audit import log_event
             log_event(
@@ -2475,6 +2518,13 @@ def search_sales_invoices(
 
 def get_sale(sale_id):
     with get_connection() as conn:
+        try:
+            from db_v3 import _add_col
+            _add_col(conn, "sales_invoices", "show_pcs", "INTEGER DEFAULT 0")
+            _add_col(conn, "sales_invoice_items", "packing_size", "TEXT")
+            _add_col(conn, "customers", "invoice_pcs_mode", "INTEGER DEFAULT 0")
+        except Exception:
+            pass
         header = row_to_dict(conn.execute(
             """SELECT s.id, s.document_no AS invoice_no, s.invoice_date AS sale_date, s.customer_id,
                       s.subtotal, s.discount, s.discount_pct, s.tax, s.tax_rate_id, s.tax_inclusive,
@@ -2484,7 +2534,9 @@ def get_sale(sale_id):
                       s.total_net_weight, s.physical_weight_kg, s.weight_variance_kg, s.weight_variance_pct,
                       s.weight_match_status, s.gate_pass_id, s.override_reason, s.approved_by, s.approved_at,
                       s.created_by, s.created_at, s.posted_at, s.updated_at,
-                      c.name AS customer_name
+                      COALESCE(s.show_pcs, 0) AS show_pcs,
+                      c.name AS customer_name,
+                      COALESCE(c.invoice_pcs_mode, 0) AS customer_invoice_pcs_mode
                FROM sales_invoices s JOIN customers c ON s.customer_id=c.id WHERE s.id=?""",
             (sale_id,),
         ).fetchone())
@@ -2494,6 +2546,7 @@ def get_sale(sale_id):
             """SELECT si.id, si.invoice_id AS sale_id, si.product_id AS item_id,
                       si.quantity, si.rate, si.amount, si.net_weight,
                       COALESCE(si.line_discount, 0) AS line_discount,
+                      COALESCE(si.packing_size, pr.packing_size) AS packing_size,
                       pr.name AS item_name, u.symbol AS unit
                FROM sales_invoice_items si
                JOIN products pr ON si.product_id=pr.id
@@ -2511,6 +2564,14 @@ def get_sale(sale_id):
                 li["discount_pct"] = round(min(100.0, disc_amt / gross * 100.0), 2)
             else:
                 li["discount_pct"] = 0.0
+            try:
+                from erp_core.packing_units import parse_packing_units
+                pack_u = parse_packing_units(li.get("packing_size"), li.get("item_name"))
+            except Exception:
+                pack_u = 0.0
+            li["packing_units"] = pack_u
+            li["pcs_qty"] = round(qty * pack_u, 4) if pack_u else 0.0
+            li["rate_pc"] = (rate / pack_u) if pack_u else 0.0
         wi = conn.execute(
             """SELECT ws.document_no, s.weight_slip_id, s.total_net_weight
                FROM sales_invoices s LEFT JOIN weight_slips ws ON s.weight_slip_id=ws.id WHERE s.id=?""",
@@ -2664,14 +2725,37 @@ def save_sale(data, line_items, sale_id=None, user_id=None):
                     "Could not save invoice — document number conflict. Please try again."
                 )
 
+        try:
+            from db_v3 import _add_col
+            _add_col(conn, "sales_invoice_items", "packing_size", "TEXT")
+            _add_col(conn, "sales_invoices", "show_pcs", "INTEGER DEFAULT 0")
+        except Exception:
+            pass
+
         for li in line_items:
             pid = li["item_id"]
+            pack = (li.get("packing_size") or "").strip() or None
+            if not pack:
+                prow = conn.execute(
+                    "SELECT packing_size FROM products WHERE id=?", (pid,),
+                ).fetchone()
+                pack = (prow["packing_size"] if prow else None) or None
             conn.execute(
-                """INSERT INTO sales_invoice_items (invoice_id, product_id, quantity, rate, amount, net_weight, tax_amount, line_discount)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                """INSERT INTO sales_invoice_items (invoice_id, product_id, quantity, rate, amount, net_weight, tax_amount, line_discount, packing_size)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (sale_id, pid, li["quantity"], li["rate"], li["line_amount"],
-                 float(li.get("net_weight") or 0), li.get("tax_amount", 0), li.get("line_discount", 0)),
+                 float(li.get("net_weight") or 0), li.get("tax_amount", 0), li.get("line_discount", 0),
+                 pack),
             )
+
+        # Persist pcs display flag
+        try:
+            conn.execute(
+                "UPDATE sales_invoices SET show_pcs=? WHERE id=?",
+                (1 if data.get("show_pcs") else 0, sale_id),
+            )
+        except Exception:
+            pass
 
         from db_v3 import apply_sales_order_delivery, mark_quotation_converted
         if data.get("order_id"):

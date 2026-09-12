@@ -354,6 +354,19 @@ def page_sales():
             )
         if retail_sale:
             header["payment_mode"] = "cash"
+        # Pcs mode: default ON when customer master has invoice_pcs_mode
+        pcs_default = bool((cust_row or {}).get("invoice_pcs_mode"))
+        pcs_key = f"sal_show_pcs_{cust_id}"
+        if pcs_key not in st.session_state:
+            st.session_state[pcs_key] = pcs_default
+        show_pcs = st.checkbox(
+            "Show carton + pcs (Qty×packing → Pcs, Rate÷packing → Rate/Pc)",
+            key=pcs_key,
+            help="Only for customers that need pcs on the invoice. "
+                 "Turn this on permanently under Master Data → Customer → "
+                 "**Show carton + pcs on sales invoices**.",
+        )
+        header["show_pcs"] = int(bool(show_pcs))
         ws_id = None
         ws_primary = True
         if flow["show_weight"]:
@@ -370,6 +383,7 @@ def page_sales():
             items_dict, "sal", show_weight=flow["show_weight"],
             party_id=header.get("customer_id") or cust_id,
             default_discount_pct=float(header.get("discount_pct") or 0),
+            show_pcs=bool(show_pcs),
         )
         tax_hdr, totals = hlp.invoice_tax_form(
             "sal", lines, header,
@@ -590,11 +604,27 @@ def page_sales():
                 header.pop("weight_slip_as_primary", None)
                 st.caption("Non-weighed invoice — weight slip not required.")
                 header.update(hlp.sale_dispatch_fields_ui("sal_edit", header))
+            edit_cust = db.get_customer(edit_cust_id) if edit_cust_id else None
+            pcs_default_edit = bool(
+                header.get("show_pcs")
+                if header.get("show_pcs") is not None
+                else (sale.get("show_pcs") if sale.get("show_pcs") is not None
+                      else (edit_cust or {}).get("invoice_pcs_mode"))
+            )
+            pcs_edit_key = f"sal_edit_show_pcs_{sid}"
+            if pcs_edit_key not in st.session_state:
+                st.session_state[pcs_edit_key] = bool(pcs_default_edit)
+            show_pcs_edit = st.checkbox(
+                "Show carton + pcs (Qty×packing → Pcs, Rate÷packing → Rate/Pc)",
+                key=pcs_edit_key,
+            )
+            header["show_pcs"] = int(bool(show_pcs_edit))
             lines, subtotal = hlp.smart_line_item_editor(
                 items_dict, "sal_edit", st.session_state.get("sal_edit_lines", []),
                 show_weight=flow_edit["show_weight"],
                 party_id=edit_cust_id,
                 default_discount_pct=float(header.get("discount_pct") or 0),
+                show_pcs=bool(show_pcs_edit),
             )
             tax_hdr, totals = hlp.invoice_tax_form(
                 "sal_edit", lines, header,

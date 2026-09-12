@@ -288,6 +288,7 @@ def _lines_table(items, cols):
 
 def _invoice_line_cols_and_format(
     items: list, *, include_weight: bool = True, hide_rates: bool = False, rate_decimals: int = 2,
+    show_pcs: bool = False,
 ) -> tuple:
     """Build print columns; include Disc % / Disc when any line has discount."""
     from product_rates_legacy import _implied_line_discount_pct
@@ -306,13 +307,30 @@ def _invoice_line_cols_and_format(
             it["_disc_amt_resolved"] = round(qty * rate * disc_pct / 100.0, 2)
         else:
             it["_disc_amt_resolved"] = disc_amt
+        pack_u = float(it.get("packing_units") or 0)
+        if pack_u <= 0:
+            try:
+                from erp_core.packing_units import parse_packing_units
+                pack_u = parse_packing_units(it.get("packing_size"), it.get("item_name"))
+            except Exception:
+                pack_u = 0.0
+        it["packing_units"] = pack_u
+        it["pcs_qty"] = round(qty * pack_u, 4) if pack_u else 0.0
+        it["rate_pc"] = (rate / pack_u) if pack_u else 0.0
 
     has_disc = (not hide_rates) and any(float(it.get("_disc_pct_resolved") or 0) > 0.005 for it in items)
-    cols = [("item_name", "Product"), ("quantity", "Qty")]
+    if show_pcs:
+        cols = [("item_name", "Product"), ("quantity", "Qty (Ctn)"), ("pcs_qty", "Pcs")]
+    else:
+        cols = [("item_name", "Product"), ("quantity", "Qty")]
     if has_wt:
         cols.append(("net_weight", "Net Wt (kg)"))
     if not hide_rates:
-        cols.append(("rate", "Rate"))
+        if show_pcs:
+            cols.append(("rate", "Rate/Ctn"))
+            cols.append(("rate_pc", "Rate/Pc"))
+        else:
+            cols.append(("rate", "Rate"))
         if has_disc:
             cols.append(("discount_pct", "Disc %"))
             cols.append(("line_discount", "Disc"))
@@ -327,6 +345,8 @@ def _invoice_line_cols_and_format(
         disc_amt = float(it.get("_disc_amt_resolved") or 0)
         it["quantity"] = f"{qty:,.2f}"
         it["rate"] = f"{rate:,.{rd}f}"
+        it["pcs_qty"] = f"{float(it.get('pcs_qty') or 0):,.0f}" if show_pcs else it.get("pcs_qty")
+        it["rate_pc"] = f"{float(it.get('rate_pc') or 0):,.4f}" if show_pcs else it.get("rate_pc")
         it["amount"] = f"{float(it.get('amount', 0)):,.2f}"
         nw = float(it.get("net_weight") or 0)
         it["net_weight"] = f"{nw:,.3f}"
@@ -600,7 +620,10 @@ def sales_invoice_html(sale_id, tax_invoice=False):
         doc_time=inv.get("created_at") or inv.get("approved_at"),
     )
     items = inv.get("items") or []
-    cols, _total_wt, has_disc = _invoice_line_cols_and_format(items, include_weight=False)
+    show_pcs = bool(inv.get("show_pcs"))
+    cols, _total_wt, has_disc = _invoice_line_cols_and_format(
+        items, include_weight=False, show_pcs=show_pcs,
+    )
     body += _lines_table(items, cols)
     prev_bal = db.get_customer_balance_before_ref(
         inv["customer_id"], inv["invoice_no"], inv.get("sale_date"),
@@ -648,6 +671,7 @@ def sales_invoice_pdf_bytes(sale_id, *, tax_invoice: bool = False, include_compa
     title = "SALES TAX INVOICE" if tax_invoice else "SALES INVOICE"
     items = list(inv.get("items") or [])
     has_disc = any(float(it.get("discount_pct") or it.get("line_discount") or 0) > 0.005 for it in items)
+    show_pcs = bool(inv.get("show_pcs"))
 
     pdf = FPDF(format="A4")
     pdf.set_auto_page_break(auto=True, margin=14)
@@ -686,9 +710,14 @@ def sales_invoice_pdf_bytes(sale_id, *, tax_invoice: bool = False, include_compa
         pdf.cell(0, 6, _pdf_latin1(f"Gate Pass: {gp_no}"), new_x="LMARGIN", new_y="NEXT")
     pdf.ln(3)
 
-    headers = [("Product", 78), ("Qty", 22), ("Rate", 28), ("Amount", 32)]
-    if has_disc:
-        headers = [("Product", 58), ("Qty", 18), ("Rate", 24), ("Disc %", 18), ("Amount", 32)]
+    if show_pcs:
+        headers = [("Product", 52), ("Ctn", 16), ("Pcs", 18), ("Rate/Ctn", 24), ("Rate/Pc", 24), ("Amount", 28)]
+        if has_disc:
+            headers = [("Product", 44), ("Ctn", 14), ("Pcs", 16), ("Rate/Ctn", 20), ("Rate/Pc", 20), ("Disc%", 14), ("Amt", 24)]
+    else:
+        headers = [("Product", 78), ("Qty", 22), ("Rate", 28), ("Amount", 32)]
+        if has_disc:
+            headers = [("Product", 58), ("Qty", 18), ("Rate", 24), ("Disc %", 18), ("Amount", 32)]
     pdf.set_font("Helvetica", "B", 8)
     for label, w in headers:
         pdf.cell(w, 6, label, border=1)
@@ -700,18 +729,43 @@ def sales_invoice_pdf_bytes(sale_id, *, tax_invoice: bool = False, include_compa
         qty = float(src.get("quantity") or 0)
         rate = float(src.get("rate") or 0)
         amt = float(src.get("amount") or 0)
-        prod = _pdf_latin1(name)[:48]
-        row = [
-            (prod, headers[0][1]),
-            (f"{qty:,.2f}", headers[1][1]),
-            (f"{rate:,.2f}", headers[2][1]),
-        ]
-        if has_disc:
-            dp = float(src.get("discount_pct") or 0)
-            row.append((f"{dp:,.2f}" if dp > 0.005 else "-", headers[3][1]))
-            row.append((f"{amt:,.2f}", headers[4][1]))
+        pcs = float(src.get("pcs_qty") or 0)
+        rate_pc = float(src.get("rate_pc") or 0)
+        if pcs <= 0 and show_pcs:
+            try:
+                from erp_core.packing_units import parse_packing_units
+                pack_u = parse_packing_units(src.get("packing_size"), name)
+                pcs = qty * pack_u
+                rate_pc = (rate / pack_u) if pack_u else 0
+            except Exception:
+                pass
+        prod = _pdf_latin1(name)[:40 if show_pcs else 48]
+        if show_pcs:
+            row = [
+                (prod, headers[0][1]),
+                (f"{qty:,.2f}", headers[1][1]),
+                (f"{pcs:,.0f}", headers[2][1]),
+                (f"{rate:,.2f}", headers[3][1]),
+                (f"{rate_pc:,.4f}", headers[4][1]),
+            ]
+            if has_disc:
+                dp = float(src.get("discount_pct") or 0)
+                row.append((f"{dp:,.2f}" if dp > 0.005 else "-", headers[5][1]))
+                row.append((f"{amt:,.2f}", headers[6][1]))
+            else:
+                row.append((f"{amt:,.2f}", headers[5][1]))
         else:
-            row.append((f"{amt:,.2f}", headers[3][1]))
+            row = [
+                (prod, headers[0][1]),
+                (f"{qty:,.2f}", headers[1][1]),
+                (f"{rate:,.2f}", headers[2][1]),
+            ]
+            if has_disc:
+                dp = float(src.get("discount_pct") or 0)
+                row.append((f"{dp:,.2f}" if dp > 0.005 else "-", headers[3][1]))
+                row.append((f"{amt:,.2f}", headers[4][1]))
+            else:
+                row.append((f"{amt:,.2f}", headers[3][1]))
         for text, w in row:
             pdf.cell(w, 6, text, border=1)
         pdf.ln()

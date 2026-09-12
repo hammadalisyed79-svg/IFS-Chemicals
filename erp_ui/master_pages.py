@@ -88,6 +88,13 @@ def page_customers():
                 help="+ receivable (customer owes you). − credit/advance balance.",
             )
             group_id = hlp.master_group_select("customer", wk("grp"))
+            invoice_pcs_mode = st.checkbox(
+                "Show carton + pcs on sales invoices",
+                value=False,
+                key=wk("pcs"),
+                help="For this customer only: sales invoices default to Qty(Ctn)/Pcs and Rate/Ctn/Rate/Pc "
+                     "(Pcs = Qty × packing size).",
+            )
             if st.form_submit_button("Save Customer"):
                 if not name:
                     st.error("Name is required.")
@@ -95,7 +102,8 @@ def page_customers():
                     db.add_customer({"code": code, "name": name, "contact_person": contact, "phone": phone,
                                      "email": email, "address": address, "city": city, "province": province,
                                      "ntn": ntn, "strn": strn,
-                                     "credit_limit": credit, "opening_balance": opening, "group_id": group_id}, hlp.uid())
+                                     "credit_limit": credit, "opening_balance": opening, "group_id": group_id,
+                                     "invoice_pcs_mode": int(invoice_pcs_mode)}, hlp.uid())
                     ff.finish_new_entry(
                         form_id=fid,
                         message=f"Customer **{name}** saved successfully. Form cleared for the next entry.",
@@ -146,6 +154,12 @@ def page_customers():
             st.caption("Signed: **positive = Dr**, **negative = Cr** (Finance Manager).")
             group_id = hlp.master_group_select("customer", "cust_edit", c.get("group_id"))
             active = st.checkbox("Active", value=bool(c["is_active"]))
+            invoice_pcs_mode = st.checkbox(
+                "Show carton + pcs on sales invoices",
+                value=bool(c.get("invoice_pcs_mode")),
+                key="cust_edit_pcs",
+                help="For this customer only: sales invoices default to Qty(Ctn)/Pcs and Rate/Ctn/Rate/Pc.",
+            )
             c1, c2 = st.columns(2)
             update = c1.form_submit_button("Update")
             delete = c2.form_submit_button("Delete", type="secondary")
@@ -157,7 +171,8 @@ def page_customers():
                                          "accounts_phone": accounts_phone or None,
                                          "owner_phone": owner_phone or None,
                                          "credit_limit": credit, "opening_balance": opening, "group_id": group_id,
-                                         "is_active": int(active)})
+                                         "is_active": int(active),
+                                         "invoice_pcs_mode": int(invoice_pcs_mode)})
                 ff.action_done(f"Customer **{name}** updated successfully.")
             if delete:
                 db.delete_customer(cid)
