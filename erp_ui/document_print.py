@@ -1092,7 +1092,8 @@ def _pdf_latin1(text) -> str:
     for a, b in (
         ("\u2014", "-"), ("\u2013", "-"), ("\u2018", "'"), ("\u2019", "'"),
         ("\u201c", '"'), ("\u201d", '"'), ("\u00a0", " "), ("\u2022", "*"),
-        ("Rs.", "Rs."), ("—", "-"), ("–", "-"),
+        ("\u2026", "..."), ("\ufffd", "-"),
+        ("Rs.", "Rs."), ("—", "-"), ("–", "-"), ("−", "-"),
     ):
         s = s.replace(a, b)
     return s.encode("latin-1", "replace").decode("latin-1")
@@ -1754,6 +1755,316 @@ def gate_pass_html(pass_id, *, duplicate: bool = False, dual: bool = False, prin
             1,
         )
     return html
+
+
+def _gate_pass_print_data(g: dict, items: list, *, print_party_codes: bool = False, duplicate: bool = False):
+    """Shared layout data for Gate Pass / Delivery Challan HTML + PDF."""
+    inv_wt = float(g.get("invoice_weight_kg") or 0)
+    phys = float(g.get("physical_weight_kg") or g.get("weight") or 0)
+    var_kg = float(g.get("weight_variance_kg") or round(phys - inv_wt, 3))
+    var_pct = float(g.get("weight_variance_pct") or 0)
+    is_purchase = bool(g.get("purchase_invoice_id") or g.get("purchase_invoice_no"))
+    show_amt = _gate_pass_is_cash_sale(g)
+    party_code_map = {}
+    if print_party_codes and g.get("customer_id"):
+        try:
+            from db_customer_product_codes import map_customer_product_codes
+            party_code_map = map_customer_product_codes(g["customer_id"])
+        except Exception:
+            party_code_map = {}
+    show_party_col = bool(print_party_codes and (party_code_map or g.get("customer_id")))
+    if show_party_col and not is_purchase:
+        title = "Delivery Challan — DUPLICATE" if duplicate else "Delivery Challan / Gate Pass"
+    else:
+        title = "Gate Pass — DUPLICATE" if duplicate else ("Inward Gate Pass" if is_purchase else "Gate Pass")
+
+    meta = [
+        ("Type", (g.get("pass_type") or "").replace("_", " ").title() or "—"),
+        ("Vehicle", g.get("vehicle_no") or "—"),
+        ("Driver", g.get("driver_name") or "—"),
+        ("Weight Slip", g.get("weight_slip_no") or "—"),
+    ]
+    if g.get("driver_contact"):
+        meta.append(("Driver Contact", g.get("driver_contact")))
+    if g.get("sales_invoice_no"):
+        meta.append(("Sales Invoice", g["sales_invoice_no"]))
+    if (g.get("customer_order_no") or "").strip():
+        meta.append(("Customer Order No.", (g.get("customer_order_no") or "").strip()))
+    if g.get("purchase_invoice_no"):
+        meta.append(("Purchase Invoice", g["purchase_invoice_no"]))
+    if g.get("delivery_note_no"):
+        meta.append(("Delivery Note", g["delivery_note_no"]))
+    if g.get("grn_no"):
+        meta.append(("GRN", g["grn_no"]))
+    party_phone = (g.get("party_phone") or g.get("customer_phone") or g.get("supplier_phone") or "").strip()
+    if party_phone:
+        meta.append(("Party Contact", party_phone))
+
+    has_wt = any(float(it.get("net_weight") or 0) for it in items)
+    show_pcs = bool(g.get("show_pcs")) or any(float(it.get("packing_units") or 0) > 0 for it in items)
+    if show_party_col:
+        cols = [
+            ("party_item_code", "Party Code"),
+            ("item_code", "IFS Code"),
+            ("item_name", "Product"),
+            ("quantity", "Qty (Ctn)" if show_pcs else "Qty"),
+        ]
+    else:
+        cols = [
+            ("item_code", "Code"),
+            ("item_name", "Product"),
+            ("quantity", "Qty (Ctn)" if show_pcs else "Qty"),
+        ]
+    if show_pcs:
+        cols.append(("pcs_qty", "Pcs"))
+    if has_wt:
+        cols.append(("net_weight", "Net Wt (kg)"))
+    if show_amt:
+        cols.extend([("rate", "Rate"), ("amount", "Amount")])
+
+    lines = []
+    total_qty = total_wt = total_amt = total_pcs = 0.0
+    for src in items:
+        qty = float(src.get("quantity") or 0)
+        nw = float(src.get("net_weight") or 0)
+        pack_u = float(src.get("packing_units") or 0)
+        if pack_u <= 0:
+            try:
+                from erp_core.packing_units import parse_packing_units
+                pack_u = parse_packing_units(src.get("packing_size"), src.get("item_name"))
+            except Exception:
+                pack_u = 0.0
+        pcs = float(src.get("pcs_qty") or 0)
+        if pcs <= 0 and pack_u > 0:
+            pcs = round(qty * pack_u, 4)
+        pid = src.get("product_id") or src.get("item_id")
+        their = ""
+        if show_party_col and pid is not None:
+            their = (party_code_map.get(int(pid)) or "").strip()
+        rate = float(src.get("rate") or 0)
+        amt = float(src.get("amount") or 0)
+        if show_amt and not amt and rate and qty:
+            amt = round(rate * qty, 2)
+        row = {
+            "party_item_code": their or "—",
+            "item_code": src.get("item_code") or "—",
+            "item_name": src.get("item_name") or "—",
+            "quantity": qty,
+            "pcs_qty": pcs,
+            "net_weight": nw,
+            "rate": rate,
+            "amount": amt,
+        }
+        total_qty += qty
+        total_pcs += pcs
+        total_wt += nw
+        total_amt += amt
+        lines.append(row)
+
+    summary = [f"Total Quantity: {total_qty:,.2f}"]
+    if show_pcs and total_pcs > 0:
+        summary.append(f"Total Pcs: {total_pcs:,.0f}")
+    if has_wt:
+        summary.append(f"Total Item Weight: {total_wt:,.3f} kg")
+    if show_amt:
+        summary.append(f"Total Amount: Rs. {total_amt:,.2f}")
+        inv_total = _gate_pass_invoice_amount(g)
+        if inv_total and abs(inv_total - total_amt) > 0.05:
+            summary.append(f"Invoice Net: Rs. {inv_total:,.2f}")
+
+    wt_lines = []
+    if inv_wt:
+        wt_lines.append(f"Invoice Weight: {inv_wt:,.3f} kg")
+    if phys:
+        wt_lines.append(f"Physical Weight (Scale): {phys:,.3f} kg")
+    if inv_wt or phys:
+        wt_lines.append(f"Variance: {var_kg:+,.3f} kg ({var_pct:.2f}%)")
+
+    return {
+        "title": title,
+        "document_no": g.get("document_no") or "",
+        "pass_date": g.get("pass_date"),
+        "pass_time": g.get("pass_time") or g.get("created_at"),
+        "party_name": g.get("party_name") or "—",
+        "meta": meta,
+        "cols": cols,
+        "lines": lines,
+        "summary": summary,
+        "wt_lines": wt_lines,
+        "remarks": _gate_pass_remarks_text(g) or "—",
+        "show_pcs": show_pcs,
+        "show_amt": show_amt,
+        "has_wt": has_wt,
+        "show_party_col": show_party_col,
+        "preparer_id": document_preparer_user_id(g),
+    }
+
+
+def gate_pass_pdf_bytes(
+    pass_id,
+    *,
+    duplicate: bool = False,
+    print_party_codes: bool = False,
+    include_company: bool = True,
+) -> bytes:
+    """Proper Gate Pass / Delivery Challan PDF (table layout — not HTML scrape)."""
+    from fpdf import FPDF
+    from db_commercial import get_gate_pass_material_lines
+
+    rows = [r for r in db.get_gate_passes() if r["id"] == pass_id]
+    if not rows:
+        raise ValueError("Gate pass not found.")
+    g = rows[0]
+    items = get_gate_pass_material_lines(g)
+    data = _gate_pass_print_data(
+        g, items, print_party_codes=bool(print_party_codes), duplicate=bool(duplicate),
+    )
+
+    pdf = FPDF(format="A4")
+    pdf.set_auto_page_break(auto=True, margin=14)
+    pdf.add_page()
+    pdf.set_margins(12, 12, 12)
+    usable = pdf.w - pdf.l_margin - pdf.r_margin
+
+    if include_company:
+        co = get_company_info()
+        pdf.set_font("Helvetica", "B", 13)
+        pdf.cell(usable, 7, _pdf_latin1(co.get("name") or "IFS Chemicals"), new_x="LMARGIN", new_y="NEXT")
+        pdf.set_font("Helvetica", size=8)
+        bits = [co.get("address"), co.get("phone"), co.get("email"), co.get("ntn")]
+        line = " | ".join(str(b) for b in bits if b)
+        if line:
+            pdf.multi_cell(usable, 4, _pdf_latin1(line))
+        pdf.ln(1)
+
+    if duplicate:
+        pdf.set_font("Helvetica", "B", 10)
+        pdf.set_text_color(180, 20, 20)
+        pdf.cell(usable, 6, "DUPLICATE", new_x="LMARGIN", new_y="NEXT", align="C")
+        pdf.set_text_color(0, 0, 0)
+
+    pdf.set_font("Helvetica", "B", 12)
+    pdf.cell(usable, 7, _pdf_latin1(data["title"]), new_x="LMARGIN", new_y="NEXT", align="C")
+    pdf.set_font("Helvetica", size=9)
+    pdf.cell(
+        usable, 5,
+        _pdf_latin1(
+            f"No: {data['document_no']}    "
+            f"Date / Time: {fmt_datetime(data['pass_date'], data['pass_time'])}"
+        ),
+        new_x="LMARGIN", new_y="NEXT",
+    )
+    pdf.ln(1)
+    pdf.set_font("Helvetica", size=8)
+    pdf.cell(usable, 4, "Party", new_x="LMARGIN", new_y="NEXT")
+    pdf.set_font("Helvetica", "B", 11)
+    pdf.multi_cell(usable, 6, _pdf_latin1(data["party_name"]))
+    pdf.ln(1)
+
+    # Meta grid — two columns
+    pdf.set_font("Helvetica", size=8)
+    col_w = usable / 2.0
+    meta = list(data["meta"])
+    for i in range(0, len(meta), 2):
+        left = meta[i]
+        right = meta[i + 1] if i + 1 < len(meta) else None
+        x0 = pdf.l_margin
+        y0 = pdf.get_y()
+        pdf.set_xy(x0, y0)
+        pdf.set_font("Helvetica", "B", 8)
+        pdf.cell(28, 5, _pdf_latin1(f"{left[0]}:"))
+        pdf.set_font("Helvetica", size=8)
+        pdf.cell(col_w - 28, 5, _pdf_latin1(str(left[1]))[:42])
+        if right:
+            pdf.set_xy(x0 + col_w, y0)
+            pdf.set_font("Helvetica", "B", 8)
+            pdf.cell(28, 5, _pdf_latin1(f"{right[0]}:"))
+            pdf.set_font("Helvetica", size=8)
+            pdf.cell(col_w - 28, 5, _pdf_latin1(str(right[1]))[:42])
+        pdf.ln(5)
+    pdf.ln(2)
+
+    # Column widths as relative weights → mm
+    weight_map = {
+        "party_item_code": 14, "item_code": 12, "item_name": 34,
+        "quantity": 10, "pcs_qty": 9, "net_weight": 12, "rate": 10, "amount": 12,
+    }
+    cols = data["cols"]
+    weights = [weight_map.get(c[0], 10) for c in cols]
+    wsum = sum(weights) or 1.0
+    widths = [usable * w / wsum for w in weights]
+
+    pdf.set_font("Helvetica", "B", 7)
+    for (key, label), w in zip(cols, widths):
+        pdf.cell(w, 6, _pdf_latin1(label)[:18], border=1, align="C")
+    pdf.ln()
+    pdf.set_font("Helvetica", size=7)
+
+    for row in data["lines"]:
+        # Soft wrap product name by truncating to fit (FPDF core fonts)
+        cells = []
+        for (key, _label), w in zip(cols, widths):
+            val = row.get(key)
+            if key == "quantity":
+                text = f"{float(val or 0):,.2f}"
+                align = "R"
+            elif key == "pcs_qty":
+                text = f"{float(val or 0):,.0f}"
+                align = "R"
+            elif key == "net_weight":
+                text = f"{float(val or 0):,.3f}"
+                align = "R"
+            elif key in ("rate", "amount"):
+                text = f"{float(val or 0):,.2f}"
+                align = "R"
+            else:
+                text = str(val or "")
+                align = "L"
+            # ~0.35mm per char at size 7 Helvetica approx
+            max_chars = max(4, int(w / 1.55))
+            cells.append((_pdf_latin1(text)[:max_chars], w, align))
+        for text, w, align in cells:
+            pdf.cell(w, 5.5, text, border=1, align=align)
+        pdf.ln()
+
+    pdf.ln(2)
+    pdf.set_font("Helvetica", size=9)
+    for line in data["summary"]:
+        pdf.cell(usable, 5, _pdf_latin1(line), new_x="LMARGIN", new_y="NEXT")
+    if data["wt_lines"]:
+        pdf.ln(1)
+        pdf.set_font("Helvetica", "B", 9)
+        pdf.cell(usable, 5, "Weight", new_x="LMARGIN", new_y="NEXT")
+        pdf.set_font("Helvetica", size=8)
+        for line in data["wt_lines"]:
+            pdf.cell(usable, 4.5, _pdf_latin1(line), new_x="LMARGIN", new_y="NEXT")
+
+    pdf.ln(1)
+    pdf.set_font("Helvetica", size=8)
+    pdf.multi_cell(usable, 4.5, _pdf_latin1(f"Remarks: {data['remarks']}"))
+
+    pdf.ln(6)
+    pdf.set_font("Helvetica", size=8)
+    sig_w = usable / 3.0
+    y = pdf.get_y()
+    for i, label in enumerate(("Prepared by", "Checked by", "Received by")):
+        x = pdf.l_margin + i * sig_w
+        pdf.set_xy(x, y)
+        pdf.cell(sig_w - 4, 4, _pdf_latin1(label), align="C")
+        pdf.set_xy(x, y + 10)
+        pdf.cell(sig_w - 4, 4, "____________________", align="C")
+    pdf.ln(18)
+
+    prep = resolve_preparer_name(data.get("preparer_id"))
+    pdf.set_font("Helvetica", size=7)
+    if prep:
+        pdf.cell(usable, 4, _pdf_latin1(f"Prepared by: {prep}"), new_x="LMARGIN", new_y="NEXT")
+    pdf.cell(
+        usable, 4,
+        "This is a system-generated gate pass / delivery challan.",
+        new_x="LMARGIN", new_y="NEXT",
+    )
+    return bytes(pdf.output())
 
 
 def _wrap_gate_pass_multi_full(original_body: str, duplicate_body: str, doc_no: str, user_id=None) -> str:
@@ -2605,6 +2916,14 @@ def document_print_toolbar(doc_type, doc_id, key_prefix="doc", vch_source=None, 
             doc_no = ((dn or {}).get("document_no") or "").strip()
             pdf_label = f"Delivery Note {doc_no}".strip() if doc_no else "Delivery Note"
             party_name = (dn or {}).get("customer_name") or ""
+        elif doc_type == "Gate Pass":
+            gps = [r for r in db.get_gate_passes() if r["id"] == int(doc_id)]
+            g = gps[0] if gps else {}
+            doc_no = (g.get("document_no") or "").strip()
+            pdf_label = f"Gate Pass {doc_no}".strip() if doc_no else "Gate Pass"
+            if duplicate:
+                pdf_label = f"{pdf_label} Duplicate"
+            party_name = g.get("party_name") or g.get("customer_name") or g.get("supplier_name") or ""
     except Exception:
         party_name = ""
     from erp_ui.helpers import party_download_filename
@@ -2627,6 +2946,13 @@ def document_print_toolbar(doc_type, doc_id, key_prefix="doc", vch_source=None, 
             pdf_bytes = sales_invoice_pdf_bytes(
                 doc_id,
                 tax_invoice=(doc_type == "Sales Tax Invoice"),
+                include_company=include_hdr,
+            )
+        elif doc_type == "Gate Pass" and not dual:
+            pdf_bytes = gate_pass_pdf_bytes(
+                doc_id,
+                duplicate=bool(duplicate),
+                print_party_codes=bool(st.session_state.get(f"{key_prefix}_print_party_codes")),
                 include_company=include_hdr,
             )
         else:
@@ -2699,10 +3025,22 @@ def document_print_toolbar(doc_type, doc_id, key_prefix="doc", vch_source=None, 
                     dup_html.replace("</body>", "<script>window.onload=function(){window.print();}</script></body>"),
                     height=0,
                 )
-            dd3.download_button(
-                "Save Duplicate HTML", dup_html.encode("utf-8"),
-                f"gate_pass_{doc_id}_dup.html", key=f"{key_prefix}_dup_pf",
-            )
+            try:
+                dup_pdf = gate_pass_pdf_bytes(
+                    doc_id, duplicate=True,
+                    print_party_codes=bool(st.session_state.get(f"{key_prefix}_print_party_codes")),
+                    include_company=include_hdr,
+                )
+                dd3.download_button(
+                    "Download Duplicate PDF", dup_pdf,
+                    f"gate_pass_{doc_id}_dup.pdf", "application/pdf",
+                    key=f"{key_prefix}_dup_pdf", type="primary",
+                )
+            except Exception:
+                dd3.download_button(
+                    "Save Duplicate HTML", dup_html.encode("utf-8"),
+                    f"gate_pass_{doc_id}_dup.html", key=f"{key_prefix}_dup_pf",
+                )
         elif mode == "dual":
             with print_company_header_scope(include_hdr):
                 dual_html = gate_pass_html(
