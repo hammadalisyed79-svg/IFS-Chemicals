@@ -226,7 +226,7 @@ def _customer_product_codes_editor(customer_id, customer_name=""):
     with st.form(f"cpc_add_{customer_id}"):
         labels = {f"{p.get('code')} — {p.get('name')}": p["id"] for p in items}
         plabel = st.selectbox("IFS Product", list(labels.keys()), key=f"cpc_prod_{customer_id}")
-        their = st.text_input("Their product code *", key=f"cpc_code_{customer_id}",
+        their = st.text_input("Party product code *", key=f"cpc_code_{customer_id}",
                               placeholder="e.g. Metro / toll SKU")
         notes = st.text_input("Notes", key=f"cpc_notes_{customer_id}")
         if st.form_submit_button("Save product code"):
@@ -234,7 +234,7 @@ def _customer_product_codes_editor(customer_id, customer_name=""):
                 cpc.upsert_customer_product_code(
                     customer_id, labels[plabel], their, notes=notes, user_id=hlp.uid(),
                 )
-                ff.action_done(f"Saved their code **{their.strip()}** for {plabel.split(' — ')[0]}.")
+                ff.action_done(f"Saved party code **{their.strip()}** for {plabel.split(' — ')[0]}.")
                 st.rerun()
             except Exception as e:
                 st.error(str(e))
