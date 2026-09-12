@@ -2150,17 +2150,27 @@ def get_purchase(purchase_id):
                WHERE pi.invoice_id=?""",
             (purchase_id,),
         ).fetchall())
+        st_pct = 0.0
+        if bool(header.get("tax_inclusive")) and header.get("tax_rate_id"):
+            try:
+                from db_v3 import get_tax_rate
+                tr = get_tax_rate(header.get("tax_rate_id"))
+                st_pct = float((tr or {}).get("sales_tax_pct") or 0)
+            except Exception:
+                st_pct = 0.0
+        from tax_engine import discount_pct_from_line_discount
+        tax_inc = bool(header.get("tax_inclusive"))
         for li in header["items"]:
             qty = float(li.get("quantity") or 0)
             rate = float(li.get("rate") or 0)
             disc_amt = float(li.get("line_discount") or 0)
             # Only expose Disc % from stored line_discount — never invent discount from amount gaps
-            # (that caused Submit for Approval to re-save an unintended 5% etc.)
-            gross = qty * rate
-            if disc_amt > 0.0001 and gross > 0.0001:
-                li["discount_pct"] = round(min(100.0, disc_amt / gross * 100.0), 2)
-            else:
-                li["discount_pct"] = 0.0
+            # MRP mode: disc is on RP, not Qty×MRP — reverse on RP or Update shrinks Disc %.
+            li["discount_pct"] = discount_pct_from_line_discount(
+                qty, rate, disc_amt,
+                tax_inclusive=tax_inc,
+                sales_tax_pct=st_pct,
+            )
         wi = conn.execute(
             """SELECT ws.document_no, p.weight_slip_id, p.total_net_weight
                FROM purchase_invoices p LEFT JOIN weight_slips ws ON p.weight_slip_id=ws.id WHERE p.id=?""",
@@ -2559,17 +2569,27 @@ def get_sale(sale_id):
                LEFT JOIN units_of_measure u ON pr.unit_id=u.id WHERE si.invoice_id=?""",
             (sale_id,),
         ).fetchall())
+        st_pct = 0.0
+        if bool(header.get("tax_inclusive")) and header.get("tax_rate_id"):
+            try:
+                from db_v3 import get_tax_rate
+                tr = get_tax_rate(header.get("tax_rate_id"))
+                st_pct = float((tr or {}).get("sales_tax_pct") or 0)
+            except Exception:
+                st_pct = 0.0
+        from tax_engine import discount_pct_from_line_discount
+        tax_inc = bool(header.get("tax_inclusive"))
         for li in header["items"]:
             qty = float(li.get("quantity") or 0)
             rate = float(li.get("rate") or 0)
             disc_amt = float(li.get("line_discount") or 0)
             # Only expose Disc % from stored line_discount — never invent discount from amount gaps
-            # (that caused Submit for Approval to re-save an unintended 5% etc.)
-            gross = qty * rate
-            if disc_amt > 0.0001 and gross > 0.0001:
-                li["discount_pct"] = round(min(100.0, disc_amt / gross * 100.0), 2)
-            else:
-                li["discount_pct"] = 0.0
+            # MRP mode: disc is on RP, not Qty×MRP — reverse on RP or Update shrinks Disc %.
+            li["discount_pct"] = discount_pct_from_line_discount(
+                qty, rate, disc_amt,
+                tax_inclusive=tax_inc,
+                sales_tax_pct=st_pct,
+            )
             try:
                 from erp_core.packing_units import parse_packing_units
                 pack_u = parse_packing_units(li.get("packing_size"), li.get("item_name"))

@@ -2287,7 +2287,7 @@ def _blank_line_item():
     }
 
 
-def _line_discount_pct(line) -> float:
+def _line_discount_pct(line, tax_inclusive=False, sales_tax_pct=0) -> float:
     """Resolve line discount % from stored fields only (do not invent from amount gaps)."""
     qty = float((line or {}).get("quantity") or 0)
     rate = float((line or {}).get("rate") or 0)
@@ -2297,11 +2297,13 @@ def _line_discount_pct(line) -> float:
             return max(0.0, min(100.0, float(line.get("discount_pct") or 0)))
         except (TypeError, ValueError):
             pass
-    # Explicit discount amount only — never reverse-engineer % from amount < qty*rate
-    gross = qty * rate
-    if gross > 0.0001 and disc_amt > 0.0001:
-        return round(min(100.0, max(0.0, disc_amt / gross * 100.0)), 4)
-    return 0.0
+    # Explicit discount amount only — reverse on RP when MRP/tax-inclusive
+    from tax_engine import discount_pct_from_line_discount
+    return discount_pct_from_line_discount(
+        qty, rate, disc_amt,
+        tax_inclusive=bool(tax_inclusive),
+        sales_tax_pct=float(sales_tax_pct or 0),
+    )
 
 
 def _line_amount_after_discount(qty, rate, discount_pct, tax_inclusive=False, sales_tax_pct=0) -> float:

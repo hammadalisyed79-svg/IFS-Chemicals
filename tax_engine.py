@@ -28,6 +28,26 @@ def _tax_pcts(tax_rate_row):
     )
 
 
+def discount_base_amount(quantity, rate, tax_inclusive=False, sales_tax_pct=0):
+    """Amount Disc % applies to: RP in MRP mode, else Qty×Rate."""
+    gross = float(quantity or 0) * float(rate or 0)
+    st_pct = float(sales_tax_pct or 0)
+    if tax_inclusive and st_pct > 0 and gross > 0:
+        return _r(gross * 100.0 / (100.0 + st_pct))
+    return _r(gross)
+
+
+def discount_pct_from_line_discount(
+    quantity, rate, line_discount, tax_inclusive=False, sales_tax_pct=0,
+):
+    """Recover Disc % from stored line_discount (RP base when tax-inclusive/MRP)."""
+    disc_amt = float(line_discount or 0)
+    base = discount_base_amount(quantity, rate, tax_inclusive, sales_tax_pct)
+    if disc_amt > 0.0001 and base > 0.0001:
+        return round(min(100.0, disc_amt / base * 100.0), 2)
+    return 0.0
+
+
 def calc_line(
     quantity,
     rate,
@@ -142,7 +162,14 @@ def compute_document_totals(line_items, header=None, get_tax_rate_fn=None):
     for li in line_items:
         qty = li.get("quantity", li.get("qty", 0))
         rt = li.get("rate", 0)
-        disc = li.get("discount_pct", default_disc)
+        # Line Disc % > 0 overrides header; 0 / missing uses header default
+        # (matches invoice_tax_form display — avoid Update wiping header disc).
+        raw_disc = li.get("discount_pct", None)
+        try:
+            raw_f = float(raw_disc) if raw_disc is not None and raw_disc != "" else 0.0
+        except (TypeError, ValueError):
+            raw_f = 0.0
+        disc = raw_f if raw_f > 0 else default_disc
         # Invoice/header tax category overrides product default tax on lines
         tr_id = default_tax_id if default_tax_id else li.get("tax_rate_id")
         tr = get_tax_rate_fn(tr_id) if tr_id else None

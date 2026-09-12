@@ -233,6 +233,15 @@ def prime_edit_refresh(edit_prefix: str, record_id: int, picker_prefix: str | No
     """Drop cached lines/header; reload from DB on next run."""
     rid = int(record_id)
     clear_keys(f"{edit_prefix}_header", f"{edit_prefix}_lines")
+    # Drop sticky tax/disc widgets so reload uses DB values (esp. MRP Disc % on RP)
+    for k in list(st.session_state.keys()):
+        if not isinstance(k, str):
+            continue
+        if k in (f"{edit_prefix}_tax_inc", f"{edit_prefix}_disc_pct"):
+            st.session_state.pop(k, None)
+            continue
+        if k.startswith(f"{edit_prefix}_d_") or k.startswith(f"{edit_prefix}_ir_") or k.startswith(f"{edit_prefix}_psig_"):
+            st.session_state.pop(k, None)
     st.session_state[f"{edit_prefix}_id"] = rid
     st.session_state[f"{edit_prefix}_picker_id"] = rid
     st.session_state[f"{edit_prefix}_reload"] = rid

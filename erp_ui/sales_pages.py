@@ -24,6 +24,18 @@ def item_options(active_only=True):
 
 def _seed_sal_edit(sale, cust_opts, *, cust=None, inv=None, sdate=None, notes=None, from_form=False):
     st.session_state["sal_edit_id"] = sale["id"]
+    # Sync MRP checkbox + header Disc % widgets from DB (Streamlit ignores value= once keyed)
+    st.session_state["sal_edit_tax_inc"] = bool(sale.get("tax_inclusive"))
+    st.session_state["sal_edit_disc_pct"] = float(sale.get("discount_pct") or 0)
+    # Drop sticky line Rate/Disc widgets so seeded Disc % (MRP-aware) is shown
+    for k in list(st.session_state.keys()):
+        if isinstance(k, str) and (
+            k.startswith("sal_edit_d_")
+            or k.startswith("sal_edit_ir_")
+            or k.startswith("sal_edit_psig_")
+            or k.startswith("sal_edit_iq_")
+        ):
+            st.session_state.pop(k, None)
     st.session_state["sal_edit_header"] = {
         "invoice_no": inv if from_form else sale["invoice_no"],
         "customer_id": cust_opts[cust] if from_form and cust else sale["customer_id"],
