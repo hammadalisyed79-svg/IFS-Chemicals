@@ -1524,8 +1524,17 @@ def invoice_tax_form(key_prefix, line_items, defaults=None, party_id=None, party
         key=f"{key_prefix}_disc_pct",
         help="Optional. Applies to lines with Disc % left at 0. Use **Apply discounts from last invoices** above to fill from history.",
     )
-    tax_inclusive = c2.checkbox("Tax Inclusive Pricing", value=bool(defaults.get("tax_inclusive", False)),
-                                key=f"{key_prefix}_tax_inc")
+    tax_inclusive = c2.checkbox(
+        "Rate = MRP (tax inclusive)",
+        value=bool(defaults.get("tax_inclusive", False)),
+        key=f"{key_prefix}_tax_inc",
+        help=(
+            "Tick when **Rate** is **MRP including sales tax**. "
+            "System derives RP = MRP ÷ (1+ST%), applies Disc % on RP, "
+            "then Sales Tax on Taxable. Example: MRP 50, ST 18% → RP 42.37; "
+            "Disc 24.52% → Taxable 31.98 + ST 5.76 = Net 37.74."
+        ),
+    )
     tax_labels = list(tax_map.keys()) if tax_map else []
     default_tax = defaults.get("tax_rate_id") or db.default_tax_rate_id()
     tax_idx = 0
@@ -1537,7 +1546,15 @@ def invoice_tax_form(key_prefix, line_items, defaults=None, party_id=None, party
     tax_lbl = c3.selectbox("Tax Category", tax_labels or ["—"], index=min(tax_idx, max(len(tax_labels) - 1, 0)),
                            key=f"{key_prefix}_tax_cat") if tax_labels else None
     tax_rate_id = tax_map[tax_lbl]["id"] if tax_lbl and tax_lbl in tax_map else defaults.get("tax_rate_id")
-    tax_pct = float(tax_map[tax_lbl].get("sales_tax_pct", 0)) if tax_lbl and tax_lbl in tax_map else float(defaults.get("tax_pct", 18))
+    tax_row = tax_map[tax_lbl] if tax_lbl and tax_lbl in tax_map else {}
+    tax_pct = float(tax_row.get("sales_tax_pct", 0)) if tax_row else float(defaults.get("tax_pct", 18))
+
+    if tax_inclusive:
+        st.info(
+            "**MRP mode:** enter **Rate = MRP (incl. tax)** and **Disc %**. "
+            f"RP (ex-tax) = MRP ÷ (1 + {tax_pct:g}%). "
+            "Discount applies on RP → Taxable → Sales Tax → Net Invoice."
+        )
 
     ch1, ch2, ch3, ch4 = st.columns(4)
     with ch1:
@@ -1582,12 +1599,30 @@ def invoice_tax_form(key_prefix, line_items, defaults=None, party_id=None, party
     totals["other_charges"] = other
     totals["round_off"] = round_off
     totals["total"] = net_with_charges
+
+    # RP total = ex-tax base before discount (for MRP mode display)
+    rp_total = round(float(totals.get("discount_amt") or 0) + float(totals.get("taxable") or 0), 2)
+
     st.markdown("**Invoice Tax Summary**")
-    s1, s2, s3, s4 = st.columns(4)
-    s1.metric("Subtotal", fmt_money(totals["subtotal"]))
-    s2.metric("Discount", fmt_money(totals["discount_amt"]))
-    s3.metric("Taxable", fmt_money(totals["taxable"]))
-    s4.metric("Net Invoice", fmt_money(totals["total"]))
+    if tax_inclusive:
+        m1, m2, m3, m4, m5 = st.columns(5)
+        m1.metric("MRP Gross", fmt_money(totals["subtotal"]), help="Σ Qty × MRP (incl. tax)")
+        m2.metric("RP (ex-tax)", fmt_money(rp_total), help="MRP Gross ÷ (1+ST%) after line extract")
+        m3.metric("Discount", fmt_money(totals["discount_amt"]), help="Disc % applied on RP")
+        m4.metric("Taxable", fmt_money(totals["taxable"]), help="RP − Discount")
+        m5.metric("Net Invoice", fmt_money(totals["total"]))
+        st.caption(
+            f"Working: MRP Gross **{fmt_money(totals['subtotal'])}** → "
+            f"RP **{fmt_money(rp_total)}** − Disc **{fmt_money(totals['discount_amt'])}** = "
+            f"Taxable **{fmt_money(totals['taxable'])}** + Sales Tax **{fmt_money(totals['sales_tax'])}** "
+            f"(+ other taxes − WHT + charges) = Net **{fmt_money(totals['total'])}**."
+        )
+    else:
+        s1, s2, s3, s4 = st.columns(4)
+        s1.metric("Subtotal", fmt_money(totals["subtotal"]))
+        s2.metric("Discount", fmt_money(totals["discount_amt"]))
+        s3.metric("Taxable", fmt_money(totals["taxable"]))
+        s4.metric("Net Invoice", fmt_money(totals["total"]))
     t1, t2, t3, t4, t5 = st.columns(5)
     t1.metric("Sales Tax", fmt_money(totals["sales_tax"]))
     t2.metric("Further Tax", fmt_money(totals["further_tax"]))
@@ -2289,33 +2324,34 @@ def _line_item_col_widths(show_weight, show_pcs=False):
 
 
 _LINE_ITEM_NUM_COLS = frozenset({
-    "Qty", "Qty (Ctn)", "Pcs", "Rate", "Rate/Ctn", "Rate/Pc", "Disc %", "Amount",
-    "Prev Rate", "Net Wt (kg)", "Unit Wt (kg)",
+    "Qty", "Qty (Ctn)", "Pcs", "Rate", "Rate/Ctn", "Rate/Pc", "MRP", "MRP/Ctn",
+    "Disc %", "Amount", "Prev Rate", "Net Wt (kg)", "Unit Wt (kg)",
 })
 
 
-def _line_items_table_header(show_weight, show_pcs=False):
+def _line_items_table_header(show_weight, show_pcs=False, rate_as_mrp=False):
     """Header row — same st.columns ratios as data rows (HTML table caused misalignment)."""
     from html import escape
 
     widths = _line_item_col_widths(show_weight, show_pcs=show_pcs)
+    rate_lbl = "MRP/Ctn" if (rate_as_mrp and show_pcs) else ("MRP" if rate_as_mrp else ("Rate/Ctn" if show_pcs else "Rate"))
     if show_pcs and show_weight:
         cols_hdr = [
             "Product", "Qty (Ctn)", "Pcs", "Net Wt (kg)", "Unit Wt (kg)",
-            "Rate/Ctn", "Rate/Pc", "Disc %", "Amount", "Prev Rate", "",
+            rate_lbl, "Rate/Pc", "Disc %", "Amount", "Prev Rate", "",
         ]
     elif show_pcs:
         cols_hdr = [
-            "Product", "Qty (Ctn)", "Pcs", "Rate/Ctn", "Rate/Pc",
+            "Product", "Qty (Ctn)", "Pcs", rate_lbl, "Rate/Pc",
             "Disc %", "Amount", "Prev Rate", "",
         ]
     elif show_weight:
         cols_hdr = [
             "Product", "Qty", "Net Wt (kg)", "Unit Wt (kg)",
-            "Rate", "Disc %", "Amount", "Prev Rate", "",
+            rate_lbl, "Disc %", "Amount", "Prev Rate", "",
         ]
     else:
-        cols_hdr = ["Product", "Qty", "Rate", "Disc %", "Amount", "Prev Rate", ""]
+        cols_hdr = ["Product", "Qty", rate_lbl, "Disc %", "Amount", "Prev Rate", ""]
     cols = st.columns(widths, gap="small")
     for label, col in zip(cols_hdr, cols):
         if not label:
@@ -2749,7 +2785,7 @@ def line_items_editor(
 
 def smart_line_item_editor(
     items_dict, key_prefix, default_lines=None, show_weight=False, party_id=None,
-    default_discount_pct=0.0, max_product_options=500, show_pcs=False,
+    default_discount_pct=0.0, max_product_options=500, show_pcs=False, rate_as_mrp=False,
 ):
     """Tabular line editor with product filter, unit weight, and padded rows for edits."""
     # Full Product dropdown stays searchable until catalogs get very large.
@@ -2764,6 +2800,11 @@ def smart_line_item_editor(
             "**Pcs mode:** enter **Qty (Ctn)** and **Rate/Ctn**. "
             "**Pcs** = Qty x packing size · **Rate/Pc** = Rate / packing size. "
             "Stock and amount still use cartons."
+        )
+    if rate_as_mrp:
+        st.caption(
+            "**MRP mode:** enter **MRP (incl. sales tax)** in the rate column and **Disc %**. "
+            "Tax summary derives RP, Taxable, Sales Tax and Net."
         )
     id_to_label = {
         p["id"]: label
@@ -2841,7 +2882,7 @@ def smart_line_item_editor(
     updated, to_remove = [], []
     widths = _line_item_col_widths(show_weight, show_pcs=show_pcs)
     with st.container(key=f"{key_prefix}_lines_blk"):
-        _line_items_table_header(show_weight, show_pcs=show_pcs)
+        _line_items_table_header(show_weight, show_pcs=show_pcs, rate_as_mrp=rate_as_mrp)
         for i, line in enumerate(st.session_state[sk]):
             cols = st.columns(widths, gap="small")
             pid = line.get("item_id") or line.get("product_id")

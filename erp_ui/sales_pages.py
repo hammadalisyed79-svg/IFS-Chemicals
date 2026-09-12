@@ -367,6 +367,9 @@ def page_sales():
                  "**Show carton + pcs on sales invoices**.",
         )
         header["show_pcs"] = int(bool(show_pcs))
+        # MRP pricing: Rate entered as MRP incl. tax (synced with tax form checkbox)
+        mrp_key = f"sal_tax_inc"
+        rate_as_mrp = bool(st.session_state.get(mrp_key) or header.get("tax_inclusive"))
         ws_id = None
         ws_primary = True
         if flow["show_weight"]:
@@ -379,11 +382,17 @@ def page_sales():
                 "Use **credit** or tick **Retail** for cash counter sales."
             )
             header.update(hlp.sale_dispatch_fields_ui("sal_new", header))
+        if not rate_as_mrp:
+            st.caption(
+                "To price from **MRP**: enter Rate as MRP (incl. tax) + Disc %, then tick "
+                "**Rate = MRP (tax inclusive)** in the tax section below."
+            )
         lines, subtotal = hlp.smart_line_item_editor(
             items_dict, "sal", show_weight=flow["show_weight"],
             party_id=header.get("customer_id") or cust_id,
             default_discount_pct=float(header.get("discount_pct") or 0),
             show_pcs=bool(show_pcs),
+            rate_as_mrp=rate_as_mrp,
         )
         tax_hdr, totals = hlp.invoice_tax_form(
             "sal", lines, header,
@@ -619,12 +628,16 @@ def page_sales():
                 key=pcs_edit_key,
             )
             header["show_pcs"] = int(bool(show_pcs_edit))
+            rate_as_mrp_edit = bool(
+                st.session_state.get("sal_edit_tax_inc") or header.get("tax_inclusive")
+            )
             lines, subtotal = hlp.smart_line_item_editor(
                 items_dict, "sal_edit", st.session_state.get("sal_edit_lines", []),
                 show_weight=flow_edit["show_weight"],
                 party_id=edit_cust_id,
                 default_discount_pct=float(header.get("discount_pct") or 0),
                 show_pcs=bool(show_pcs_edit),
+                rate_as_mrp=rate_as_mrp_edit,
             )
             tax_hdr, totals = hlp.invoice_tax_form(
                 "sal_edit", lines, header,
