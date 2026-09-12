@@ -160,6 +160,13 @@ def page_customers():
                 key="cust_edit_pcs",
                 help="For this customer only: sales invoices default to Qty(Ctn)/Pcs and Rate/Ctn/Rate/Pc.",
             )
+            print_party_item_code = st.checkbox(
+                "Default: print their product codes on Gate Pass / Delivery Challan",
+                value=bool(c.get("print_party_item_code")),
+                key="cust_edit_party_code",
+                help="For toll / 3rd-party customers whose item codes differ from IFS codes. "
+                     "Map codes below, then Gate Pass print can show **Their Code**.",
+            )
             c1, c2 = st.columns(2)
             update = c1.form_submit_button("Update")
             delete = c2.form_submit_button("Delete", type="secondary")
@@ -172,11 +179,65 @@ def page_customers():
                                          "owner_phone": owner_phone or None,
                                          "credit_limit": credit, "opening_balance": opening, "group_id": group_id,
                                          "is_active": int(active),
-                                         "invoice_pcs_mode": int(invoice_pcs_mode)})
+                                         "invoice_pcs_mode": int(invoice_pcs_mode),
+                                         "print_party_item_code": int(print_party_item_code)})
                 ff.action_done(f"Customer **{name}** updated successfully.")
             if delete:
                 db.delete_customer(cid)
                 ff.action_done(f"Customer **{code}** deleted successfully.")
+
+        # Outside form: maintain customer / toll product codes
+        _customer_product_codes_editor(cid, c.get("name") or "")
+
+
+def _customer_product_codes_editor(customer_id, customer_name=""):
+    """Map IFS products → customer/toll product codes for delivery challan print."""
+    import db_customer_product_codes as cpc
+
+    hlp.section_header("Customer / toll product codes")
+    st.caption(
+        f"For **{customer_name or 'this customer'}** (Metro, toll manufacturing, OEM). "
+        "These codes print on **Gate Pass / Delivery Challan** when the print option is on."
+    )
+    rows = cpc.list_customer_product_codes(customer_id, active_only=False)
+    if rows:
+        import pandas as pd
+        from erp_ui.helpers import render_dataframe_html_table
+        df = pd.DataFrame([{
+            "IFS Code": r.get("ifs_code"),
+            "Product": r.get("product_name"),
+            "Their Code": r.get("customer_code"),
+            "Notes": r.get("notes") or "",
+        } for r in rows])
+        render_dataframe_html_table(df)
+        del_opts = {
+            f"{r.get('ifs_code')} → {r.get('customer_code')}": r["id"] for r in rows
+        }
+        dsel = st.selectbox("Remove mapping", ["—"] + list(del_opts.keys()), key=f"cpc_del_{customer_id}")
+        if dsel != "—" and st.button("Delete mapping", key=f"cpc_del_btn_{customer_id}"):
+            cpc.delete_customer_product_code(del_opts[dsel])
+            ff.action_done("Customer product code removed.")
+            st.rerun()
+
+    items = db.get_items(active_only=True) or []
+    if not items:
+        st.info("No products in master to map.")
+        return
+    with st.form(f"cpc_add_{customer_id}"):
+        labels = {f"{p.get('code')} — {p.get('name')}": p["id"] for p in items}
+        plabel = st.selectbox("IFS Product", list(labels.keys()), key=f"cpc_prod_{customer_id}")
+        their = st.text_input("Their product code *", key=f"cpc_code_{customer_id}",
+                              placeholder="e.g. Metro / toll SKU")
+        notes = st.text_input("Notes", key=f"cpc_notes_{customer_id}")
+        if st.form_submit_button("Save product code"):
+            try:
+                cpc.upsert_customer_product_code(
+                    customer_id, labels[plabel], their, notes=notes, user_id=hlp.uid(),
+                )
+                ff.action_done(f"Saved their code **{their.strip()}** for {plabel.split(' — ')[0]}.")
+                st.rerun()
+            except Exception as e:
+                st.error(str(e))
 
 
 def page_suppliers():

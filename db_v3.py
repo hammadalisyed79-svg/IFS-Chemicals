@@ -286,6 +286,8 @@ def apply_v3(conn, db_module):
     _ensure_cash_borrows_schema(conn)
     db_contractors = _safe_import("db_contractors")
     db_contractors.apply_contract_labour(conn, db_module)
+    db_cpc = _safe_import("db_customer_product_codes")
+    db_cpc.apply_customer_product_codes(conn, db_module)
 
 
 def _ensure_expense_bills_schema(conn):

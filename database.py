@@ -1600,6 +1600,7 @@ def update_customer(customer_id, data, modified_by=None):
         try:
             from db_v3 import _add_col
             _add_col(conn, "customers", "invoice_pcs_mode", "INTEGER DEFAULT 0")
+            _add_col(conn, "customers", "print_party_item_code", "INTEGER DEFAULT 0")
         except Exception:
             pass
         old = conn.execute("SELECT opening_balance, current_balance FROM customers WHERE id=?", (customer_id,)).fetchone()
@@ -1635,6 +1636,11 @@ def update_customer(customer_id, data, modified_by=None):
                  data.get("dispatch_phone"), data.get("accounts_phone"), data.get("owner_phone"),
                  data.get("credit_limit", 0), data.get("opening_balance", 0), new_balance,
                  data.get("group_id"), data.get("is_active", 1), modified_by, _now(), customer_id),
+            )
+        if "print_party_item_code" in cols and "print_party_item_code" in data:
+            conn.execute(
+                "UPDATE customers SET print_party_item_code=? WHERE id=?",
+                (int(data.get("print_party_item_code") or 0), customer_id),
             )
         try:
             from db_audit import log_event

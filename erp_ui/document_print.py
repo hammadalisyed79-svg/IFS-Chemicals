@@ -361,6 +361,74 @@ def _totals_block(lines):
     return '<div class="summary-box">' + "".join(f"<div>{l}</div>" for l in lines) + "</div>"
 
 
+def _sales_invoice_money_rows(inv, *, has_disc: bool = False) -> list[tuple[str, float]]:
+    """
+    Footer amount rows that reconcile for both tax-exclusive and MRP (tax-inclusive) invoices.
+
+    Exclusive: Subtotal − Discount = Taxable; Taxable + Tax (+charges) = Net.
+    MRP: MRP Gross − Discount (on RP) ≠ Taxable; Taxable + Sales Tax (+charges) = Net.
+    Showing Taxable avoids the false identity Subtotal − Discount + Tax = Net.
+    """
+    subtotal = float(inv.get("subtotal") or 0)
+    disc = float(inv.get("discount") or 0)
+    taxable = float(inv.get("taxable_amount") or 0)
+    sales_tax = float(inv.get("sales_tax") or 0)
+    further = float(inv.get("further_tax") or 0)
+    extra = float(inv.get("extra_tax") or 0)
+    fed = float(inv.get("fed_tax") or 0)
+    wht = float(inv.get("wht_tax") or 0)
+    freight = float(inv.get("freight") or 0)
+    loading = float(inv.get("loading_charges") or 0)
+    other = float(inv.get("other_charges") or 0)
+    round_off = float(inv.get("round_off") or 0)
+    tax_blob = float(inv.get("tax") or 0)
+    st = sales_tax if sales_tax > 0.005 else max(0.0, tax_blob - further - extra - fed)
+    tax_inclusive = bool(int(inv.get("tax_inclusive") or 0))
+
+    rows: list[tuple[str, float]] = []
+    if tax_inclusive:
+        rows.append(("MRP Gross", subtotal))
+    else:
+        rows.append(("Subtotal", subtotal))
+    if disc > 0.005 or has_disc:
+        rows.append(("Item Discount" if has_disc else "Discount", disc))
+    if taxable > 0.005 or tax_inclusive:
+        rows.append(("Taxable", taxable if taxable > 0.005 else round(subtotal - disc, 2)))
+    if st > 0.005:
+        rows.append(("Sales Tax", st))
+    if further > 0.005:
+        rows.append(("Further Tax", further))
+    if extra > 0.005:
+        rows.append(("Extra Tax", extra))
+    if fed > 0.005:
+        rows.append(("FED", fed))
+    if wht > 0.005:
+        rows.append(("WHT", wht))
+    if freight > 0.005:
+        rows.append(("Freight", freight))
+    if loading > 0.005:
+        rows.append(("Loading", loading))
+    if other > 0.005:
+        rows.append(("Other Charges", other))
+    if abs(round_off) > 0.005:
+        rows.append(("Round Off", round_off))
+    return rows
+
+
+def _sales_invoice_totals_html(inv, *, has_disc: bool, prev_bal: float, paid: float, balance_due: float, total: float) -> str:
+    lines = [
+        f"<b>{escape(label)}:</b> Rs. {amt:,.2f}"
+        for label, amt in _sales_invoice_money_rows(inv, has_disc=has_disc)
+    ]
+    lines.extend([
+        f"<b>Previous Balance:</b> Rs. {prev_bal:,.2f}",
+        f"<b>Net Total:</b> Rs. {total:,.2f}",
+        f"<b>Paid:</b> Rs. {paid:,.2f}",
+        f"<b>Balance Due:</b> Rs. {balance_due:,.2f}",
+    ])
+    return _totals_block(lines)
+
+
 def _wrap_doc(body, title, page_mode="half", user_id=None, *, footer_label=None, skip_footer=False):
     """page_mode 'half' = A4 portrait voucher (top 50%); 'full' = A4 portrait full page (invoices)."""
     footer = "" if skip_footer else document_footer_html(user_id, label=footer_label)
@@ -631,16 +699,10 @@ def sales_invoice_html(sale_id, tax_invoice=False):
     total = float(inv.get("total", 0))
     paid = float(inv.get("paid_amount") or 0)
     balance_due = prev_bal + total - paid
-    disc_label = "Item Discount" if has_disc else "Discount"
-    body += _totals_block([
-        f"<b>Subtotal:</b> Rs. {float(inv.get('subtotal', 0)):,.2f}",
-        f"<b>{disc_label}:</b> Rs. {float(inv.get('discount', 0)):,.2f}",
-        f"<b>Tax:</b> Rs. {float(inv.get('tax', 0)):,.2f}",
-        f"<b>Previous Balance:</b> Rs. {prev_bal:,.2f}",
-        f"<b>Net Total:</b> Rs. {total:,.2f}",
-        f"<b>Paid:</b> Rs. {paid:,.2f}",
-        f"<b>Balance Due:</b> Rs. {balance_due:,.2f}",
-    ])
+    body += _sales_invoice_totals_html(
+        inv, has_disc=has_disc, prev_bal=prev_bal, paid=paid,
+        balance_due=balance_due, total=total,
+    )
     body += signature_block_html(doc_label="invoice")
     return _wrap_doc(body, f"{title} {inv['invoice_no']}", page_mode="full", user_id=document_preparer_user_id(inv))
 
@@ -772,11 +834,8 @@ def sales_invoice_pdf_bytes(sale_id, *, tax_invoice: bool = False, include_compa
 
     pdf.ln(4)
     pdf.set_font("Helvetica", "B", 10)
-    pdf.cell(0, 6, _pdf_latin1(f"Subtotal: Rs. {float(inv.get('subtotal') or 0):,.2f}"), new_x="LMARGIN", new_y="NEXT")
-    if disc > 0.005 or has_disc:
-        pdf.cell(0, 6, _pdf_latin1(f"{'Item Discount' if has_disc else 'Discount'}: Rs. {disc:,.2f}"), new_x="LMARGIN", new_y="NEXT")
-    if tax > 0.005:
-        pdf.cell(0, 6, _pdf_latin1(f"Tax: Rs. {tax:,.2f}"), new_x="LMARGIN", new_y="NEXT")
+    for label, amt in _sales_invoice_money_rows(inv, has_disc=has_disc):
+        pdf.cell(0, 6, _pdf_latin1(f"{label}: Rs. {amt:,.2f}"), new_x="LMARGIN", new_y="NEXT")
     pdf.cell(0, 6, _pdf_latin1(f"Previous Balance: Rs. {prev_bal:,.2f}"), new_x="LMARGIN", new_y="NEXT")
     pdf.cell(0, 6, _pdf_latin1(f"Net Total: Rs. {total:,.2f}"), new_x="LMARGIN", new_y="NEXT")
     if paid > 0.005:
@@ -1449,7 +1508,7 @@ def _gate_pass_needs_full_page(g: dict, items: list) -> bool:
     return height_mm > 135.0
 
 
-def _gate_pass_body(g: dict, items: list, *, duplicate: bool = False) -> str:
+def _gate_pass_body(g: dict, items: list, *, duplicate: bool = False, print_party_codes: bool = False) -> str:
     """Build gate-pass HTML body (no page wrapper)."""
     inv_wt = float(g.get("invoice_weight_kg") or 0)
     phys = float(g.get("physical_weight_kg") or g.get("weight") or 0)
@@ -1457,6 +1516,14 @@ def _gate_pass_body(g: dict, items: list, *, duplicate: bool = False) -> str:
     var_pct = float(g.get("weight_variance_pct") or 0)
     is_purchase = bool(g.get("purchase_invoice_id") or g.get("purchase_invoice_no"))
     show_amt = _gate_pass_is_cash_sale(g)
+    party_code_map = {}
+    if print_party_codes and g.get("customer_id"):
+        try:
+            from db_customer_product_codes import map_customer_product_codes
+            party_code_map = map_customer_product_codes(g["customer_id"])
+        except Exception:
+            party_code_map = {}
+    show_party_col = bool(print_party_codes and (party_code_map or g.get("customer_id")))
     extra = {
         "Type": (g.get("pass_type") or "").replace("_", " ").title(),
         "Vehicle": g.get("vehicle_no") or "—",
@@ -1475,7 +1542,10 @@ def _gate_pass_body(g: dict, items: list, *, duplicate: bool = False) -> str:
     elif g.get("customer_id") or g.get("supplier_id"):
         extra["Party Contact"] = "—"
 
-    title = "Gate Pass — DUPLICATE" if duplicate else ("Inward Gate Pass" if is_purchase else "Gate Pass")
+    if show_party_col and not is_purchase:
+        title = "Delivery Challan — DUPLICATE" if duplicate else "Delivery Challan / Gate Pass"
+    else:
+        title = "Gate Pass — DUPLICATE" if duplicate else ("Inward Gate Pass" if is_purchase else "Gate Pass")
     banner = '<div class="copy-banner gate-pass-dup-banner">DUPLICATE</div>' if duplicate else ""
     body = banner + _doc_header(
         title, g["document_no"], g["pass_date"], "Party", g.get("party_name"), extra,
@@ -1490,7 +1560,15 @@ def _gate_pass_body(g: dict, items: list, *, duplicate: bool = False) -> str:
     # Format line values on a shallow copy so dual print can reuse items
     lines = []
     has_wt = any(float(it.get("net_weight") or 0) for it in items)
-    cols = [("item_code", "Code"), ("item_name", "Product"), ("quantity", "Qty")]
+    if show_party_col:
+        cols = [
+            ("party_item_code", "Their Code"),
+            ("item_code", "IFS Code"),
+            ("item_name", "Product"),
+            ("quantity", "Qty"),
+        ]
+    else:
+        cols = [("item_code", "Code"), ("item_name", "Product"), ("quantity", "Qty")]
     if has_wt:
         cols.append(("net_weight", "Net Wt (kg)"))
     # Amounts only on SALE IN CASH / cash-sale gate passes (not credit / purchase)
@@ -1500,6 +1578,11 @@ def _gate_pass_body(g: dict, items: list, *, duplicate: bool = False) -> str:
     for src in items:
         it = dict(src)
         it["item_code"] = it.get("item_code") or "—"
+        pid = it.get("product_id") or it.get("item_id")
+        their = ""
+        if show_party_col and pid is not None:
+            their = (party_code_map.get(int(pid)) or "").strip()
+        it["party_item_code"] = their or "—"
         qty = float(it.get("quantity") or 0)
         nw = float(it.get("net_weight") or 0)
         it["quantity"] = f"{qty:,.2f}"
@@ -1566,7 +1649,7 @@ def _wrap_gate_pass_dual(original_body: str, duplicate_body: str, title: str) ->
     </body></html>"""
 
 
-def gate_pass_html(pass_id, *, duplicate: bool = False, dual: bool = False):
+def gate_pass_html(pass_id, *, duplicate: bool = False, dual: bool = False, print_party_codes: bool = False):
     """Gate pass print — half A4 when it fits; full page when content is bigger than half."""
     from db_commercial import get_gate_pass_material_lines
 
@@ -1578,20 +1661,21 @@ def gate_pass_html(pass_id, *, duplicate: bool = False, dual: bool = False):
     uid = document_preparer_user_id(g)
     footer = document_footer_html(uid)
     use_full = _gate_pass_needs_full_page(g, items)
+    ppc = bool(print_party_codes)
 
     if dual:
         if use_full:
             return _wrap_gate_pass_multi_full(
-                _gate_pass_body(g, items, duplicate=False),
-                _gate_pass_body(g, items, duplicate=True),
+                _gate_pass_body(g, items, duplicate=False, print_party_codes=ppc),
+                _gate_pass_body(g, items, duplicate=True, print_party_codes=ppc),
                 g["document_no"],
                 uid,
             )
-        orig = _gate_pass_body(g, items, duplicate=False) + footer
-        dup = _gate_pass_body(g, items, duplicate=True) + footer
+        orig = _gate_pass_body(g, items, duplicate=False, print_party_codes=ppc) + footer
+        dup = _gate_pass_body(g, items, duplicate=True, print_party_codes=ppc) + footer
         return _wrap_gate_pass_dual(orig, dup, f"{g['document_no']} Original+Duplicate")
 
-    body = _gate_pass_body(g, items, duplicate=duplicate)
+    body = _gate_pass_body(g, items, duplicate=duplicate, print_party_codes=ppc)
     title = f"{g['document_no']} DUPLICATE" if duplicate else g["document_no"]
     if use_full:
         html = _wrap_doc(body, title, page_mode="full", user_id=uid)
@@ -2357,6 +2441,33 @@ def document_print_toolbar(doc_type, doc_id, key_prefix="doc", vch_source=None, 
     import streamlit.components.v1 as components
 
     include_hdr = use_print_company_header_checkbox(key_prefix)
+    print_party_codes = False
+    if doc_type == "Gate Pass":
+        default_ppc = False
+        try:
+            gp_rows = [r for r in db.get_gate_passes() if r["id"] == int(doc_id)]
+            g0 = gp_rows[0] if gp_rows else None
+            cid = (g0 or {}).get("customer_id")
+            if cid:
+                from db_customer_product_codes import (
+                    customer_wants_party_item_code_print,
+                    list_customer_product_codes,
+                )
+                default_ppc = bool(
+                    customer_wants_party_item_code_print(cid)
+                    or list_customer_product_codes(cid)
+                )
+        except Exception:
+            default_ppc = False
+        ppc_key = f"{key_prefix}_print_party_codes"
+        if ppc_key not in st.session_state:
+            st.session_state[ppc_key] = default_ppc
+        print_party_codes = st.checkbox(
+            "Print customer / toll product codes (Delivery Challan)",
+            key=ppc_key,
+            help="Shows **Their Code** next to IFS Code on the Gate Pass. "
+                 "Map codes under Master Data → Customers → Edit → Customer / toll product codes.",
+        )
     with print_company_header_scope(include_hdr):
         if doc_type == "Party Transfer":
             html = party_transfer_voucher_html(doc_id)
@@ -2369,7 +2480,10 @@ def document_print_toolbar(doc_type, doc_id, key_prefix="doc", vch_source=None, 
         elif doc_type == "Payment Voucher" and vch_source:
             html = finance_voucher_html(vch_source, doc_id)
         elif doc_type == "Gate Pass":
-            html = gate_pass_html(doc_id, duplicate=duplicate, dual=dual)
+            html = gate_pass_html(
+                doc_id, duplicate=duplicate, dual=dual,
+                print_party_codes=bool(print_party_codes),
+            )
         elif doc_type == "Sales Order":
             html = sales_order_html(doc_id, hide_rates=bool(hide_rates))
         else:
@@ -2508,7 +2622,10 @@ def document_print_toolbar(doc_type, doc_id, key_prefix="doc", vch_source=None, 
         mode = st.session_state.get(f"{key_prefix}_mode")
         if mode == "dup":
             with print_company_header_scope(include_hdr):
-                dup_html = gate_pass_html(doc_id, duplicate=True)
+                dup_html = gate_pass_html(
+                    doc_id, duplicate=True,
+                    print_party_codes=bool(st.session_state.get(f"{key_prefix}_print_party_codes")),
+                )
             st.success("Duplicate ready — use Open Print Dialog below, or the Print button inside the preview.")
             with st.expander("Print Preview — Gate Pass (Duplicate)", expanded=True):
                 components.html(dup_html, height=560, scrolling=True)
@@ -2528,7 +2645,10 @@ def document_print_toolbar(doc_type, doc_id, key_prefix="doc", vch_source=None, 
             )
         elif mode == "dual":
             with print_company_header_scope(include_hdr):
-                dual_html = gate_pass_html(doc_id, dual=True)
+                dual_html = gate_pass_html(
+                    doc_id, dual=True,
+                    print_party_codes=bool(st.session_state.get(f"{key_prefix}_print_party_codes")),
+                )
             st.success("Original + Duplicate on one A4 — use Open Print Dialog below.")
             with st.expander("Print Preview — Gate Pass (Original + Duplicate)", expanded=True):
                 components.html(dual_html, height=720, scrolling=True)
