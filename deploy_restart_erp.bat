@@ -19,7 +19,7 @@ if not exist "%PY%" (
 
 echo [1] Checkpoint SQLite WAL, then stop old Streamlit (app.py) ...
 "%PY%" -c "import database as db; cm=db.get_connection(); conn=cm.__enter__(); conn.execute('PRAGMA wal_checkpoint(TRUNCATE)'); cm.__exit__(None, None, None)"
-powershell -NoProfile -Command "Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -and $_.CommandLine -match 'streamlit run app\.py' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue; Write-Host ('killed ' + $_.ProcessId) }"
+powershell -NoProfile -Command "Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -and $_.CommandLine -match 'streamlit run app\.py' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue; Write-Host ('killed ' + $_.ProcessId) }; Get-NetTCPConnection -LocalPort 8501 -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue; Write-Host ('freed port 8501 pid ' + $_.OwningProcess) }"
 timeout /t 3 /nobreak >nul
 
 echo [2] Start Streamlit backend ...

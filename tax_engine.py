@@ -127,6 +127,7 @@ def compute_document_totals(line_items, header=None, get_tax_rate_fn=None):
     sums = {
         "gross_amount": 0.0,
         "subtotal": 0.0,
+        "rp_base": 0.0,
         "discount_amt": 0.0,
         "taxable": 0.0,
         "taxable_amount": 0.0,
@@ -152,6 +153,7 @@ def compute_document_totals(line_items, header=None, get_tax_rate_fn=None):
         computed_lines.append(merged)
         sums["gross_amount"] += cl["line_amount"]
         sums["subtotal"] += cl["line_amount"]
+        sums["rp_base"] += cl.get("rp_base") or 0.0
         sums["discount_amt"] += cl["discount_amt"]
         sums["taxable"] += cl["taxable"]
         sums["sales_tax"] += cl["sales_tax"]

@@ -370,6 +370,9 @@ def page_sales():
         # MRP pricing: Rate entered as MRP incl. tax (synced with tax form checkbox)
         mrp_key = f"sal_tax_inc"
         rate_as_mrp = bool(st.session_state.get(mrp_key) or header.get("tax_inclusive"))
+        tr_id = header.get("tax_rate_id") or db.default_tax_rate_id()
+        tr_row = db.get_tax_rate(tr_id) if tr_id else None
+        mrp_st_pct = float((tr_row or {}).get("sales_tax_pct") or 18)
         ws_id = None
         ws_primary = True
         if flow["show_weight"]:
@@ -393,6 +396,7 @@ def page_sales():
             default_discount_pct=float(header.get("discount_pct") or 0),
             show_pcs=bool(show_pcs),
             rate_as_mrp=rate_as_mrp,
+            mrp_sales_tax_pct=mrp_st_pct,
         )
         tax_hdr, totals = hlp.invoice_tax_form(
             "sal", lines, header,
@@ -631,6 +635,9 @@ def page_sales():
             rate_as_mrp_edit = bool(
                 st.session_state.get("sal_edit_tax_inc") or header.get("tax_inclusive")
             )
+            tr_id_edit = header.get("tax_rate_id") or sale.get("tax_rate_id") or db.default_tax_rate_id()
+            tr_edit = db.get_tax_rate(tr_id_edit) if tr_id_edit else None
+            mrp_st_pct_edit = float((tr_edit or {}).get("sales_tax_pct") or 18)
             lines, subtotal = hlp.smart_line_item_editor(
                 items_dict, "sal_edit", st.session_state.get("sal_edit_lines", []),
                 show_weight=flow_edit["show_weight"],
@@ -638,6 +645,7 @@ def page_sales():
                 default_discount_pct=float(header.get("discount_pct") or 0),
                 show_pcs=bool(show_pcs_edit),
                 rate_as_mrp=rate_as_mrp_edit,
+                mrp_sales_tax_pct=mrp_st_pct_edit,
             )
             tax_hdr, totals = hlp.invoice_tax_form(
                 "sal_edit", lines, header,

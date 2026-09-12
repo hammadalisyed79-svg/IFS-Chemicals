@@ -1516,18 +1516,14 @@ def invoice_tax_form(key_prefix, line_items, defaults=None, party_id=None, party
     tax_map = tax_opts()
     default_disc = float(defaults.get("discount_pct", 0) or 0)
     # Do not auto-fill Disc % from last invoice — user must enter discount intentionally.
+    # Init MRP checkbox once via session_state (avoid value= resetting checked state each rerun).
+    inc_key = f"{key_prefix}_tax_inc"
+    if inc_key not in st.session_state:
+        st.session_state[inc_key] = bool(defaults.get("tax_inclusive", False))
     c1, c2, c3 = st.columns(3)
-    discount_pct = c1.number_input(
-        "Discount % (header default)",
-        min_value=0.0, max_value=100.0,
-        value=float(default_disc),
-        key=f"{key_prefix}_disc_pct",
-        help="Optional. Applies to lines with Disc % left at 0. Use **Apply discounts from last invoices** above to fill from history.",
-    )
-    tax_inclusive = c2.checkbox(
+    tax_inclusive = c1.checkbox(
         "Rate = MRP (tax inclusive)",
-        value=bool(defaults.get("tax_inclusive", False)),
-        key=f"{key_prefix}_tax_inc",
+        key=inc_key,
         help=(
             "Tick when **Rate** is **MRP including sales tax**. "
             "Sales tax is taken from MRP: RP = MRP×100/(100+ST%), ST = MRP−RP "
@@ -1535,6 +1531,7 @@ def invoice_tax_form(key_prefix, line_items, defaults=None, party_id=None, party
             "it does **not** reduce sales tax."
         ),
     )
+    tax_inclusive = bool(st.session_state.get(inc_key))
     tax_labels = list(tax_map.keys()) if tax_map else []
     default_tax = defaults.get("tax_rate_id") or db.default_tax_rate_id()
     tax_idx = 0
@@ -1543,11 +1540,18 @@ def invoice_tax_form(key_prefix, line_items, defaults=None, party_id=None, party
             if tr["id"] == default_tax:
                 tax_idx = i
                 break
-    tax_lbl = c3.selectbox("Tax Category", tax_labels or ["—"], index=min(tax_idx, max(len(tax_labels) - 1, 0)),
+    tax_lbl = c2.selectbox("Tax Category", tax_labels or ["—"], index=min(tax_idx, max(len(tax_labels) - 1, 0)),
                            key=f"{key_prefix}_tax_cat") if tax_labels else None
     tax_rate_id = tax_map[tax_lbl]["id"] if tax_lbl and tax_lbl in tax_map else defaults.get("tax_rate_id")
     tax_row = tax_map[tax_lbl] if tax_lbl and tax_lbl in tax_map else {}
     tax_pct = float(tax_row.get("sales_tax_pct", 0)) if tax_row else float(defaults.get("tax_pct", 18))
+    discount_pct = c3.number_input(
+        "Discount % (header default)",
+        min_value=0.0, max_value=100.0,
+        value=float(default_disc),
+        key=f"{key_prefix}_disc_pct",
+        help="Optional. Applies to lines with Disc % left at 0. Use **Apply discounts from last invoices** above to fill from history.",
+    )
 
     if tax_inclusive:
         st.info(
@@ -1602,16 +1606,18 @@ def invoice_tax_form(key_prefix, line_items, defaults=None, party_id=None, party
     totals["total"] = net_with_charges
 
     # RP total = ex-tax base before discount (for MRP mode display)
-    rp_total = round(float(totals.get("discount_amt") or 0) + float(totals.get("taxable") or 0), 2)
+    rp_total = float(totals.get("rp_base") or 0)
+    if rp_total <= 0:
+        rp_total = round(float(totals.get("discount_amt") or 0) + float(totals.get("taxable") or 0), 2)
 
     st.markdown("**Invoice Tax Summary**")
     if tax_inclusive:
         m1, m2, m3, m4, m5 = st.columns(5)
         m1.metric("MRP Gross", fmt_money(totals["subtotal"]), help="Σ Qty × MRP (incl. tax)")
-        m2.metric("RP (ex-tax)", fmt_money(rp_total), help="MRP Gross ÷ (1+ST%) after line extract")
+        m2.metric("RP (ex-tax)", fmt_money(rp_total), help="MRP × 100 / (100+ST%)")
         m3.metric("Discount", fmt_money(totals["discount_amt"]), help="Disc % applied on RP")
         m4.metric("Taxable", fmt_money(totals["taxable"]), help="RP − Discount")
-        m5.metric("Net Invoice", fmt_money(totals["total"]))
+        m5.metric("Sales Tax", fmt_money(totals["sales_tax"]), help="MRP − RP (not reduced by discount)")
         st.caption(
             f"Working: MRP Gross **{fmt_money(totals['subtotal'])}** → "
             f"RP **{fmt_money(rp_total)}** (MRP×100/(100+{tax_pct:g}%)) − Disc "
@@ -1619,19 +1625,28 @@ def invoice_tax_form(key_prefix, line_items, defaults=None, party_id=None, party
             f"Sales Tax **{fmt_money(totals['sales_tax'])}** = MRP − RP "
             f"(+ other taxes − WHT + charges) → Net **{fmt_money(totals['total'])}**."
         )
+        n1, n2 = st.columns(2)
+        n1.metric("Net Invoice", fmt_money(totals["total"]))
+        n2.metric("Further Tax", fmt_money(totals["further_tax"]))
+        t1, t2, t3, t4 = st.columns(4)
+        t1.metric("Extra Tax", fmt_money(totals["extra_tax"]))
+        t2.metric("WHT", fmt_money(totals["wht_tax"]))
+        t3.metric("FED", fmt_money(totals.get("fed_tax", 0)))
+        t4.metric("", "")
     else:
         s1, s2, s3, s4 = st.columns(4)
         s1.metric("Subtotal", fmt_money(totals["subtotal"]))
         s2.metric("Discount", fmt_money(totals["discount_amt"]))
         s3.metric("Taxable", fmt_money(totals["taxable"]))
         s4.metric("Net Invoice", fmt_money(totals["total"]))
-    t1, t2, t3, t4, t5 = st.columns(5)
-    t1.metric("Sales Tax", fmt_money(totals["sales_tax"]))
-    t2.metric("Further Tax", fmt_money(totals["further_tax"]))
-    t3.metric("Extra Tax", fmt_money(totals["extra_tax"]))
-    t4.metric("WHT", fmt_money(totals["wht_tax"]))
-    t5.metric("FED", fmt_money(totals.get("fed_tax", 0)))
+        t1, t2, t3, t4, t5 = st.columns(5)
+        t1.metric("Sales Tax", fmt_money(totals["sales_tax"]))
+        t2.metric("Further Tax", fmt_money(totals["further_tax"]))
+        t3.metric("Extra Tax", fmt_money(totals["extra_tax"]))
+        t4.metric("WHT", fmt_money(totals["wht_tax"]))
+        t5.metric("FED", fmt_money(totals.get("fed_tax", 0)))
     hdr.update(totals)
+    hdr["tax_inclusive"] = bool(tax_inclusive)
     return hdr, totals
 
 
@@ -2289,9 +2304,14 @@ def _line_discount_pct(line) -> float:
     return 0.0
 
 
-def _line_amount_after_discount(qty, rate, discount_pct) -> float:
+def _line_amount_after_discount(qty, rate, discount_pct, tax_inclusive=False, sales_tax_pct=0) -> float:
+    """Line Amount column. MRP mode: (RP after disc) = MRP×100/(100+ST%)×(1−Disc%)."""
     gross = float(qty or 0) * float(rate or 0)
     disc = max(0.0, min(100.0, float(discount_pct or 0)))
+    st_pct = float(sales_tax_pct or 0)
+    if tax_inclusive and st_pct > 0:
+        rp = gross * 100.0 / (100.0 + st_pct)
+        return round(rp * (1 - disc / 100), 2)
     return round(gross * (1 - disc / 100), 2)
 
 
@@ -2788,6 +2808,7 @@ def line_items_editor(
 def smart_line_item_editor(
     items_dict, key_prefix, default_lines=None, show_weight=False, party_id=None,
     default_discount_pct=0.0, max_product_options=500, show_pcs=False, rate_as_mrp=False,
+    mrp_sales_tax_pct=18.0,
 ):
     """Tabular line editor with product filter, unit weight, and padded rows for edits."""
     # Full Product dropdown stays searchable until catalogs get very large.
@@ -2807,7 +2828,8 @@ def smart_line_item_editor(
         st.caption(
             "**MRP mode:** enter **MRP (incl. sales tax)** and **Disc %**. "
             "Sales Tax = MRP − MRP×100/(100+ST%) (e.g. 50 → ST **7.63**). "
-            "Discount reduces RP/Taxable only — not Sales Tax."
+            "Discount reduces RP/Taxable only — not Sales Tax. "
+            "Amount column = taxable (RP after discount)."
         )
     id_to_label = {
         p["id"]: label
@@ -2951,7 +2973,11 @@ def smart_line_item_editor(
                     _rate_pc_display_markdown(rate, pack_u), unsafe_allow_html=True,
                 )
             effective_disc = disc_pct if disc_pct > 0 else float(default_discount_pct or 0)
-            amount = _line_amount_after_discount(qty, rate, effective_disc)
+            amount = _line_amount_after_discount(
+                qty, rate, effective_disc,
+                tax_inclusive=bool(rate_as_mrp),
+                sales_tax_pct=float(mrp_sales_tax_pct or 0) if rate_as_mrp else 0.0,
+            )
             cols[ci].markdown(
                 f'<div class="txn-line-num">{amount:,.2f}</div>',
                 unsafe_allow_html=True,
@@ -3046,6 +3072,8 @@ def smart_line_item_editor(
                         st.session_state[sk][j]["discount_pct"] = ndisc
                         st.session_state[sk][j]["amount"] = _line_amount_after_discount(
                             nqty, nrate, ndisc,
+                            tax_inclusive=bool(rate_as_mrp),
+                            sales_tax_pct=float(mrp_sales_tax_pct or 0) if rate_as_mrp else 0.0,
                         )
                         break
                 st.rerun()
