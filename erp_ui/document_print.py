@@ -247,8 +247,9 @@ def _doc_header(title, doc_no, doc_date, party_label, party_name, extra_meta=Non
 
 _LINE_COL_WEIGHTS = {
     "item_code": 12, "product_code": 12, "code": 11,
+    "party_item_code": 12,
     "item_name": 36, "product_name": 36, "product": 34,
-    "quantity": 9, "qty": 9, "unit": 7,
+    "quantity": 9, "qty": 9, "pcs_qty": 9, "unit": 7,
     "net_weight": 11, "rate": 9, "discount_pct": 8, "line_discount": 10,
     "amount": 11,
 }
@@ -261,7 +262,7 @@ def _line_col_widths(cols) -> list[float]:
 
 
 _NUM_LINE_COLS = frozenset({
-    "quantity", "qty", "net_weight", "rate", "amount",
+    "quantity", "qty", "pcs_qty", "net_weight", "rate", "amount",
     "discount_pct", "line_discount", "tax_amount",
 })
 
@@ -676,6 +677,8 @@ def sales_invoice_html(sale_id, tax_invoice=False):
         "Status": inv.get("status", "—").replace("_", " ").title(),
         "Gate Pass": inv.get("gate_pass_no") or "—",
     }
+    if (inv.get("customer_order_no") or "").strip():
+        meta["Customer Order No."] = (inv.get("customer_order_no") or "").strip()
     if not inv.get("gate_pass_no") and inv.get("gate_pass_id"):
         gps = db.get_gate_passes(sales_invoice_id=sale_id)
         if gps:
@@ -1504,6 +1507,10 @@ def _gate_pass_needs_full_page(g: dict, items: list) -> bool:
         height_mm += 6.0
     if g.get("driver_contact") or g.get("sales_invoice_no") or g.get("purchase_invoice_no"):
         height_mm += 4.0
+    if (g.get("customer_order_no") or "").strip():
+        height_mm += 4.0
+    if bool(g.get("show_pcs")) or any(float(it.get("packing_units") or 0) > 0 for it in (items or [])):
+        height_mm += 4.0 + n * 0.4
     # Leave a small margin under 148mm so nothing clips
     return height_mm > 135.0
 
@@ -1534,6 +1541,8 @@ def _gate_pass_body(g: dict, items: list, *, duplicate: bool = False, print_part
         extra["Driver Contact"] = g.get("driver_contact")
     if g.get("sales_invoice_no"):
         extra["Sales Invoice"] = g["sales_invoice_no"]
+    if (g.get("customer_order_no") or "").strip():
+        extra["Customer Order No."] = (g.get("customer_order_no") or "").strip()
     if g.get("purchase_invoice_no"):
         extra["Purchase Invoice"] = g["purchase_invoice_no"]
     party_phone = (g.get("party_phone") or g.get("customer_phone") or g.get("supplier_phone") or "").strip()
@@ -1560,21 +1569,29 @@ def _gate_pass_body(g: dict, items: list, *, duplicate: bool = False, print_part
     # Format line values on a shallow copy so dual print can reuse items
     lines = []
     has_wt = any(float(it.get("net_weight") or 0) for it in items)
+    # Pcs: invoice show_pcs flag, or any line with packing units
+    show_pcs = bool(g.get("show_pcs")) or any(float(it.get("packing_units") or 0) > 0 for it in items)
     if show_party_col:
         cols = [
             ("party_item_code", "Their Code"),
             ("item_code", "IFS Code"),
             ("item_name", "Product"),
-            ("quantity", "Qty"),
+            ("quantity", "Qty (Ctn)" if show_pcs else "Qty"),
         ]
     else:
-        cols = [("item_code", "Code"), ("item_name", "Product"), ("quantity", "Qty")]
+        cols = [
+            ("item_code", "Code"),
+            ("item_name", "Product"),
+            ("quantity", "Qty (Ctn)" if show_pcs else "Qty"),
+        ]
+    if show_pcs:
+        cols.append(("pcs_qty", "Pcs"))
     if has_wt:
         cols.append(("net_weight", "Net Wt (kg)"))
     # Amounts only on SALE IN CASH / cash-sale gate passes (not credit / purchase)
     if show_amt:
         cols.extend([("rate", "Rate"), ("amount", "Amount")])
-    total_qty = total_wt = total_amt = 0.0
+    total_qty = total_wt = total_amt = total_pcs = 0.0
     for src in items:
         it = dict(src)
         it["item_code"] = it.get("item_code") or "—"
@@ -1585,9 +1602,21 @@ def _gate_pass_body(g: dict, items: list, *, duplicate: bool = False, print_part
         it["party_item_code"] = their or "—"
         qty = float(it.get("quantity") or 0)
         nw = float(it.get("net_weight") or 0)
+        pack_u = float(it.get("packing_units") or 0)
+        if pack_u <= 0:
+            try:
+                from erp_core.packing_units import parse_packing_units
+                pack_u = parse_packing_units(it.get("packing_size"), it.get("item_name"))
+            except Exception:
+                pack_u = 0.0
+        pcs = float(it.get("pcs_qty") or 0)
+        if pcs <= 0 and pack_u > 0:
+            pcs = round(qty * pack_u, 4)
         it["quantity"] = f"{qty:,.2f}"
+        it["pcs_qty"] = f"{pcs:,.0f}" if show_pcs else ""
         it["net_weight"] = f"{nw:,.3f}"
         total_qty += qty
+        total_pcs += pcs
         total_wt += nw
         if show_amt:
             rate = float(src.get("rate") or 0)
@@ -1601,6 +1630,8 @@ def _gate_pass_body(g: dict, items: list, *, duplicate: bool = False, print_part
     if lines:
         body += _lines_table(lines, cols)
         summary = [f"<b>Total Quantity:</b> {total_qty:,.2f}"]
+        if show_pcs and total_pcs > 0:
+            summary.append(f"<b>Total Pcs:</b> {total_pcs:,.0f}")
         if has_wt:
             summary.append(f"<b>Total Item Weight:</b> {total_wt:,.3f} kg")
         if show_amt:

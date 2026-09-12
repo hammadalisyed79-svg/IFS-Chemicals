@@ -2537,6 +2537,7 @@ def get_sale(sale_id):
         try:
             from db_v3 import _add_col
             _add_col(conn, "sales_invoices", "show_pcs", "INTEGER DEFAULT 0")
+            _add_col(conn, "sales_invoices", "customer_order_no", "TEXT")
             _add_col(conn, "sales_invoice_items", "packing_size", "TEXT")
             _add_col(conn, "customers", "invoice_pcs_mode", "INTEGER DEFAULT 0")
         except Exception:
@@ -2547,6 +2548,7 @@ def get_sale(sale_id):
                       s.total, s.paid_amount, s.payment_mode, s.notes, s.status, s.weight_slip_id,
                       s.order_id, s.quotation_id, s.weighbridge_required,
                       s.vehicle_no, s.driver_name, s.driver_contact, s.dispatch_remarks,
+                      s.customer_order_no,
                       s.total_net_weight, s.physical_weight_kg, s.weight_variance_kg, s.weight_variance_pct,
                       s.weight_match_status, s.gate_pass_id, s.override_reason, s.approved_by, s.approved_at,
                       s.created_by, s.created_at, s.posted_at, s.updated_at,
@@ -2755,6 +2757,7 @@ def save_sale(data, line_items, sale_id=None, user_id=None):
             from db_v3 import _add_col
             _add_col(conn, "sales_invoice_items", "packing_size", "TEXT")
             _add_col(conn, "sales_invoices", "show_pcs", "INTEGER DEFAULT 0")
+            _add_col(conn, "sales_invoices", "customer_order_no", "TEXT")
         except Exception:
             pass
 
@@ -2774,11 +2777,15 @@ def save_sale(data, line_items, sale_id=None, user_id=None):
                  pack),
             )
 
-        # Persist pcs display flag
+        # Persist pcs display flag + customer PO / order reference
         try:
             conn.execute(
-                "UPDATE sales_invoices SET show_pcs=? WHERE id=?",
-                (1 if data.get("show_pcs") else 0, sale_id),
+                "UPDATE sales_invoices SET show_pcs=?, customer_order_no=? WHERE id=?",
+                (
+                    1 if data.get("show_pcs") else 0,
+                    (str(data.get("customer_order_no") or "").strip() or None),
+                    sale_id,
+                ),
             )
         except Exception:
             pass

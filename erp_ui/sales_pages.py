@@ -27,6 +27,7 @@ def _seed_sal_edit(sale, cust_opts, *, cust=None, inv=None, sdate=None, notes=No
     # Sync MRP checkbox + header Disc % widgets from DB (Streamlit ignores value= once keyed)
     st.session_state["sal_edit_tax_inc"] = bool(sale.get("tax_inclusive"))
     st.session_state["sal_edit_disc_pct"] = float(sale.get("discount_pct") or 0)
+    st.session_state["sal_edit_customer_order_no"] = sale.get("customer_order_no") or ""
     # Drop sticky line Rate/Disc widgets so seeded Disc % (MRP-aware) is shown
     for k in list(st.session_state.keys()):
         if isinstance(k, str) and (
@@ -51,6 +52,7 @@ def _seed_sal_edit(sale, cust_opts, *, cust=None, inv=None, sdate=None, notes=No
         "driver_name": sale.get("driver_name") or "",
         "driver_contact": sale.get("driver_contact") or "",
         "dispatch_remarks": sale.get("dispatch_remarks") or "",
+        "customer_order_no": sale.get("customer_order_no") or "",
         "weighbridge_required": sale.get("weighbridge_required"),
         # Keep SO/quotation link on edit — otherwise save clears order_id and reopens the SO
         "order_id": sale.get("order_id"),
@@ -397,6 +399,7 @@ def page_sales():
                 "Use **credit** or tick **Retail** for cash counter sales."
             )
             header.update(hlp.sale_dispatch_fields_ui("sal_new", header))
+        header.update(hlp.sale_customer_order_ui("sal_new", header))
         if not rate_as_mrp:
             st.caption(
                 "To price from **MRP**: enter Rate as MRP (incl. tax) + Disc %, then tick "
@@ -629,6 +632,7 @@ def page_sales():
                 header.pop("weight_slip_as_primary", None)
                 st.caption("Non-weighed invoice — weight slip not required.")
                 header.update(hlp.sale_dispatch_fields_ui("sal_edit", header))
+            header.update(hlp.sale_customer_order_ui("sal_edit", header))
             edit_cust = db.get_customer(edit_cust_id) if edit_cust_id else None
             pcs_default_edit = bool(
                 header.get("show_pcs")

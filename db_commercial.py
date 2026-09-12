@@ -1392,15 +1392,29 @@ def get_invoice_line_items(invoice_kind, invoice_id):
     rows = []
     for i in inv.get("items") or []:
         pid = i.get("item_id") or i.get("product_id")
+        qty = float(i.get("quantity") or 0)
+        pack_u = float(i.get("packing_units") or 0)
+        if pack_u <= 0:
+            try:
+                from erp_core.packing_units import parse_packing_units
+                pack_u = parse_packing_units(i.get("packing_size"), i.get("item_name"))
+            except Exception:
+                pack_u = 0.0
+        pcs = float(i.get("pcs_qty") or 0)
+        if pcs <= 0 and pack_u > 0:
+            pcs = round(qty * pack_u, 4)
         rows.append({
             "line_id": i.get("id"),
             "product_id": pid,
             "item_code": code_map.get(pid, ""),
             "item_name": i.get("item_name") or "",
-            "quantity": float(i.get("quantity") or 0),
+            "quantity": qty,
             "net_weight": float(i.get("net_weight") or 0),
             "rate": float(i.get("rate") or 0),
             "amount": float(i.get("amount") or 0),
+            "packing_size": i.get("packing_size") or "",
+            "packing_units": pack_u,
+            "pcs_qty": pcs,
         })
     return rows
 
@@ -1707,6 +1721,7 @@ def approve_gate_pass(pass_id, user_id):
 
 def get_gate_passes(pass_type=None, from_date=None, to_date=None, sales_invoice_id=None, purchase_invoice_id=None):
     from database import get_connection, rows_to_list
+    from db_v3 import _add_col
     q = """SELECT gp.*, c.name AS customer_name, c.phone AS customer_phone, c.contact_person AS customer_contact,
                   s.name AS supplier_name, s.phone AS supplier_phone, s.contact_person AS supplier_contact,
                   p.name AS product_name,
@@ -1721,6 +1736,8 @@ def get_gate_passes(pass_type=None, from_date=None, to_date=None, sales_invoice_
                   COALESCE(si.weight_variance_pct, pi.weight_variance_pct) AS weight_variance_pct,
                   si.payment_mode AS invoice_payment_mode, si.paid_amount AS invoice_paid_amount,
                   si.total AS invoice_total, si.notes AS sales_notes,
+                  si.customer_order_no AS customer_order_no,
+                  COALESCE(si.show_pcs, 0) AS show_pcs,
                   pi.payment_mode AS purchase_payment_mode,
                   pi.paid_amount AS purchase_paid_amount, pi.total AS purchase_invoice_total,
                   pi.notes AS purchase_notes
@@ -1747,6 +1764,11 @@ def get_gate_passes(pass_type=None, from_date=None, to_date=None, sales_invoice_
     q += " ORDER BY gp.pass_date DESC, gp.id DESC"
     with get_connection() as conn:
         ensure_gate_pass_schema(conn)
+        try:
+            _add_col(conn, "sales_invoices", "customer_order_no", "TEXT")
+            _add_col(conn, "sales_invoices", "show_pcs", "INTEGER DEFAULT 0")
+        except Exception:
+            pass
         return rows_to_list(conn.execute(q, params).fetchall())
 
 

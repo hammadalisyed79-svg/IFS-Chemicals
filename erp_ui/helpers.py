@@ -2168,6 +2168,19 @@ def sale_invoice_flow_flags(no_weighbridge=False, retail=False):
     }
 
 
+def sale_customer_order_ui(key_prefix, header=None):
+    """Customer PO / order reference — printed on Delivery Challan / Gate Pass."""
+    h = header or {}
+    order_no = st.text_input(
+        "Customer Order No.",
+        value=h.get("customer_order_no") or "",
+        key=f"{key_prefix}_customer_order_no",
+        placeholder="Customer's PO / order / indent number",
+        help="Printed on Delivery Challan / Gate Pass header.",
+    )
+    return {"customer_order_no": (order_no or "").strip() or None}
+
+
 def sale_dispatch_fields_ui(key_prefix, header=None):
     """Optional driver / vehicle / remarks for invoices without weighbridge."""
     h = header or {}

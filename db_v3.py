@@ -684,6 +684,7 @@ def _alter_columns(conn):
         ("sales_invoices", "posted_by", "INTEGER"),
         ("sales_invoices", "posted_at", "TEXT"),
         ("sales_invoices", "show_pcs", "INTEGER DEFAULT 0"),
+        ("sales_invoices", "customer_order_no", "TEXT"),
         ("customers", "invoice_pcs_mode", "INTEGER DEFAULT 0"),
         ("sales_invoice_items", "packing_size", "TEXT"),
         ("purchase_invoices", "status", "TEXT DEFAULT 'posted'"),
