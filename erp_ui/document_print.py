@@ -1602,7 +1602,7 @@ def _gate_pass_body(g: dict, items: list, *, duplicate: bool = False, print_part
     show_pcs = bool(g.get("show_pcs")) or any(float(it.get("packing_units") or 0) > 0 for it in items)
     if show_party_col:
         cols = [
-            ("party_item_code", "Their Code"),
+            ("party_item_code", "Party Code"),
             ("item_code", "IFS Code"),
             ("item_name", "Product"),
             ("quantity", "Qty (Ctn)" if show_pcs else "Qty"),
@@ -2525,7 +2525,7 @@ def document_print_toolbar(doc_type, doc_id, key_prefix="doc", vch_source=None, 
         print_party_codes = st.checkbox(
             "Print customer / toll product codes (Delivery Challan)",
             key=ppc_key,
-            help="Shows **Their Code** next to IFS Code on the Gate Pass. "
+            help="Shows **Party Code** next to IFS Code on the Gate Pass. "
                  "Map codes under Master Data → Customers → Edit → Customer / toll product codes.",
         )
     with print_company_header_scope(include_hdr):

@@ -165,7 +165,7 @@ def page_customers():
                 value=bool(c.get("print_party_item_code")),
                 key="cust_edit_party_code",
                 help="For toll / 3rd-party customers whose item codes differ from IFS codes. "
-                     "Map codes below, then Gate Pass print can show **Their Code**.",
+                     "Map codes below, then Gate Pass print can show **Party Code**.",
             )
             c1, c2 = st.columns(2)
             update = c1.form_submit_button("Update")
@@ -206,7 +206,7 @@ def _customer_product_codes_editor(customer_id, customer_name=""):
         df = pd.DataFrame([{
             "IFS Code": r.get("ifs_code"),
             "Product": r.get("product_name"),
-            "Their Code": r.get("customer_code"),
+            "Party Code": r.get("customer_code"),
             "Notes": r.get("notes") or "",
         } for r in rows])
         render_dataframe_html_table(df)
