@@ -17,6 +17,29 @@ from erp_ui.report_print import (
 )
 from erp_ui.helpers import fmt_datetime, fmt_datetime_from_record
 
+# Workflow lines appended historically into notes — keep in audit log, never on customer prints
+_WORKFLOW_NOTE_PREFIXES = (
+    "rejected:",
+    "unapproved:",
+    "cancelled:",
+)
+
+
+def public_document_notes(text) -> str:
+    """Strip reject/unapprove/cancel history lines from notes for invoice/challan print."""
+    if not text:
+        return ""
+    kept = []
+    for raw in str(text).replace("\r\n", "\n").replace("\r", "\n").split("\n"):
+        line = raw.strip()
+        if not line:
+            continue
+        low = line.lower()
+        if any(low.startswith(p) for p in _WORKFLOW_NOTE_PREFIXES):
+            continue
+        kept.append(line)
+    return "\n".join(kept).strip()
+
 
 def _so_status_display(status) -> str:
     """Sales order status for print/UI: open→Active, partial→Partial."""
@@ -674,11 +697,11 @@ def sales_invoice_html(sale_id, tax_invoice=False):
         return ""
     title = "Sales Tax Invoice" if tax_invoice else "Sales Invoice"
     meta = {
-        "Status": inv.get("status", "—").replace("_", " ").title(),
         "Gate Pass": inv.get("gate_pass_no") or "—",
     }
     if (inv.get("customer_order_no") or "").strip():
         meta["Customer Order No."] = (inv.get("customer_order_no") or "").strip()
+    # Do not print workflow Status (Rejected / Pending) on customer copies
     if not inv.get("gate_pass_no") and inv.get("gate_pass_id"):
         gps = db.get_gate_passes(sales_invoice_id=sale_id)
         if gps:
@@ -732,7 +755,6 @@ def sales_invoice_pdf_bytes(sale_id, *, tax_invoice: bool = False, include_compa
     disc = float(inv.get("discount") or 0)
     tax = float(inv.get("tax") or 0)
     balance_due = prev_bal + total - paid
-    status = str(inv.get("status") or "—").replace("_", " ").title()
     title = "SALES TAX INVOICE" if tax_invoice else "SALES INVOICE"
     items = list(inv.get("items") or [])
     has_disc = any(float(it.get("discount_pct") or it.get("line_discount") or 0) > 0.005 for it in items)
@@ -762,7 +784,6 @@ def sales_invoice_pdf_bytes(sale_id, *, tax_invoice: bool = False, include_compa
         0, 6,
         _pdf_latin1(
             f"Date: {fmt_datetime(inv.get('sale_date'), inv.get('created_at') or inv.get('approved_at'))}"
-            f"  |  Status: {status}"
         ),
         new_x="LMARGIN", new_y="NEXT",
     )
@@ -771,6 +792,12 @@ def sales_invoice_pdf_bytes(sale_id, *, tax_invoice: bool = False, include_compa
         _pdf_latin1(f"Customer: {inv.get('customer_name') or '—'}"),
         new_x="LMARGIN", new_y="NEXT",
     )
+    if (inv.get("customer_order_no") or "").strip():
+        pdf.cell(
+            0, 6,
+            _pdf_latin1(f"Customer Order No.: {(inv.get('customer_order_no') or '').strip()}"),
+            new_x="LMARGIN", new_y="NEXT",
+        )
     if gp_no:
         pdf.cell(0, 6, _pdf_latin1(f"Gate Pass: {gp_no}"), new_x="LMARGIN", new_y="NEXT")
     pdf.ln(3)
@@ -846,7 +873,9 @@ def sales_invoice_pdf_bytes(sale_id, *, tax_invoice: bool = False, include_compa
     pdf.cell(0, 6, _pdf_latin1(f"Balance Due: Rs. {balance_due:,.2f}"), new_x="LMARGIN", new_y="NEXT")
     if inv.get("notes"):
         pdf.set_font("Helvetica", size=9)
-        pdf.multi_cell(0, 5, _pdf_latin1(f"Notes: {inv['notes']}"))
+        pub_notes = public_document_notes(inv["notes"])
+        if pub_notes:
+            pdf.multi_cell(0, 5, _pdf_latin1(f"Notes: {pub_notes}"))
     pdf.set_font("Helvetica", size=8)
     pdf.ln(2)
     pdf.cell(0, 5, "This is a system-generated invoice.", new_x="LMARGIN", new_y="NEXT")
@@ -1453,10 +1482,10 @@ def job_card_html(job_id):
 
 
 def _gate_pass_remarks_text(g: dict) -> str:
-    """Combined remarks for print — gate pass + linked invoice notes."""
+    """Combined remarks for print — gate pass + linked invoice notes (no reject history)."""
     parts = []
     for key in ("remarks", "purchase_notes", "sales_notes", "dispatch_remarks"):
-        val = (g.get(key) or "").strip()
+        val = public_document_notes(g.get(key) or "")
         if val and val not in parts:
             parts.append(val)
     return " | ".join(parts)

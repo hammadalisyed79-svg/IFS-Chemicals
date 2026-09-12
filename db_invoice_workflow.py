@@ -767,10 +767,11 @@ def reject_sale_invoice(invoice_id, user_id, reason=""):
             raise ValueError("Only pending invoices can be rejected.")
         if inv["order_id"]:
             reverse_sales_order_delivery(conn, inv["order_id"], invoice_id)
+        # Keep reason in audit log only — do not append to notes (prints on invoice/challan)
         conn.execute(
             """UPDATE sales_invoices SET status='rejected', rejected_by=?, rejected_at=?,
-               notes=COALESCE(notes,'') || ?, modified_by=?, modified_at=? WHERE id=?""",
-            (user_id, _ts(), f"\nRejected: {reason}" if reason else "", user_id, _ts(), invoice_id),
+               modified_by=?, modified_at=? WHERE id=?""",
+            (user_id, _ts(), user_id, _ts(), invoice_id),
         )
         inv = conn.execute("SELECT document_no FROM sales_invoices WHERE id=?", (invoice_id,)).fetchone()
     try:
@@ -793,10 +794,11 @@ def reject_purchase_invoice(invoice_id, user_id, reason=""):
             raise ValueError("Only pending invoices can be rejected.")
         if inv["order_id"]:
             reverse_purchase_order_delivery(conn, inv["order_id"], invoice_id)
+        # Keep reason in audit log only — do not append to notes (prints on documents)
         conn.execute(
             """UPDATE purchase_invoices SET status='rejected', rejected_by=?, rejected_at=?,
-               notes=COALESCE(notes,'') || ?, modified_by=?, modified_at=? WHERE id=?""",
-            (user_id, _ts(), f"\nRejected: {reason}" if reason else "", user_id, _ts(), invoice_id),
+               modified_by=?, modified_at=? WHERE id=?""",
+            (user_id, _ts(), user_id, _ts(), invoice_id),
         )
         inv = conn.execute("SELECT document_no FROM purchase_invoices WHERE id=?", (invoice_id,)).fetchone()
     try:
@@ -839,8 +841,8 @@ def unapprove_sale_invoice(invoice_id, user_id, reason=""):
         conn.execute(
             """UPDATE sales_invoices SET status='draft',
                unapproved_by=?, unapproved_at=?, unapproved_reason=?,
-               notes=COALESCE(notes,'') || ?, modified_by=?, modified_at=? WHERE id=?""",
-            (user_id, _ts(), reason.strip(), note, user_id, _ts(), invoice_id),
+               modified_by=?, modified_at=? WHERE id=?""",
+            (user_id, _ts(), reason.strip(), user_id, _ts(), invoice_id),
         )
     try:
         from db_audit import log_event
@@ -876,8 +878,8 @@ def unapprove_purchase_invoice(invoice_id, user_id, reason=""):
         conn.execute(
             """UPDATE purchase_invoices SET status='draft',
                unapproved_by=?, unapproved_at=?, unapproved_reason=?,
-               notes=COALESCE(notes,'') || ?, modified_by=?, modified_at=? WHERE id=?""",
-            (user_id, _ts(), reason.strip(), note, user_id, _ts(), invoice_id),
+               modified_by=?, modified_at=? WHERE id=?""",
+            (user_id, _ts(), reason.strip(), user_id, _ts(), invoice_id),
         )
     try:
         from db_audit import log_event

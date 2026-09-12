@@ -1513,10 +1513,15 @@ def build_gate_pass_sale_remarks(sale, ws=None):
         parts.append(extra)
     notes = (sale.get("notes") or "").strip()
     if notes and notes not in parts:
-        # Prefer short "Dispatch To: …" fragment if present
-        for line in notes.splitlines():
+        # Prefer short "Dispatch To: …" fragment if present; skip reject/unapprove history
+        for line in notes.replace("\r\n", "\n").split("\n"):
             t = line.strip()
-            if t.lower().startswith("dispatch to"):
+            if not t:
+                continue
+            low = t.lower()
+            if low.startswith(("rejected:", "unapproved:", "cancelled:")):
+                continue
+            if low.startswith("dispatch to"):
                 if t not in parts:
                     parts.append(t)
                 break
