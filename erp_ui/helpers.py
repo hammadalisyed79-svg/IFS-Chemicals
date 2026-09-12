@@ -1530,9 +1530,9 @@ def invoice_tax_form(key_prefix, line_items, defaults=None, party_id=None, party
         key=f"{key_prefix}_tax_inc",
         help=(
             "Tick when **Rate** is **MRP including sales tax**. "
-            "System derives RP = MRP ÷ (1+ST%), applies Disc % on RP, "
-            "then Sales Tax on Taxable. Example: MRP 50, ST 18% → RP 42.37; "
-            "Disc 24.52% → Taxable 31.98 + ST 5.76 = Net 37.74."
+            "Sales tax is taken from MRP: RP = MRP×100/(100+ST%), ST = MRP−RP "
+            "(e.g. 50 → RP 42.37, ST 7.63). Discount applies on RP only; "
+            "it does **not** reduce sales tax."
         ),
     )
     tax_labels = list(tax_map.keys()) if tax_map else []
@@ -1551,9 +1551,10 @@ def invoice_tax_form(key_prefix, line_items, defaults=None, party_id=None, party
 
     if tax_inclusive:
         st.info(
-            "**MRP mode:** enter **Rate = MRP (incl. tax)** and **Disc %**. "
-            f"RP (ex-tax) = MRP ÷ (1 + {tax_pct:g}%). "
-            "Discount applies on RP → Taxable → Sales Tax → Net Invoice."
+            "**MRP mode — tax on MRP:** "
+            f"RP = MRP × 100 / (100+{tax_pct:g}%) · "
+            f"Sales Tax = MRP − RP (e.g. 50 → 42.37 + **7.63**). "
+            "Discount is on RP only and does **not** reduce Sales Tax."
         )
 
     ch1, ch2, ch3, ch4 = st.columns(4)
@@ -1613,9 +1614,10 @@ def invoice_tax_form(key_prefix, line_items, defaults=None, party_id=None, party
         m5.metric("Net Invoice", fmt_money(totals["total"]))
         st.caption(
             f"Working: MRP Gross **{fmt_money(totals['subtotal'])}** → "
-            f"RP **{fmt_money(rp_total)}** − Disc **{fmt_money(totals['discount_amt'])}** = "
-            f"Taxable **{fmt_money(totals['taxable'])}** + Sales Tax **{fmt_money(totals['sales_tax'])}** "
-            f"(+ other taxes − WHT + charges) = Net **{fmt_money(totals['total'])}**."
+            f"RP **{fmt_money(rp_total)}** (MRP×100/(100+{tax_pct:g}%)) − Disc "
+            f"**{fmt_money(totals['discount_amt'])}** = Taxable **{fmt_money(totals['taxable'])}**; "
+            f"Sales Tax **{fmt_money(totals['sales_tax'])}** = MRP − RP "
+            f"(+ other taxes − WHT + charges) → Net **{fmt_money(totals['total'])}**."
         )
     else:
         s1, s2, s3, s4 = st.columns(4)
@@ -2803,8 +2805,9 @@ def smart_line_item_editor(
         )
     if rate_as_mrp:
         st.caption(
-            "**MRP mode:** enter **MRP (incl. sales tax)** in the rate column and **Disc %**. "
-            "Tax summary derives RP, Taxable, Sales Tax and Net."
+            "**MRP mode:** enter **MRP (incl. sales tax)** and **Disc %**. "
+            "Sales Tax = MRP − MRP×100/(100+ST%) (e.g. 50 → ST **7.63**). "
+            "Discount reduces RP/Taxable only — not Sales Tax."
         )
     id_to_label = {
         p["id"]: label

@@ -38,6 +38,15 @@ def calc_line(
     """
     Compute one document line per ERP tax rules.
     Returns all amounts rounded to 2 decimals.
+
+    Tax-exclusive (default):
+      Gross = Qty×Rate → Disc on gross → Taxable → ST% on Taxable.
+
+    Tax-inclusive / MRP mode (rate = MRP incl. sales tax):
+      MRP = Qty×Rate
+      RP  = MRP × 100 / (100+ST%)     e.g. 50×100/118 = 42.37
+      ST  = MRP − RP                  e.g. 50−42.37 = 7.63  (tax on MRP)
+      Disc applies on RP only; further/extra/FED/WHT on Taxable after disc.
     """
     qty = float(quantity or 0)
     rt = float(rate or 0)
@@ -45,15 +54,6 @@ def calc_line(
 
     line_amount = _r(qty * rt)
     st_pct, ft_pct, et_pct, fed_pct, wht_pct = _tax_pcts(tax_rate_row)
-    add_pct = st_pct + ft_pct + et_pct + fed_pct
-
-    if tax_inclusive and add_pct > 0:
-        gross_base = _r(line_amount / (1 + add_pct / 100))
-        discount_amt = _r(gross_base * discount_pct / 100)
-        taxable = _r(gross_base - discount_amt)
-    else:
-        discount_amt = _r(line_amount * discount_pct / 100)
-        taxable = _r(line_amount - discount_amt)
 
     validate_pct(st_pct, "Sales Tax %")
     validate_pct(ft_pct, "Further Tax %")
@@ -61,7 +61,26 @@ def calc_line(
     validate_pct(fed_pct, "FED %")
     validate_pct(wht_pct, "WHT %")
 
-    sales_tax = _r(taxable * st_pct / 100)
+    rp_base = 0.0
+    if tax_inclusive and st_pct > 0:
+        # MRP → RP / ST split (tax locked to MRP; discount does not reduce ST)
+        # RP = MRP × 100 / (100+ST%); ST = MRP − RP
+        rp_base = _r(line_amount * 100.0 / (100.0 + st_pct))
+        sales_tax = _r(line_amount - rp_base)
+        discount_amt = _r(rp_base * discount_pct / 100)
+        taxable = _r(rp_base - discount_amt)
+    elif tax_inclusive:
+        # Inclusive flagged but no ST% — treat rate as gross, disc on gross
+        discount_amt = _r(line_amount * discount_pct / 100)
+        taxable = _r(line_amount - discount_amt)
+        sales_tax = 0.0
+        rp_base = line_amount
+    else:
+        discount_amt = _r(line_amount * discount_pct / 100)
+        taxable = _r(line_amount - discount_amt)
+        sales_tax = _r(taxable * st_pct / 100)
+        rp_base = line_amount
+
     further_tax = _r(taxable * ft_pct / 100)
     extra_tax = _r(taxable * et_pct / 100)
     fed_tax = _r(taxable * fed_pct / 100)
@@ -78,6 +97,7 @@ def calc_line(
         "discount_pct": discount_pct,
         "discount_amt": discount_amt,
         "line_discount": discount_amt,
+        "rp_base": rp_base,
         "taxable": taxable,
         "taxable_amount": taxable,
         "sales_tax": sales_tax,
