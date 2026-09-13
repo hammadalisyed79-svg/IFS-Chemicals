@@ -16,7 +16,13 @@ sys.path.insert(0, str(ROOT))
 
 from database import DB_PATH, get_connection
 
-REF_TYPES = ("payroll_line_payment", "employee_advance", "employee_loan", "expense_claim")
+REF_TYPES = (
+    "payroll_line_payment",
+    "employee_advance",
+    "employee_advance_return",
+    "employee_loan",
+    "expense_claim",
+)
 
 
 def main(apply: bool = True) -> int:
