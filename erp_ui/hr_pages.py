@@ -676,7 +676,11 @@ def _render_single_employee_edit_pay(
                 value=float(line.get("loan_recovery") or 0),
                 min_value=0.0,
                 key=f"pr_sep_loan_{_fk}",
-                help=f"Total loan outstanding: {fmt(loan_out)}",
+                help=(
+                    f"Total loan outstanding: {fmt(loan_out)}. "
+                    "You can recover the full remaining balance anytime "
+                    "(other draft months are adjusted automatically)."
+                ),
             )
         with d3:
             other = money_input(

@@ -1502,30 +1502,46 @@ def _recover_loans(conn, employee_id, payroll_id, due_date):
 
 
 def _loan_recovery_capacity(conn, employee_id, payroll_id) -> float:
-    """Max loan amount this draft line may hold (already on this payroll + still outstanding)."""
-    on_pay = conn.execute(
+    """Max loan recovery this draft line may hold — full remaining balance anytime.
+
+    = amount already on this payroll
+      + loan outstanding still open
+      + recoveries sitting on other draft/unpaid payrolls (reclaimed on save)
+    """
+    on_pay = float(conn.execute(
         """SELECT COALESCE(SUM(li.amount),0)
            FROM loan_installments li
            JOIN employee_loans l ON l.id=li.loan_id
-           WHERE li.payroll_id=? AND l.employee_id=? AND li.recovered=1""",
+           WHERE li.payroll_id=? AND l.employee_id=? AND COALESCE(li.recovered,0)=1""",
         (payroll_id, employee_id),
-    ).fetchone()[0]
-    outstanding = conn.execute(
+    ).fetchone()[0] or 0)
+    outstanding = float(conn.execute(
         """SELECT COALESCE(SUM(outstanding_amount),0) FROM employee_loans
-           WHERE employee_id=? AND status='issued' AND outstanding_amount>0""",
+           WHERE employee_id=? AND status IN ('issued','closed') AND outstanding_amount>0""",
         (employee_id,),
-    ).fetchone()[0]
-    return round(float(on_pay or 0) + float(outstanding or 0), 2)
+    ).fetchone()[0] or 0)
+    other_draft = float(conn.execute(
+        """SELECT COALESCE(SUM(li.amount),0)
+           FROM loan_installments li
+           JOIN employee_loans l ON l.id=li.loan_id
+           JOIN payroll_runs pr ON pr.id=li.payroll_id
+           WHERE l.employee_id=?
+             AND li.payroll_id<>?
+             AND COALESCE(li.recovered,0)=1
+             AND LOWER(COALESCE(pr.status,'')) NOT IN ('posted','paid','closed')
+             AND NOT EXISTS (
+                 SELECT 1 FROM payroll_lines pl
+                 WHERE pl.payroll_id=li.payroll_id
+                   AND pl.employee_id=l.employee_id
+                   AND COALESCE(pl.paid_status,'')='paid'
+             )""",
+        (employee_id, payroll_id),
+    ).fetchone()[0] or 0)
+    return round(on_pay + outstanding + other_draft, 2)
 
 
 def _advance_recovery_capacity(conn, employee_id, payroll_id) -> float:
-    on_pay = conn.execute(
-        """SELECT COALESCE(SUM(s.amount),0)
-           FROM advance_recovery_schedule s
-           JOIN employee_advances a ON a.id=s.advance_id
-           WHERE s.payroll_id=? AND a.employee_id=? AND s.recovered=1""",
-        (payroll_id, employee_id),
-    ).fetchone()[0]
+    """Max advance recovery — full effective outstanding due by this payroll month."""
     pr = conn.execute(
         "SELECT payroll_month, payroll_year FROM payroll_runs WHERE id=?",
         (payroll_id,),
@@ -1536,16 +1552,34 @@ def _advance_recovery_capacity(conn, employee_id, payroll_id) -> float:
             payroll_ym = f"{int(pr['payroll_year']):04d}-{int(pr['payroll_month']):02d}"
         except (TypeError, ValueError, KeyError):
             pass
-    outstanding = conn.execute(
+    # Stored outstanding due by this month + provisional recoveries on draft payrolls
+    # for those same advances (so full settle can reclaim other draft months).
+    stored = float(conn.execute(
         """SELECT COALESCE(SUM(outstanding_amount),0) FROM employee_advances
-           WHERE employee_id=? AND status='issued' AND outstanding_amount>0
+           WHERE employee_id=? AND status IN ('issued','closed') AND outstanding_amount>0
              AND (
                salary_month IS NULL OR TRIM(COALESCE(salary_month,''))=''
                OR substr(salary_month,1,7) <= ?
              )""",
         (employee_id, payroll_ym),
-    ).fetchone()[0]
-    return round(float(on_pay or 0) + float(outstanding or 0), 2)
+    ).fetchone()[0] or 0)
+    prov = _provisional_advance_recovery_map(conn, employee_id)
+    if not prov:
+        return round(stored, 2)
+    bump = 0.0
+    for aid, amt in prov.items():
+        row = conn.execute(
+            """SELECT salary_month, outstanding_amount FROM employee_advances WHERE id=?""",
+            (int(aid),),
+        ).fetchone()
+        if not row:
+            continue
+        sm = (row["salary_month"] if hasattr(row, "keys") else row[0]) or ""
+        sm7 = str(sm).strip()[:7]
+        if sm7 and sm7 > payroll_ym:
+            continue
+        bump += float(amt or 0)
+    return round(stored + bump, 2)
 
 
 def _undo_loan_recoveries_for_employee(conn, payroll_id, employee_id) -> list[int]:
@@ -1914,6 +1948,147 @@ def _recover_advances_capped(conn, employee_id, payroll_id, due_date, target_amo
     return total
 
 
+def _adjust_payroll_line_recovery_fields(conn, line_id, *, loan_delta=0.0, advance_delta=0.0):
+    """Apply delta to loan/advance recovery on a draft line and refresh net + run totals."""
+    row = conn.execute(
+        """SELECT id, payroll_id, advance_recovery, loan_recovery, tax_deduction, eobi,
+                  social_security, other_deductions, absent_deduction, gross_salary
+           FROM payroll_lines WHERE id=?""",
+        (int(line_id),),
+    ).fetchone()
+    if not row:
+        return
+    row = dict(row)
+    new_loan = max(0.0, round(float(row.get("loan_recovery") or 0) + float(loan_delta or 0), 2))
+    new_adv = max(0.0, round(float(row.get("advance_recovery") or 0) + float(advance_delta or 0), 2))
+    total_ded = round(
+        float(row.get("tax_deduction") or 0)
+        + float(row.get("eobi") or 0)
+        + float(row.get("social_security") or 0)
+        + new_adv + new_loan
+        + float(row.get("other_deductions") or 0)
+        + float(row.get("absent_deduction") or 0),
+        2,
+    )
+    net = round(float(row.get("gross_salary") or 0) - total_ded, 2)
+    conn.execute(
+        """UPDATE payroll_lines SET advance_recovery=?, loan_recovery=?,
+           total_deductions=?, net_salary=? WHERE id=?""",
+        (new_adv, new_loan, total_ded, net, int(line_id)),
+    )
+    _refresh_payroll_run_totals(conn, int(row["payroll_id"]))
+
+
+def _reclaim_other_draft_loan_recoveries(conn, employee_id, keep_payroll_id, need_amount) -> float:
+    """Free loan outstanding by undoing recoveries on other draft/unpaid payrolls.
+
+    Used when settling the full loan on one month while later draft months already
+    hold installments. Returns amount freed.
+    """
+    need = round(max(0.0, float(need_amount or 0)), 2)
+    if need <= 0.01:
+        return 0.0
+    rows = conn.execute(
+        """SELECT li.id AS inst_id, li.loan_id, li.amount, li.payroll_id, pl.id AS line_id
+           FROM loan_installments li
+           JOIN employee_loans l ON l.id=li.loan_id
+           JOIN payroll_runs pr ON pr.id=li.payroll_id
+           JOIN payroll_lines pl
+             ON pl.payroll_id=li.payroll_id AND pl.employee_id=l.employee_id
+           WHERE l.employee_id=?
+             AND li.payroll_id<>?
+             AND COALESCE(li.recovered,0)=1
+             AND LOWER(COALESCE(pr.status,'')) NOT IN ('posted','paid','closed')
+             AND COALESCE(pl.paid_status,'')<>'paid'
+           ORDER BY pr.payroll_year DESC, pr.payroll_month DESC, li.installment_no DESC""",
+        (int(employee_id), int(keep_payroll_id)),
+    ).fetchall()
+    freed = 0.0
+    affected_loans = set()
+    for row in rows:
+        if freed >= need - 0.009:
+            break
+        r = dict(row)
+        amt = round(float(r.get("amount") or 0), 2)
+        if amt <= 0:
+            continue
+        loan_id = int(r["loan_id"])
+        affected_loans.add(loan_id)
+        ln = conn.execute(
+            "SELECT recovered_amount, outstanding_amount, amount FROM employee_loans WHERE id=?",
+            (loan_id,),
+        ).fetchone()
+        if ln:
+            new_rec = max(0.0, float(ln[0] or 0) - amt)
+            new_out = min(float(ln[2] or 0), float(ln[1] or 0) + amt)
+            conn.execute(
+                "UPDATE employee_loans SET recovered_amount=?, outstanding_amount=?, status=? WHERE id=?",
+                (new_rec, new_out, "closed" if new_out <= 0.01 else "issued", loan_id),
+            )
+        conn.execute(
+            "UPDATE loan_installments SET recovered=0, recovered_date=NULL, payroll_id=NULL WHERE id=?",
+            (int(r["inst_id"]),),
+        )
+        _adjust_payroll_line_recovery_fields(conn, int(r["line_id"]), loan_delta=-amt)
+        freed = round(freed + amt, 2)
+    for lid in affected_loans:
+        _rebuild_unpaid_loan_installments(conn, lid)
+    return freed
+
+
+def _reclaim_other_draft_advance_recoveries(conn, employee_id, keep_payroll_id, need_amount) -> float:
+    """Free advance outstanding by undoing recoveries on other draft/unpaid payrolls."""
+    need = round(max(0.0, float(need_amount or 0)), 2)
+    if need <= 0.01:
+        return 0.0
+    rows = conn.execute(
+        """SELECT s.id AS sched_id, s.advance_id, s.amount, s.payroll_id, pl.id AS line_id
+           FROM advance_recovery_schedule s
+           JOIN employee_advances a ON a.id=s.advance_id
+           JOIN payroll_runs pr ON pr.id=s.payroll_id
+           JOIN payroll_lines pl
+             ON pl.payroll_id=s.payroll_id AND pl.employee_id=a.employee_id
+           WHERE a.employee_id=?
+             AND s.payroll_id<>?
+             AND COALESCE(s.recovered,0)=1
+             AND LOWER(COALESCE(pr.status,'')) NOT IN ('posted','paid','closed')
+             AND COALESCE(pl.paid_status,'')<>'paid'
+           ORDER BY pr.payroll_year DESC, pr.payroll_month DESC, s.installment_no DESC""",
+        (int(employee_id), int(keep_payroll_id)),
+    ).fetchall()
+    freed = 0.0
+    affected = set()
+    for row in rows:
+        if freed >= need - 0.009:
+            break
+        r = dict(row)
+        amt = round(float(r.get("amount") or 0), 2)
+        if amt <= 0:
+            continue
+        adv_id = int(r["advance_id"])
+        affected.add(adv_id)
+        adv = conn.execute(
+            "SELECT recovered_amount, outstanding_amount, amount FROM employee_advances WHERE id=?",
+            (adv_id,),
+        ).fetchone()
+        if adv:
+            new_rec = max(0.0, float(adv[0] or 0) - amt)
+            new_out = min(float(adv[2] or 0), float(adv[1] or 0) + amt)
+            conn.execute(
+                "UPDATE employee_advances SET recovered_amount=?, outstanding_amount=?, status=? WHERE id=?",
+                (new_rec, new_out, "closed" if new_out <= 0.01 else "issued", adv_id),
+            )
+        conn.execute(
+            "UPDATE advance_recovery_schedule SET recovered=0, recovered_date=NULL, payroll_id=NULL WHERE id=?",
+            (int(r["sched_id"]),),
+        )
+        _adjust_payroll_line_recovery_fields(conn, int(r["line_id"]), advance_delta=-amt)
+        freed = round(freed + amt, 2)
+    for aid in affected:
+        _rebuild_unpaid_advance_schedule(conn, aid)
+    return freed
+
+
 def _resync_payroll_line_recoveries(
     conn, payroll_id, employee_id, *, advance_amount, loan_amount, due_date,
 ):
@@ -1923,6 +2098,8 @@ def _resync_payroll_line_recoveries(
       - This month recovers only the edited amount
       - Outstanding increases by the shortfall
       - Shortfall is added to the next unpaid installment (due next month)
+    Full settlement anytime: capacity is the full remaining loan/advance; recoveries
+    sitting on other draft months are reclaimed onto this payroll when needed.
     GL is not posted until payroll is posted; then credits 100180 for the
     amounts on the lines (same account as advances).
     """
@@ -1934,12 +2111,12 @@ def _resync_payroll_line_recoveries(
     if adv_target > max_adv + 0.05:
         raise ValueError(
             f"Advance recovery Rs. {adv_target:,.2f} exceeds available "
-            f"Rs. {max_adv:,.2f} (this payroll + outstanding)."
+            f"Rs. {max_adv:,.2f} (full outstanding / draft recoveries)."
         )
     if loan_target > max_loan + 0.05:
         raise ValueError(
             f"Loan recovery Rs. {loan_target:,.2f} exceeds available "
-            f"Rs. {max_loan:,.2f} (this payroll + outstanding)."
+            f"Rs. {max_loan:,.2f} (full outstanding / draft recoveries)."
         )
 
     adv_ids = _undo_advance_recoveries_for_employee(conn, payroll_id, employee_id)
@@ -1959,6 +2136,16 @@ def _resync_payroll_line_recoveries(
             ).fetchone()
             if not has_unpaid:
                 _rebuild_unpaid_advance_schedule(conn, int(r[0]))
+    # Free advance held on other draft months if settling more than unpaid now
+    open_adv = float(conn.execute(
+        """SELECT COALESCE(SUM(outstanding_amount),0) FROM employee_advances
+           WHERE employee_id=? AND status='issued' AND outstanding_amount>0""",
+        (employee_id,),
+    ).fetchone()[0] or 0)
+    if adv_target > open_adv + 0.05:
+        _reclaim_other_draft_advance_recoveries(
+            conn, employee_id, payroll_id, round(adv_target - open_adv, 2),
+        )
     actual_adv = _recover_advances_capped(
         conn, employee_id, payroll_id, due_date, target_amount=adv_target,
     )
@@ -1979,6 +2166,15 @@ def _resync_payroll_line_recoveries(
             ).fetchone()
             if not has_unpaid:
                 _rebuild_unpaid_loan_installments(conn, int(r[0]))
+    open_loan = float(conn.execute(
+        """SELECT COALESCE(SUM(outstanding_amount),0) FROM employee_loans
+           WHERE employee_id=? AND status='issued' AND outstanding_amount>0""",
+        (employee_id,),
+    ).fetchone()[0] or 0)
+    if loan_target > open_loan + 0.05:
+        _reclaim_other_draft_loan_recoveries(
+            conn, employee_id, payroll_id, round(loan_target - open_loan, 2),
+        )
     actual_loan = _recover_loans_capped(
         conn, employee_id, payroll_id, due_date, target_amount=loan_target,
     )
