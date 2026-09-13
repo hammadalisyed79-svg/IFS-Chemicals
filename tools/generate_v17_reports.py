@@ -76,7 +76,20 @@ def main():
     _write("API_MATURITY_REPORT.md", "\n".join(api_md))
 
     from erp_core.health_engine import run_health_check_2
-    health = run_health_check_2()
+    try:
+        health = run_health_check_2()
+        health_score = health.score
+        health_pass = sum(1 for r in health.results if r[0] == "pass")
+        health_total = len(health.results)
+    except Exception as exc:
+        class _H:
+            score = 0
+            results = []
+        health = _H()
+        health_score = 0
+        health_pass = 0
+        health_total = 0
+        print(f"Health check skipped: {exc}")
 
     scores = {
         "Architecture": 78,
@@ -88,7 +101,7 @@ def main():
         "Scalability": 62,
         "API": 80 if results.get("test_api_v1.py", "").startswith("PASS") else 60,
         "Documentation": 88,
-        "Testing": 78 if health.score >= 95 else 65,
+        "Testing": 78 if health_score >= 95 else 65,
         "Deployment": 82,
     }
     scores["Overall"] = round(sum(scores.values()) / len(scores), 1)
@@ -96,7 +109,7 @@ def main():
     scorecard = [
         "# Enterprise Readiness Scorecard — V17.0",
         "",
-        f"**Health Check:** {health.score}% ({sum(1 for r in health.results if r[0]=='pass')}/{len(health.results)})",
+        f"**Health Check:** {health_score}% ({health_pass}/{health_total})",
         "",
         "| Domain | Score | Evidence |",
         "|--------|------:|----------|",
@@ -111,7 +124,7 @@ def main():
         "Scalability": "TENANT_ISOLATION_REPORT.md, db adapter stubs",
         "API": "API_MATURITY_REPORT.md, test_api_v1.py",
         "Documentation": "V17_RELEASE_NOTES.md + guides",
-        "Testing": f"Health Check {health.score}%, run_tests.bat",
+        "Testing": f"Health Check {health_score}%, run_tests.bat",
         "Deployment": "CI_CD_SETUP_GUIDE.md, install/",
     }
     for k, v in scores.items():
