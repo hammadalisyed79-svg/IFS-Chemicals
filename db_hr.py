@@ -3473,8 +3473,9 @@ def pay_payroll_line(line_id, user_id, payment_mode="cash", payment_date=None, b
                 conn, pay_date, label, ref, amt, user_id,
                 party_type="employee", party_id=row["employee_id"],
             )
+            from db_v3 import gl_account_code
             asset_id = conn.execute(
-                "SELECT id FROM chart_of_accounts WHERE code=?", (AC["cash"],)
+                "SELECT id FROM chart_of_accounts WHERE code=?", (gl_account_code("cash"),)
             ).fetchone()
             asset_id = asset_id[0] if asset_id else None
         else:
@@ -3932,8 +3933,9 @@ def issue_advance(advance_id, user_id, payment_mode="cash", bank_account_id=None
                 account_id=adv_acct_id,
                 party_type="account", party_id=adv_acct_id,
             )
+            from db_v3 import gl_account_code
             asset_id = conn.execute(
-                "SELECT id FROM chart_of_accounts WHERE code=?", (AC["cash"],)
+                "SELECT id FROM chart_of_accounts WHERE code=?", (gl_account_code("cash"),)
             ).fetchone()
             asset_id = asset_id[0] if asset_id else None
         else:
@@ -4144,8 +4146,9 @@ def settle_advance_cash_return(
                 account_id=adv_acct_id,
                 party_type="account", party_id=adv_acct_id,
             )
+            from db_v3 import gl_account_code
             asset_id = conn.execute(
-                "SELECT id FROM chart_of_accounts WHERE code=?", (AC["cash"],)
+                "SELECT id FROM chart_of_accounts WHERE code=?", (gl_account_code("cash"),)
             ).fetchone()
             asset_id = asset_id[0] if asset_id else None
         else:
@@ -4385,8 +4388,9 @@ def issue_loan(loan_id, user_id, payment_mode="cash", bank_account_id=None):
                 account_id=adv_acct_id,
                 party_type="account", party_id=adv_acct_id,
             )
+            from db_v3 import gl_account_code
             asset_id = conn.execute(
-                "SELECT id FROM chart_of_accounts WHERE code=?", (AC["cash"],)
+                "SELECT id FROM chart_of_accounts WHERE code=?", (gl_account_code("cash"),)
             ).fetchone()
             asset_id = asset_id[0] if asset_id else None
         else:
@@ -4501,13 +4505,13 @@ def approve_expense_claim(claim_id, user_id, approve=True):
 
 def reimburse_expense_claim(claim_id, user_id, payment_mode="cash"):
     from database import get_connection
-    from db_v3 import post_gl, AC
+    from db_v3 import post_gl, gl_account_code, AC
     with get_connection() as conn:
         cl = conn.execute("SELECT * FROM expense_claims WHERE id=?", (claim_id,)).fetchone()
         if not cl or cl["status"] != "approved" or cl["reimbursed"]:
             raise ValueError("Claim must be approved and not yet reimbursed")
         cl = dict(cl)
-        acct = AC["bank"] if payment_mode == "bank" else AC["cash"]
+        acct = AC["bank"] if payment_mode == "bank" else gl_account_code("cash")
         post_gl(conn, cl["claim_date"], HR_AC["salary_expense"], cl["amount"], 0,
                 "Expense reimbursement", "expense_claim", claim_id, cl["document_no"], user_id)
         post_gl(conn, cl["claim_date"], acct, 0, cl["amount"],
