@@ -14,10 +14,16 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+      - name: System packages for pyodbc
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends unixodbc-dev
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          # CI does not need Access/ODBC drivers or Playwright browsers.
+          grep -vE '^(pyodbc|playwright)([>=<]|$)' requirements.txt > /tmp/requirements-ci.txt
+          pip install -r /tmp/requirements-ci.txt
       - name: Migration verification
         run: python -c "from infrastructure.migrations.engine import verify_graph; ok,e=verify_graph(); assert ok, e"
       - name: Init database
@@ -32,7 +38,7 @@ jobs:
       - name: Generate V17 reports
         run: python tools/generate_v17_reports.py
       - name: Debt scanner
-        run: python tools/debt_scanner.py > /dev/null
+        run: PYTHONIOENCODING=utf-8 python tools/debt_scanner.py > /dev/null
 
   lint:
     runs-on: ubuntu-latest

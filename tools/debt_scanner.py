@@ -110,4 +110,11 @@ def to_markdown() -> str:
 
 
 if __name__ == "__main__":
+    import sys
+
+    # Avoid UnicodeEncodeError on Windows cp1252 consoles (CI uses UTF-8).
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
     print(to_markdown())
