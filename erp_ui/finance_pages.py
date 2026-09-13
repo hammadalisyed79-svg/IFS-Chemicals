@@ -20,7 +20,14 @@ MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", 
 
 
 def _cash_account_id(conn):
-    """Prefer live FMYE cash code 000000; fall back to legacy 1000 / name match."""
+    """Prefer live cash posting role (000000); fall back to legacy codes / name."""
+    try:
+        from db_v3 import resolve_cash_account_id
+        aid = resolve_cash_account_id(conn)
+        if aid:
+            return aid
+    except Exception:
+        pass
     for code in ("000000", "1000"):
         row = conn.execute(
             "SELECT id FROM chart_of_accounts WHERE code=? AND is_active=1", (code,)

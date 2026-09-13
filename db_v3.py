@@ -9,7 +9,8 @@ SCHEMA_V3_PATH = Path(__file__).parent / "schema_v3.sql"
 
 # Account codes for auto-posting (defaults; override via Finance → Chart of Accounts → Posting Setup)
 AC = {
-    "cash": "1000", "bank": "1100", "ar": "1200", "ap": "2000",
+    # Live FMYE books use CASH A/C 000000 (legacy seed was 1000 Cash in Hand).
+    "cash": "000000", "bank": "1100", "ar": "1200", "ap": "2000",
     "raw_inv": "1310", "pack_inv": "1320", "fg_inv": "1330", "wip": "1340",
     "sales": "4000", "st_payable": "2100", "st_receivable": "1210",
     "wht_receivable": "1215", "wht_payable": "2115",
@@ -19,7 +20,7 @@ AC = {
 }
 
 POSTING_ROLE_LABELS = {
-    "cash": ("Cash in Hand", "Cash receipts, cash payments, invoice cash paid"),
+    "cash": ("Cash (CASH A/C)", "Cash receipts, cash payments, payroll, advances — live code 000000"),
     "bank": ("Bank Account", "Bank receipts and bank payments"),
     "ar": ("Accounts Receivable (control)", "All customers — sub-ledger: Customer Ledger"),
     "ap": ("Accounts Payable (control)", "All suppliers — sub-ledger: Supplier Ledger"),
@@ -1003,6 +1004,48 @@ def _acct_id(conn, code):
     return r[0] if r else None
 
 
+# Legacy Cash in Hand — do not post new GL here when live CASH A/C exists.
+_LEGACY_CASH_CODES = frozenset({"1000"})
+
+
+def resolve_cash_account_code(conn=None):
+    """Live cash COA code used by Cash Book / auto-posting (prefer 000000)."""
+    return (gl_account_code("cash") or "000000").strip()
+
+
+def resolve_cash_account_id(conn):
+    """Resolve live cash account id (000000), with safe fallbacks."""
+    code = resolve_cash_account_code(conn)
+    aid = _acct_id(conn, code)
+    if aid:
+        return int(aid)
+    for fallback in ("000000", "100000", "1000"):
+        aid = _acct_id(conn, fallback)
+        if aid:
+            return int(aid)
+    return None
+
+
+def _remap_legacy_cash_account_id(conn, account_id):
+    """Map legacy Cash in Hand (1000) → live cash for any Dr/Cr GL post."""
+    if not account_id:
+        return account_id
+    try:
+        aid = int(account_id)
+    except (TypeError, ValueError):
+        return account_id
+    row = conn.execute("SELECT code FROM chart_of_accounts WHERE id=?", (aid,)).fetchone()
+    if not row:
+        return aid
+    code = str(row["code"] if hasattr(row, "keys") else row[0] or "").strip()
+    if code not in _LEGACY_CASH_CODES:
+        return aid
+    live_id = resolve_cash_account_id(conn)
+    if live_id and int(live_id) != aid:
+        return int(live_id)
+    return aid
+
+
 def _gl_party_label(conn, ref_type, ref_id):
     """Supplier/customer label for invoice-linked GL narrations."""
     if not ref_id:
@@ -1042,6 +1085,7 @@ def _gl_narration(base, party_label):
 def post_gl_account_id(conn, entry_date, account_id, debit, credit, description, ref_type, ref_id, ref_no, user_id, voucher_id=None):
     if not account_id:
         return
+    account_id = _remap_legacy_cash_account_id(conn, account_id)
     validate_fiscal_open(entry_date, ref_type=ref_type)
     conn.execute(
         """INSERT INTO general_ledger(entry_date,account_id,debit,credit,description,reference_type,reference_id,reference_no,voucher_id,created_by)
@@ -1055,20 +1099,14 @@ def post_gl_account_id(conn, entry_date, account_id, debit, credit, description,
 
 
 def post_gl(conn, entry_date, account_code, debit, credit, description, ref_type, ref_id, ref_no, user_id, voucher_id=None):
-    validate_fiscal_open(entry_date, ref_type=ref_type)
-    aid = _acct_id(conn, account_code)
-    if not aid:
-        return
-    conn.execute(
-        """INSERT INTO general_ledger(entry_date,account_id,debit,credit,description,reference_type,reference_id,reference_no,voucher_id,created_by)
-           VALUES(?,?,?,?,?,?,?,?,?,?)""",
-        (entry_date, aid, debit, credit, description, ref_type, ref_id, ref_no, voucher_id, user_id),
+    code = str(account_code or "").strip()
+    # Hardcoded legacy cash code (or AC['cash'] from older callers) → live cash
+    if code in _LEGACY_CASH_CODES:
+        code = resolve_cash_account_code(conn)
+    aid = _acct_id(conn, code)
+    post_gl_account_id(
+        conn, entry_date, aid, debit, credit, description, ref_type, ref_id, ref_no, user_id, voucher_id
     )
-    if debit:
-        conn.execute("UPDATE chart_of_accounts SET current_balance=current_balance+? WHERE id=?", (debit, aid))
-    if credit:
-        conn.execute("UPDATE chart_of_accounts SET current_balance=current_balance-? WHERE id=?", (credit, aid))
-
 
 def calc_line_tax(subtotal, tax_rate_row, tax_inclusive=False):
     from tax_engine import calc_line

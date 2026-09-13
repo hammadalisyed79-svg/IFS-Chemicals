@@ -3420,7 +3420,7 @@ def pay_payroll_line(line_id, user_id, payment_mode="cash", payment_date=None, b
     Posted / paid month: pays against the existing salary payable (no re-accrual).
     """
     import database as db
-    from db_v3 import post_gl, post_gl_account_id, AC
+    from db_v3 import post_gl, post_gl_account_id, resolve_cash_account_id
 
     mode = (payment_mode or "cash").lower()
     if mode not in ("cash", "bank"):
@@ -3473,17 +3473,16 @@ def pay_payroll_line(line_id, user_id, payment_mode="cash", payment_date=None, b
                 conn, pay_date, label, ref, amt, user_id,
                 party_type="employee", party_id=row["employee_id"],
             )
-            from db_v3 import gl_account_code
-            asset_id = conn.execute(
-                "SELECT id FROM chart_of_accounts WHERE code=?", (gl_account_code("cash"),)
-            ).fetchone()
-            asset_id = asset_id[0] if asset_id else None
+            asset_id = resolve_cash_account_id(conn)
         else:
             entry_id, doc_no = db._add_bank_payment(
                 conn, pay_date, label, ref, amt, bank_account_id, user_id,
                 party_type="employee", party_id=row["employee_id"],
             )
             asset_id = bank_account_id
+
+        if not asset_id:
+            raise ValueError("Cash/bank account not found for salary payment.")
 
         post_gl(conn, pay_date, HR_AC["salary_payable"], amt, 0, label, "payroll_line_payment", line_id, doc_no, user_id)
         # Both legs must use payroll line_id so undo reverses cash+payable together
@@ -3895,7 +3894,7 @@ def issue_advance(advance_id, user_id, payment_mode="cash", bank_account_id=None
     Cash Book: CP/BP payment row so the till/bank book moves.
     """
     import database as db
-    from db_v3 import post_gl, post_gl_account_id, AC
+    from db_v3 import post_gl, post_gl_account_id, resolve_cash_account_id
 
     mode = (payment_mode or "cash").lower()
     if mode not in ("cash", "bank"):
@@ -3933,17 +3932,16 @@ def issue_advance(advance_id, user_id, payment_mode="cash", bank_account_id=None
                 account_id=adv_acct_id,
                 party_type="account", party_id=adv_acct_id,
             )
-            from db_v3 import gl_account_code
-            asset_id = conn.execute(
-                "SELECT id FROM chart_of_accounts WHERE code=?", (gl_account_code("cash"),)
-            ).fetchone()
-            asset_id = asset_id[0] if asset_id else None
+            asset_id = resolve_cash_account_id(conn)
         else:
             entry_id, doc_no = db._add_bank_payment(
                 conn, post_date, label, ref, amt, bank_account_id, user_id,
                 party_type="account", party_id=adv_acct_id,
             )
             asset_id = bank_account_id
+
+        if not asset_id:
+            raise ValueError("Cash/bank account not found for advance issue.")
 
         # GL on posting date; recovery targets salary_month
         # Both legs use advance_id (do not set voucher_id — that FK is journal_vouchers only)
@@ -4051,7 +4049,7 @@ def settle_advance_cash_return(
     Cash/Bank Book: CR/BR receipt. Advance status → closed; draft payroll recovery cleared.
     """
     import database as db
-    from db_v3 import post_gl, post_gl_account_id, AC
+    from db_v3 import post_gl, post_gl_account_id, resolve_cash_account_id
 
     mode = (payment_mode or "cash").lower()
     if mode not in ("cash", "bank"):
@@ -4146,11 +4144,7 @@ def settle_advance_cash_return(
                 account_id=adv_acct_id,
                 party_type="account", party_id=adv_acct_id,
             )
-            from db_v3 import gl_account_code
-            asset_id = conn.execute(
-                "SELECT id FROM chart_of_accounts WHERE code=?", (gl_account_code("cash"),)
-            ).fetchone()
-            asset_id = asset_id[0] if asset_id else None
+            asset_id = resolve_cash_account_id(conn)
         else:
             entry_id, doc_no = db._add_bank_receipt(
                 conn, post_date, label, ref, out_amt, bank_account_id, user_id,
@@ -4208,7 +4202,6 @@ def settle_advance_cash_return(
 def backfill_advance_cash_voucher(advance_id, user_id=None):
     """Create missing cash/bank book voucher for an already-issued advance (GL already posted)."""
     import database as db
-    from db_v3 import AC
 
     with db.get_connection() as conn:
         apply_hr(conn, db)
@@ -4350,7 +4343,7 @@ def approve_loan(loan_id, user_id, approve=True):
 def issue_loan(loan_id, user_id, payment_mode="cash", bank_account_id=None):
     """Issue approved loan: GL + cash/bank book voucher."""
     import database as db
-    from db_v3 import post_gl, post_gl_account_id, AC
+    from db_v3 import post_gl, post_gl_account_id, resolve_cash_account_id
 
     mode = (payment_mode or "cash").lower()
     if mode not in ("cash", "bank"):
@@ -4388,17 +4381,16 @@ def issue_loan(loan_id, user_id, payment_mode="cash", bank_account_id=None):
                 account_id=adv_acct_id,
                 party_type="account", party_id=adv_acct_id,
             )
-            from db_v3 import gl_account_code
-            asset_id = conn.execute(
-                "SELECT id FROM chart_of_accounts WHERE code=?", (gl_account_code("cash"),)
-            ).fetchone()
-            asset_id = asset_id[0] if asset_id else None
+            asset_id = resolve_cash_account_id(conn)
         else:
             entry_id, doc_no = db._add_bank_payment(
                 conn, post_date, label, ref, amt, bank_account_id, user_id,
                 party_type="account", party_id=adv_acct_id,
             )
             asset_id = bank_account_id
+
+        if not asset_id:
+            raise ValueError("Cash/bank account not found for loan issue.")
 
         post_gl(
             conn, post_date, HR_AC["employee_advance"], amt, 0,
@@ -4505,13 +4497,13 @@ def approve_expense_claim(claim_id, user_id, approve=True):
 
 def reimburse_expense_claim(claim_id, user_id, payment_mode="cash"):
     from database import get_connection
-    from db_v3 import post_gl, gl_account_code, AC
+    from db_v3 import post_gl, resolve_cash_account_code, AC
     with get_connection() as conn:
         cl = conn.execute("SELECT * FROM expense_claims WHERE id=?", (claim_id,)).fetchone()
         if not cl or cl["status"] != "approved" or cl["reimbursed"]:
             raise ValueError("Claim must be approved and not yet reimbursed")
         cl = dict(cl)
-        acct = AC["bank"] if payment_mode == "bank" else gl_account_code("cash")
+        acct = AC["bank"] if payment_mode == "bank" else resolve_cash_account_code(conn)
         post_gl(conn, cl["claim_date"], HR_AC["salary_expense"], cl["amount"], 0,
                 "Expense reimbursement", "expense_claim", claim_id, cl["document_no"], user_id)
         post_gl(conn, cl["claim_date"], acct, 0, cl["amount"],
