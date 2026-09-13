@@ -28,13 +28,16 @@ jobs:
         run: python -c "from infrastructure.migrations.engine import verify_graph; ok,e=verify_graph(); assert ok, e"
       - name: Init database
         run: python -c "import database as db; db.init_db()"
-      - name: Run tests
-        run: |
-          python tests/test_nav_wiring.py
-          python tests/test_v16_platform.py
-          python tests/test_v17_platform.py
-          python tests/test_api_v1.py
-          python tests/test_portal_security.py
+      - name: Test nav wiring
+        run: python tests/test_nav_wiring.py
+      - name: Test v16 platform
+        run: python tests/test_v16_platform.py
+      - name: Test v17 platform
+        run: python tests/test_v17_platform.py
+      - name: Test API v1
+        run: python tests/test_api_v1.py
+      - name: Test portal security
+        run: python tests/test_portal_security.py
       - name: Generate V17 reports
         run: python tools/generate_v17_reports.py
       - name: Debt scanner
