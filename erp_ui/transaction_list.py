@@ -275,8 +275,8 @@ def _filter_bar(key_prefix, party_label, party_options, default_period="Today",
                 st.session_state.pop(f"{prefix}_td", None)
         st.session_state["_reg_default_today_v1"] = True
 
-    # One-time: draft/rejected workflow tabs → All Time (not Today)
-    if not st.session_state.get("_wf_queue_all_time_v1"):
+    # One-time: draft/rejected/pending workflow tabs → All Time (not Today)
+    if not st.session_state.get("_wf_queue_all_time_v2"):
         for k in list(st.session_state.keys()):
             ks = str(k)
             if not ks.endswith("_period"):
@@ -286,10 +286,14 @@ def _filter_bar(key_prefix, party_label, party_options, default_period="Today",
                 for x in (
                     "sal_page_draft_",
                     "pur_page_draft_",
+                    "sal_page_pend",
+                    "pur_page_pend",
                     "sal_wf_draft",
                     "sal_wf_rejected",
+                    "sal_wf_pending",
                     "pur_wf_draft",
                     "pur_wf_rejected",
+                    "pur_wf_pending",
                 )
             ):
                 st.session_state[k] = "All Time"
@@ -297,7 +301,7 @@ def _filter_bar(key_prefix, party_label, party_options, default_period="Today",
                 st.session_state.pop(f"{prefix}_period_applied", None)
                 st.session_state.pop(f"{prefix}_fd", None)
                 st.session_state.pop(f"{prefix}_td", None)
-        st.session_state["_wf_queue_all_time_v1"] = True
+        st.session_state["_wf_queue_all_time_v2"] = True
 
     st.markdown('<div class="txn-filter-box">', unsafe_allow_html=True)
 
@@ -1053,13 +1057,11 @@ def invoice_workflow_tab(key_prefix, search_fn, status, party_label, review_fn, 
         f'&nbsp;<span class="txn-queue-label">Approval queue</span></div>',
         unsafe_allow_html=True,
     )
-    # Draft/rejected queues must show older docs (Metro Jul–Aug rejected were hidden by Today).
-    # Pending stays open across days; approved keeps a shorter default.
+    # Draft / rejected / pending queues: All Time (older docs were hidden by Today).
+    # Approved keeps a shorter default so the list stays light.
     status_l = (status or "").lower()
-    if status_l in ("draft", "rejected"):
+    if status_l in ("draft", "rejected", "pending_approval"):
         default_period = "All Time"
-    elif status_l == "pending_approval":
-        default_period = "This Month"
     else:
         default_period = "Today"
     filters = _filter_bar(
