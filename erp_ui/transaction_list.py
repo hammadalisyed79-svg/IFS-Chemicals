@@ -751,7 +751,9 @@ def transaction_picker(key_prefix, search_fn, row_label_fn, party_label=None, pa
             status = c2.selectbox("Status", STATUS_OPTIONS, key=f"{key_prefix}_pick_st")
     kw = {"q": (q or "").strip() or None, "page": 1, "page_size": 30}
     # Without a search term, limit to recent invoices so Edit doesn't scan full history
-    if not kw["q"]:
+    # — except rejected/pending, which must surface older docs (e.g. Metro Jul–Aug).
+    status_l = (status or "").lower()
+    if not kw["q"] and status_l not in ("rejected", "pending_approval"):
         today = date.today()
         kw["from_date"] = str(today - timedelta(days=29))
         kw["to_date"] = str(today)
@@ -1067,27 +1069,34 @@ def invoice_workflow_tab(key_prefix, search_fn, status, party_label, review_fn, 
         f'&nbsp;<span class="txn-queue-label">Approval queue</span></div>',
         unsafe_allow_html=True,
     )
-    # Draft / rejected / pending queues: always All Time.
-    # Sticky "Today" from older sessions hid Metro rejected (all Jul–Aug; none dated today).
     status_l = (status or "").lower()
+    # Draft / rejected / pending: never use the full filter bar (sticky Today/party
+    # was hiding Metro rejected Jul–Aug). Search only; all dates; all parties.
     if status_l in ("draft", "rejected", "pending_approval"):
-        default_period = "All Time"
-        pk = f"{key_prefix}_period"
-        st.session_state[pk] = "All Time"
-        st.session_state.pop(f"{key_prefix}_period_applied", None)
-        st.session_state.pop(f"{key_prefix}_fd", None)
-        st.session_state.pop(f"{key_prefix}_td", None)
+        q = st.text_input(
+            "Search",
+            key=f"{key_prefix}_q_all",
+            placeholder="Invoice no, party name/code…",
+        )
+        page_size = st.selectbox("Rows", PAGE_SIZES, index=1, key=f"{key_prefix}_ps_all")
+        st.caption("All dates · all parties — period/customer filters disabled on this queue.")
+        filters = {
+            "q": (q or "").strip() or None,
+            "from_date": None,
+            "to_date": None,
+            "party_id": None,
+            "status": status,
+            "payment_mode": "All",
+            "page_size": page_size,
+            "sort": "date_desc",
+            "compact": False,
+        }
     else:
-        default_period = "Today"
-    filters = _filter_bar(
-        key_prefix, party_label, party_opts, default_period=default_period,
-        show_payment=False, show_status=False,
-    )
-    filters["status"] = status
-    # Belt-and-suspenders: never date-filter these queues even if widgets stick
-    if status_l in ("draft", "rejected", "pending_approval"):
-        filters["from_date"] = None
-        filters["to_date"] = None
+        filters = _filter_bar(
+            key_prefix, party_label, party_opts, default_period="Today",
+            show_payment=False, show_status=False,
+        )
+        filters["status"] = status
     selected = _register_core(
         key_prefix, search_fn, cols,
         lambda r: f"{r['invoice_no']} — {r.get(party_field, '')}",
