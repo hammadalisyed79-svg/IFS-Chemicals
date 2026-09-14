@@ -2562,15 +2562,27 @@ def get_sale(sale_id):
             return None
         header["items"] = rows_to_list(conn.execute(
             """SELECT si.id, si.invoice_id AS sale_id, si.product_id AS item_id,
+                      si.product_id,
                       si.quantity, si.rate, si.amount, si.net_weight,
                       COALESCE(si.line_discount, 0) AS line_discount,
                       COALESCE(si.packing_size, pr.packing_size) AS packing_size,
-                      pr.name AS item_name, u.symbol AS unit
+                      pr.code AS item_code, pr.code AS product_code,
+                      pr.name AS item_name, pr.name AS product_name, u.symbol AS unit
                FROM sales_invoice_items si
                JOIN products pr ON si.product_id=pr.id
                LEFT JOIN units_of_measure u ON pr.unit_id=u.id WHERE si.invoice_id=?""",
             (sale_id,),
         ).fetchall())
+        # Metro / toll: attach party product codes for print when customer uses them
+        try:
+            from db_customer_product_codes import map_customer_product_codes
+            party_map = map_customer_product_codes(header.get("customer_id"))
+        except Exception:
+            party_map = {}
+        for li in header["items"]:
+            pid = li.get("product_id") or li.get("item_id")
+            if pid and party_map.get(int(pid)):
+                li["party_item_code"] = party_map[int(pid)]
         st_pct = 0.0
         if bool(header.get("tax_inclusive")) and header.get("tax_rate_id"):
             try:
