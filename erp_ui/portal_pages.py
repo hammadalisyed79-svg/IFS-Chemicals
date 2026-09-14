@@ -111,6 +111,8 @@ def _merge_into_cart(line: dict) -> float:
                 )
                 existing["code"] = line.get("code") or existing.get("code")
                 existing["name"] = line.get("name") or existing.get("name")
+                if line.get("party_item_code"):
+                    existing["party_item_code"] = line.get("party_item_code")
                 return float(existing["quantity"])
         except (TypeError, ValueError):
             continue
@@ -144,6 +146,7 @@ def _confirm_add_to_cart(item: dict):
     net = rate * (1 - disc / 100.0)
     code = escape(str(item.get("code") or ""))
     name = escape(str(item.get("name") or ""))
+    party = escape(str(item.get("party_item_code") or "").strip())
     already = _cart_qty_by_product().get(int(item["product_id"]), 0.0)
     rate_line = f"Rate: {_fmt_money(rate)}" if rate or rate == 0 else "Rate:"
     if disc > 0:
@@ -157,10 +160,18 @@ def _confirm_add_to_cart(item: dict):
             f'will become <strong>{_fmt_qty(already + qty)}</strong></p>'
         )
     add_total = _fmt_money(qty * net)
+    heading = f"{party} — {name}" if party else f"{code} — {name}"
+    ifs_line = (
+        f'<p class="muted" style="margin:0.2rem 0 0.35rem 0;color:#475569;font-size:0.88rem;">'
+        f'IFS: {code}</p>'
+        if party
+        else ""
+    )
     st.markdown(
         f"""
 <div class="portal-dialog-card" style="background:#FFFFFF;color:#0F172A;border-radius:12px;padding:0.2rem 0.1rem 0.4rem;">
-  <h4 style="margin:0 0 0.55rem 0;color:#1E3A8A;font-size:1.05rem;font-weight:800;line-height:1.3;">{code} — {name}</h4>
+  <h4 style="margin:0 0 0.15rem 0;color:#1E3A8A;font-size:1.05rem;font-weight:800;line-height:1.3;">{heading}</h4>
+  {ifs_line}
   <p style="margin:0.35rem 0;color:#0F172A;font-size:0.95rem;">Adding quantity: <strong style="color:#0F172A;">{_fmt_qty(qty)}</strong></p>
   {already_html}
   <p class="muted" style="margin:0.35rem 0;color:#475569;font-size:0.95rem;">{escape(rate_line)}</p>
@@ -176,6 +187,7 @@ def _confirm_add_to_cart(item: dict):
             "product_id": item["product_id"],
             "code": item["code"],
             "name": item["name"],
+            "party_item_code": (item.get("party_item_code") or "").strip(),
             "quantity": qty,
             "rate": rate,
             "discount_pct": disc,
@@ -896,14 +908,14 @@ def _page_catalogue(user: dict):
             chips.append(
                 f'<span style="display:inline-block;margin:0.15rem 0.25rem 0.15rem 0;'
                 f'padding:0.2rem 0.5rem;background:#059669;color:#fff;border-radius:999px;'
-                f'font-size:0.78rem;font-weight:700;">{code} × {q:g}</span>'
+                f'font-size:0.78rem;font-weight:700;">{code} × {_fmt_qty(q)}</span>'
             )
         st.markdown(
             f"""
 <div class="portal-cart-strip">
   <strong>This order — in cart now</strong>
   <div class="muted" style="margin-top:0.25rem;">
-    {summary['products']} product(s) · total qty {summary['qty']:g} · est. Rs. {summary['total']:,.2f}
+    {summary['products']} product(s) · total qty {_fmt_qty(summary['qty'])} · est. {_fmt_money(summary['total'])}
   </div>
   <div style="margin-top:0.45rem;">{''.join(chips)}</div>
 </div>
@@ -998,7 +1010,11 @@ def _page_catalogue(user: dict):
                     unsafe_allow_html=True,
                 )
             c1, c2, c3 = st.columns([3, 1, 1])
-            title = f"**{it['code']}** — {it['name']}"
+            party = (it.get("party_item_code") or "").strip()
+            if party:
+                title = f"**{party}** — {it['name']}  \n`{it['code']}`"
+            else:
+                title = f"**{it['code']}** — {it['name']}"
             if in_cart:
                 title = f"✅ {title}"
             elif changed:
@@ -1010,6 +1026,8 @@ def _page_catalogue(user: dict):
             net = _safe_float(net_raw, default=rate) if net_raw is not None else rate
             min_qty = _safe_float(it.get("min_qty"), default=float("nan"))
             parts = []
+            if party:
+                parts.append(f"Party code {party}")
             rate_s = _fmt_money(rate)
             net_s = _fmt_money(net)
             if rate_s and net_s:
@@ -1048,6 +1066,7 @@ def _page_catalogue(user: dict):
                         "product_id": pid,
                         "code": it["code"],
                         "name": it["name"],
+                        "party_item_code": party,
                         "quantity": qty,
                         "rate": rate,
                         "discount_pct": disc,
@@ -1106,7 +1125,12 @@ def _page_cart(user: dict):
         )
     else:
         df["line_total"] = df["quantity"].fillna(0) * df["rate"].fillna(0)
-    show_cols = [c for c in ("code", "name", "quantity", "rate", "discount_pct", "line_total") if c in df.columns]
+    show_cols = [
+        c for c in ("party_item_code", "code", "name", "quantity", "rate", "discount_pct", "line_total")
+        if c in df.columns and not (
+            c == "party_item_code" and not any(str(x or "").strip() for x in df[c].tolist())
+        )
+    ]
     view = df[show_cols].copy()
     # Blank invalid numbers instead of showing "nan"
     for col in ("quantity", "rate", "discount_pct", "line_total"):
@@ -1114,8 +1138,11 @@ def _page_cart(user: dict):
             view[col] = view[col].apply(
                 lambda v: "" if v is None or (isinstance(v, float) and (math.isnan(v) or math.isinf(v))) else v
             )
+    if "party_item_code" in view.columns:
+        view["party_item_code"] = view["party_item_code"].fillna("").astype(str).replace({"nan": ""})
     render_dataframe_html_table(view.rename(columns={
-        "code": "Code", "name": "Product", "quantity": "Qty",
+        "party_item_code": "Party Code",
+        "code": "IFS Code", "name": "Product", "quantity": "Qty",
         "rate": "Rate", "discount_pct": "Disc %", "line_total": "Line Total",
     }))
     qty_total = float(pd.to_numeric(df["quantity"], errors="coerce").fillna(0).sum()) if "quantity" in df.columns else 0.0

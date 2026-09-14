@@ -202,6 +202,7 @@ def get_catalog(user: dict, *, search: str | None = None, limit: int = 300):
     """Distributor catalogue — only products on this customer's catalog (effective today)."""
     from database import get_connection, rows_to_list
     from erp_core import distributor_catalog as dcat
+    from db_customer_product_codes import map_customer_product_codes
 
     dcat.ensure_schema()
     cid = get_distributor_customer_id(user)
@@ -209,6 +210,7 @@ def get_catalog(user: dict, *, search: str | None = None, limit: int = 300):
         return []
     prof = get_distributor_profile(user) or {}
     show_stock = bool(prof.get("show_stock"))
+    party_map = map_customer_product_codes(cid)
 
     where = [
         "d.customer_id=?",
@@ -219,8 +221,20 @@ def get_catalog(user: dict, *, search: str | None = None, limit: int = 300):
     params: list = [cid]
     if search and search.strip():
         like = f"%{search.strip()}%"
-        where.append("(p.code LIKE ? OR p.name LIKE ?)")
-        params.extend([like, like])
+        # Also match mapped party (customer) product codes when present
+        where.append(
+            """(
+                p.code LIKE ? OR p.name LIKE ?
+                OR EXISTS (
+                    SELECT 1 FROM customer_product_codes cpc
+                    WHERE cpc.product_id = p.id
+                      AND cpc.customer_id = d.customer_id
+                      AND COALESCE(cpc.is_active,1)=1
+                      AND cpc.customer_code LIKE ?
+                )
+            )"""
+        )
+        params.extend([like, like, like])
 
     stock_expr = (
         "(SELECT COALESCE(SUM(ws.quantity), 0) FROM warehouse_stock ws WHERE ws.product_id=p.id)"
@@ -246,6 +260,8 @@ def get_catalog(user: dict, *, search: str | None = None, limit: int = 300):
         LIMIT ?
     """
     with get_connection() as conn:
+        from db_customer_product_codes import apply_customer_product_codes
+        apply_customer_product_codes(conn)
         rows = rows_to_list(conn.execute(sql, params).fetchall())
     out = []
     for r in rows:
@@ -255,8 +271,10 @@ def get_catalog(user: dict, *, search: str | None = None, limit: int = 300):
         min_qty = _safe_num(r.get("min_qty"), 1.0)
         if min_qty <= 0:
             min_qty = 1.0
+        pid = int(r["id"])
+        party_code = (party_map.get(pid) or "").strip()
         item = {
-            "product_id": r["id"],
+            "product_id": pid,
             "code": r["code"],
             "name": r["name"],
             "unit": r.get("unit") or "",
@@ -264,6 +282,7 @@ def get_catalog(user: dict, *, search: str | None = None, limit: int = 300):
             "discount_pct": disc,
             "net_rate": net,
             "min_qty": min_qty,
+            "party_item_code": party_code,
             "admin_changed": bool(r.get("admin_changed")),
             "source": r.get("source") or "invoice",
             "effective_from": r.get("effective_from"),
