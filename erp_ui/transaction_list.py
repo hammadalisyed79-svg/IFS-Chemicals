@@ -275,6 +275,30 @@ def _filter_bar(key_prefix, party_label, party_options, default_period="Today",
                 st.session_state.pop(f"{prefix}_td", None)
         st.session_state["_reg_default_today_v1"] = True
 
+    # One-time: draft/rejected workflow tabs → All Time (not Today)
+    if not st.session_state.get("_wf_queue_all_time_v1"):
+        for k in list(st.session_state.keys()):
+            ks = str(k)
+            if not ks.endswith("_period"):
+                continue
+            if any(
+                x in ks
+                for x in (
+                    "sal_page_draft_",
+                    "pur_page_draft_",
+                    "sal_wf_draft",
+                    "sal_wf_rejected",
+                    "pur_wf_draft",
+                    "pur_wf_rejected",
+                )
+            ):
+                st.session_state[k] = "All Time"
+                prefix = ks[: -len("_period")]
+                st.session_state.pop(f"{prefix}_period_applied", None)
+                st.session_state.pop(f"{prefix}_fd", None)
+                st.session_state.pop(f"{prefix}_td", None)
+        st.session_state["_wf_queue_all_time_v1"] = True
+
     st.markdown('<div class="txn-filter-box">', unsafe_allow_html=True)
 
     c1, c2, c3, c4 = st.columns([3, 1.2, 1.2, 1.2])
@@ -1029,8 +1053,17 @@ def invoice_workflow_tab(key_prefix, search_fn, status, party_label, review_fn, 
         f'&nbsp;<span class="txn-queue-label">Approval queue</span></div>',
         unsafe_allow_html=True,
     )
+    # Draft/rejected queues must show older docs (Metro Jul–Aug rejected were hidden by Today).
+    # Pending stays open across days; approved keeps a shorter default.
+    status_l = (status or "").lower()
+    if status_l in ("draft", "rejected"):
+        default_period = "All Time"
+    elif status_l == "pending_approval":
+        default_period = "This Month"
+    else:
+        default_period = "Today"
     filters = _filter_bar(
-        key_prefix, party_label, party_opts, default_period="Today",
+        key_prefix, party_label, party_opts, default_period=default_period,
         show_payment=False, show_status=False,
     )
     filters["status"] = status
