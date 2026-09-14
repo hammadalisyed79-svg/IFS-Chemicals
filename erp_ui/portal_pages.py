@@ -979,8 +979,6 @@ def _page_catalogue(user: dict):
             extra = f" · Min qty {it['min_qty']}"
             if disc:
                 extra += f" · Disc {disc:.2f}%"
-            if "stock_qty" in it:
-                extra += f" · Stock {it['stock_qty']:.0f}"
             if in_cart:
                 extra += f" · **In this order: {in_qty:g}**"
             c1.caption(f"Rs. {it['rate']:,.2f} → net Rs. {net:,.2f}{extra}")
