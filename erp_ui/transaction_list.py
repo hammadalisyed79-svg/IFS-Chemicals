@@ -344,6 +344,9 @@ def _filter_bar(key_prefix, party_label, party_options, default_period="Today",
         td = c4.date_input("To", key=td_key)
     else:
         fd = td = None
+        # Drop stale From/To so switching back from All Time does not resurrect Today dates
+        st.session_state.pop(fd_key, None)
+        st.session_state.pop(td_key, None)
         c3.caption("No date limit")
         c4.caption("")
 
@@ -452,13 +455,20 @@ def _search_kw_from_filters(filters, page, party_kw=None):
     """Build search_fn kwargs. Date range always applies when From/To are set.
 
     Use Period **All Time** (no From/To) to search across every date.
+    Rejected / pending queues ignore date filters so older docs (e.g. Metro) stay visible.
     """
     q = filters.get("q")
+    status = filters.get("status")
+    from_date = filters.get("from_date")
+    to_date = filters.get("to_date")
+    if (status or "").lower() in ("rejected", "pending_approval"):
+        from_date = None
+        to_date = None
     kw = {
         "q": q,
-        "from_date": filters.get("from_date"),
-        "to_date": filters.get("to_date"),
-        "status": filters.get("status"),
+        "from_date": from_date,
+        "to_date": to_date,
+        "status": status,
         "page": page,
         "page_size": filters.get("page_size"),
     }
@@ -1057,11 +1067,16 @@ def invoice_workflow_tab(key_prefix, search_fn, status, party_label, review_fn, 
         f'&nbsp;<span class="txn-queue-label">Approval queue</span></div>',
         unsafe_allow_html=True,
     )
-    # Draft / rejected / pending queues: All Time (older docs were hidden by Today).
-    # Approved keeps a shorter default so the list stays light.
+    # Draft / rejected / pending queues: always All Time.
+    # Sticky "Today" from older sessions hid Metro rejected (all Jul–Aug; none dated today).
     status_l = (status or "").lower()
     if status_l in ("draft", "rejected", "pending_approval"):
         default_period = "All Time"
+        pk = f"{key_prefix}_period"
+        st.session_state[pk] = "All Time"
+        st.session_state.pop(f"{key_prefix}_period_applied", None)
+        st.session_state.pop(f"{key_prefix}_fd", None)
+        st.session_state.pop(f"{key_prefix}_td", None)
     else:
         default_period = "Today"
     filters = _filter_bar(
@@ -1069,6 +1084,10 @@ def invoice_workflow_tab(key_prefix, search_fn, status, party_label, review_fn, 
         show_payment=False, show_status=False,
     )
     filters["status"] = status
+    # Belt-and-suspenders: never date-filter these queues even if widgets stick
+    if status_l in ("draft", "rejected", "pending_approval"):
+        filters["from_date"] = None
+        filters["to_date"] = None
     selected = _register_core(
         key_prefix, search_fn, cols,
         lambda r: f"{r['invoice_no']} — {r.get(party_field, '')}",
