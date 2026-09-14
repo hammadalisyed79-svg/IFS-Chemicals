@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from datetime import date, datetime
 
 from db_v15 import PORTAL_ORDER_STATUSES
@@ -10,6 +11,19 @@ from erp_core import notifications as notify
 
 def _now() -> str:
     return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+
+def _safe_num(val, default: float = 0.0) -> float:
+    """Coerce to a finite float; never propagate NaN/Inf into portal prices."""
+    try:
+        if val is None or val == "":
+            return default
+        n = float(val)
+        if math.isnan(n) or math.isinf(n):
+            return default
+        return n
+    except (TypeError, ValueError):
+        return default
 
 
 def get_distributor_customer_id(user: dict) -> int | None:
@@ -168,7 +182,7 @@ def resolve_price_list_id(user: dict) -> int | None:
 def get_product_price(product_id: int, price_list_id: int | None, fallback_rate: float = 0) -> dict:
     from database import get_connection, row_to_dict
     if not price_list_id:
-        return {"rate": fallback_rate, "discount_pct": 0, "min_qty": 1}
+        return {"rate": _safe_num(fallback_rate), "discount_pct": 0, "min_qty": 1}
     with get_connection() as conn:
         row = conn.execute(
             """SELECT rate, discount_pct, min_qty FROM price_list_items
@@ -176,8 +190,12 @@ def get_product_price(product_id: int, price_list_id: int | None, fallback_rate:
             (price_list_id, product_id),
         ).fetchone()
         if row:
-            return {"rate": float(row[0]), "discount_pct": float(row[1] or 0), "min_qty": float(row[2] or 1)}
-    return {"rate": fallback_rate, "discount_pct": 0, "min_qty": 1}
+            return {
+                "rate": _safe_num(row[0], _safe_num(fallback_rate)),
+                "discount_pct": _safe_num(row[1], 0.0),
+                "min_qty": _safe_num(row[2], 1.0) or 1.0,
+            }
+    return {"rate": _safe_num(fallback_rate), "discount_pct": 0, "min_qty": 1}
 
 
 def get_catalog(user: dict, *, search: str | None = None, limit: int = 300):
@@ -231,9 +249,12 @@ def get_catalog(user: dict, *, search: str | None = None, limit: int = 300):
         rows = rows_to_list(conn.execute(sql, params).fetchall())
     out = []
     for r in rows:
-        rate = float(r.get("rate") or 0)
-        disc = float(r.get("discount_pct") or 0)
+        rate = _safe_num(r.get("rate"), 0.0)
+        disc = _safe_num(r.get("discount_pct"), 0.0)
         net = rate * (1 - disc / 100.0)
+        min_qty = _safe_num(r.get("min_qty"), 1.0)
+        if min_qty <= 0:
+            min_qty = 1.0
         item = {
             "product_id": r["id"],
             "code": r["code"],
@@ -242,14 +263,14 @@ def get_catalog(user: dict, *, search: str | None = None, limit: int = 300):
             "rate": rate,
             "discount_pct": disc,
             "net_rate": net,
-            "min_qty": float(r.get("min_qty") or 1),
+            "min_qty": min_qty,
             "admin_changed": bool(r.get("admin_changed")),
             "source": r.get("source") or "invoice",
             "effective_from": r.get("effective_from"),
             "admin_note": r.get("admin_note") or "",
         }
         if show_stock:
-            item["stock_qty"] = float(r.get("stock_qty") or 0)
+            item["stock_qty"] = _safe_num(r.get("stock_qty"), 0.0)
         out.append(item)
     return out
 

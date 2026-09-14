@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 import streamlit as st
 import pandas as pd
 
@@ -11,6 +12,33 @@ from erp_core import notifications as ntf
 from erp_core.v15_security import is_portal_user
 from db_v15 import PORTAL_ORDER_STATUSES
 from erp_ui.helpers import money_input, sticky_page_tabs, render_dataframe_html_table
+
+
+def _safe_float(val, default: float = 0.0) -> float:
+    """Coerce to float; treat None / NaN / Inf as default (never display 'nan')."""
+    try:
+        if val is None or val == "":
+            return default
+        n = float(val)
+        if math.isnan(n) or math.isinf(n):
+            return default
+        return n
+    except (TypeError, ValueError):
+        return default
+
+
+def _fmt_money(val) -> str:
+    n = _safe_float(val, default=float("nan"))
+    if math.isnan(n):
+        return ""
+    return f"Rs. {n:,.2f}"
+
+
+def _fmt_qty(val) -> str:
+    n = _safe_float(val, default=float("nan"))
+    if math.isnan(n):
+        return ""
+    return f"{n:g}"
 
 
 def _cart_key():
@@ -35,7 +63,7 @@ def _cart_qty_by_product() -> dict[int, float]:
             pid = int(ln.get("product_id"))
         except (TypeError, ValueError):
             continue
-        out[pid] = out.get(pid, 0.0) + float(ln.get("quantity") or 0)
+        out[pid] = out.get(pid, 0.0) + _safe_float(ln.get("quantity"))
     return out
 
 
@@ -50,9 +78,9 @@ def _cart_order_summary() -> dict:
             products.add(int(ln.get("product_id")))
         except (TypeError, ValueError):
             pass
-        q = float(ln.get("quantity") or 0)
-        rate = float(ln.get("rate") or 0)
-        disc = float(ln.get("discount_pct") or 0)
+        q = _safe_float(ln.get("quantity"))
+        rate = _safe_float(ln.get("rate"))
+        disc = _safe_float(ln.get("discount_pct"))
         qty += q
         total += q * rate * (1 - disc / 100.0)
     return {
@@ -68,17 +96,18 @@ def _merge_into_cart(line: dict) -> float:
     _ensure_cart()
     cart = st.session_state[_cart_key()]
     pid = int(line["product_id"])
-    add_qty = float(line.get("quantity") or 0)
+    add_qty = _safe_float(line.get("quantity"))
     for existing in cart:
         try:
             if int(existing.get("product_id")) == pid:
-                existing["quantity"] = float(existing.get("quantity") or 0) + add_qty
-                existing["rate"] = float(line.get("rate") or existing.get("rate") or 0)
-                existing["discount_pct"] = float(
+                existing["quantity"] = _safe_float(existing.get("quantity")) + add_qty
+                existing["rate"] = _safe_float(
+                    line.get("rate") if line.get("rate") is not None else existing.get("rate")
+                )
+                existing["discount_pct"] = _safe_float(
                     line.get("discount_pct")
                     if line.get("discount_pct") is not None
                     else existing.get("discount_pct")
-                    or 0
                 )
                 existing["code"] = line.get("code") or existing.get("code")
                 existing["name"] = line.get("name") or existing.get("name")
@@ -109,32 +138,33 @@ def _restore_saved_cart(user: dict) -> None:
 @st.dialog("Save to cart")
 def _confirm_add_to_cart(item: dict):
     from html import escape
-    qty = float(item.get("quantity") or 0)
-    disc = float(item.get("discount_pct") or 0)
-    rate = float(item.get("rate") or 0)
+    qty = _safe_float(item.get("quantity"))
+    disc = _safe_float(item.get("discount_pct"))
+    rate = _safe_float(item.get("rate"))
     net = rate * (1 - disc / 100.0)
     code = escape(str(item.get("code") or ""))
     name = escape(str(item.get("name") or ""))
     already = _cart_qty_by_product().get(int(item["product_id"]), 0.0)
-    rate_line = f"Rate: Rs. {rate:,.2f}"
-    if disc:
-        rate_line += f" (disc {disc:.2f}% → net Rs. {net:,.2f})"
+    rate_line = f"Rate: {_fmt_money(rate)}" if rate or rate == 0 else "Rate:"
+    if disc > 0:
+        rate_line += f" (disc {disc:.2f}% → net {_fmt_money(net)})"
     already_html = ""
     if already > 0:
         already_html = (
             f'<p style="margin:0.45rem 0;padding:0.45rem 0.55rem;background:#ECFDF5;'
             f'border:1px solid #A7F3D0;border-radius:8px;color:#065F46;font-size:0.92rem;">'
-            f'Already in this order: <strong>{already:g}</strong> — '
-            f'will become <strong>{already + qty:g}</strong></p>'
+            f'Already in this order: <strong>{_fmt_qty(already)}</strong> — '
+            f'will become <strong>{_fmt_qty(already + qty)}</strong></p>'
         )
+    add_total = _fmt_money(qty * net)
     st.markdown(
         f"""
 <div class="portal-dialog-card" style="background:#FFFFFF;color:#0F172A;border-radius:12px;padding:0.2rem 0.1rem 0.4rem;">
   <h4 style="margin:0 0 0.55rem 0;color:#1E3A8A;font-size:1.05rem;font-weight:800;line-height:1.3;">{code} — {name}</h4>
-  <p style="margin:0.35rem 0;color:#0F172A;font-size:0.95rem;">Adding quantity: <strong style="color:#0F172A;">{qty:g}</strong></p>
+  <p style="margin:0.35rem 0;color:#0F172A;font-size:0.95rem;">Adding quantity: <strong style="color:#0F172A;">{_fmt_qty(qty)}</strong></p>
   {already_html}
   <p class="muted" style="margin:0.35rem 0;color:#475569;font-size:0.95rem;">{escape(rate_line)}</p>
-  <p class="total" style="margin-top:0.55rem;padding-top:0.45rem;border-top:1px solid #E2E8F0;font-weight:800;color:#1E3A8A;font-size:1.05rem;">This add: Rs. {qty * net:,.2f}</p>
+  <p class="total" style="margin-top:0.55rem;padding-top:0.45rem;border-top:1px solid #E2E8F0;font-weight:800;color:#1E3A8A;font-size:1.05rem;">This add: {escape(add_total) if add_total else ""}</p>
 </div>
         """,
         unsafe_allow_html=True,
@@ -158,7 +188,7 @@ def _confirm_add_to_cart(item: dict):
             pass
         st.session_state.pop("_portal_add_pending", None)
         st.session_state["_portal_cart_flash"] = (
-            f"Added **{item.get('code')}** — now **{new_qty:g}** in this order. "
+            f"Added **{item.get('code')}** — now **{_fmt_qty(new_qty)}** in this order. "
             "Stay on Product List to add more."
         )
         st.session_state["_portal_keep_page"] = "Product List"
@@ -862,7 +892,7 @@ def _page_catalogue(user: dict):
         chips = []
         for ln in cart_lines:
             code = escape(str(ln.get("code") or ""))
-            q = float(ln.get("quantity") or 0)
+            q = _safe_float(ln.get("quantity"))
             chips.append(
                 f'<span style="display:inline-block;margin:0.15rem 0.25rem 0.15rem 0;'
                 f'padding:0.2rem 0.5rem;background:#059669;color:#fff;border-radius:999px;'
@@ -974,21 +1004,35 @@ def _page_catalogue(user: dict):
             elif changed:
                 title = f"🟡 {title}"
             c1.markdown(title)
-            disc = float(it.get("discount_pct") or 0)
-            net = float(it.get("net_rate") if it.get("net_rate") is not None else it["rate"])
-            extra = f" · Min qty {it['min_qty']}"
-            if disc:
-                extra += f" · Disc {disc:.2f}%"
+            disc = _safe_float(it.get("discount_pct"))
+            rate = _safe_float(it.get("rate"))
+            net_raw = it.get("net_rate")
+            net = _safe_float(net_raw, default=rate) if net_raw is not None else rate
+            min_qty = _safe_float(it.get("min_qty"), default=float("nan"))
+            parts = []
+            rate_s = _fmt_money(rate)
+            net_s = _fmt_money(net)
+            if rate_s and net_s:
+                parts.append(f"{rate_s} → net {net_s}")
+            elif rate_s:
+                parts.append(rate_s)
+            elif net_s:
+                parts.append(f"net {net_s}")
+            if not math.isnan(min_qty) and min_qty > 0:
+                parts.append(f"Min qty {_fmt_qty(min_qty)}")
+            if disc > 0:
+                parts.append(f"Disc {disc:.2f}%")
             if in_cart:
-                extra += f" · **In this order: {in_qty:g}**"
-            c1.caption(f"Rs. {it['rate']:,.2f} → net Rs. {net:,.2f}{extra}")
+                parts.append(f"**In this order: {_fmt_qty(in_qty)}**")
+            if parts:
+                c1.caption(" · ".join(parts))
             qty = c2.number_input(
                 "Qty to add",
                 min_value=0.0,
                 value=0.0,
                 step=1.0,
                 key=f"pq_{pid}",
-                help=f"Already in cart: {in_qty:g}" if in_cart else "Enter quantity for this order",
+                help=f"Already in cart: {_fmt_qty(in_qty)}" if in_cart else "Enter quantity for this order",
             )
             btn_label = "Add more" if in_cart else "Save to cart"
             if c3.button(
@@ -1005,7 +1049,7 @@ def _page_catalogue(user: dict):
                         "code": it["code"],
                         "name": it["name"],
                         "quantity": qty,
-                        "rate": it["rate"],
+                        "rate": rate,
                         "discount_pct": disc,
                     }
                     st.rerun()
@@ -1053,12 +1097,24 @@ def _page_cart(user: dict):
                 st.rerun()
         return
     df = pd.DataFrame(cart)
+    for col in ("quantity", "rate", "discount_pct"):
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors="coerce")
     if "discount_pct" in df.columns:
-        df["line_total"] = df["quantity"] * df["rate"] * (1 - df["discount_pct"].fillna(0) / 100.0)
+        df["line_total"] = df["quantity"].fillna(0) * df["rate"].fillna(0) * (
+            1 - df["discount_pct"].fillna(0) / 100.0
+        )
     else:
-        df["line_total"] = df["quantity"] * df["rate"]
+        df["line_total"] = df["quantity"].fillna(0) * df["rate"].fillna(0)
     show_cols = [c for c in ("code", "name", "quantity", "rate", "discount_pct", "line_total") if c in df.columns]
-    render_dataframe_html_table(df[show_cols].rename(columns={
+    view = df[show_cols].copy()
+    # Blank invalid numbers instead of showing "nan"
+    for col in ("quantity", "rate", "discount_pct", "line_total"):
+        if col in view.columns:
+            view[col] = view[col].apply(
+                lambda v: "" if v is None or (isinstance(v, float) and (math.isnan(v) or math.isinf(v))) else v
+            )
+    render_dataframe_html_table(view.rename(columns={
         "code": "Code", "name": "Product", "quantity": "Qty",
         "rate": "Rate", "discount_pct": "Disc %", "line_total": "Line Total",
     }))
