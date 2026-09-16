@@ -67,6 +67,21 @@ def page_profit_loss():
         st.write(f"Gross Purchases: **{hlp.fmt_money(pl['gross_purchases'])}**")
         st.write(f"Less: Purchase Returns: **({hlp.fmt_money(pl['purchase_returns'])})**")
         st.write(f"**Net Purchases: {hlp.fmt_money(pl['net_purchases'])}**")
+        st.write(f"Posted inventory COGS (GL 5000): **{hlp.fmt_money(pl.get('cogs_posted', 0))}**")
+        basis = pl.get("cogs_basis") or "gl_5000"
+        cov = pl.get("cogs_coverage_pct")
+        with_n = pl.get("cogs_invoices_with")
+        tot_n = pl.get("cogs_invoices_total")
+        if basis == "net_purchases_proxy":
+            st.warning(
+                f"Inventory COGS is posted on only {with_n}/{tot_n} sales invoices "
+                f"({cov}%). P&L **Cost of Goods** is using **net purchases** as a temporary proxy."
+            )
+        else:
+            st.caption(
+                f"COGS basis: GL account 5000 · coverage {with_n}/{tot_n} invoices ({cov}%)."
+            )
+        st.write(f"**Cost of Goods (P&L): {hlp.fmt_money(pl['cogs'])}**")
         st.markdown("**Operating**")
         st.write(f"Operating Expenses: **{hlp.fmt_money(pl['operating_expenses'])}**")
     export_df(pd.DataFrame([pl]), "profit_loss", f"Profit & Loss {fd} to {td}")

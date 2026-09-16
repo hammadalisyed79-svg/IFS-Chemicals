@@ -451,11 +451,21 @@ def summary_keys_for_report(report_title: str | None, df: pd.DataFrame) -> dict:
 
 def profit_loss_dataframe(pl: dict) -> pd.DataFrame:
     """Single-column P&L as readable line items."""
+    cogs_label = "Cost of Goods Sold"
+    basis = (pl.get("cogs_basis") or "").strip()
+    if basis == "net_purchases_proxy":
+        cov = pl.get("cogs_coverage_pct")
+        cov_s = f"{cov:.1f}%" if cov is not None else "low"
+        cogs_label = f"Cost of Goods Sold (net purchases proxy; inventory COGS on {cov_s} of invoices)"
+    elif basis == "gl_5000":
+        posted = pl.get("cogs_posted")
+        if posted is not None and abs(float(posted or 0) - float(pl.get("cogs") or 0)) > 0.02:
+            cogs_label = "Cost of Goods Sold (GL 5000)"
     lines = [
         ("Gross Sales", pl.get("gross_sales", 0)),
         ("Less: Sale Returns", pl.get("sale_returns", 0)),
         ("Net Sales", pl.get("net_sales", 0)),
-        ("Cost of Goods Sold", pl.get("cogs", 0)),
+        (cogs_label, pl.get("cogs", 0)),
         ("Gross Profit", pl.get("gross_profit", 0)),
         ("Operating Expenses", pl.get("operating_expenses", 0)),
         ("Net Profit", pl.get("net_profit", 0)),

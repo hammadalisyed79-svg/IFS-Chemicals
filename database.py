@@ -6473,39 +6473,118 @@ def get_stock_report_bom_wise(*, composition_type=None, status: str = "approved"
 
 
 def get_profit_loss(from_date=None, to_date=None):
+    """Profit & Loss summary for a period.
+
+    COGS uses GL account **5000** only (not ``LIKE '5000%'``, which wrongly
+    included income codes 500001 SALE A/C, 500003 MISC INCOME, etc.).
+
+    When almost no sales invoices have inventory COGS posted yet, COGS falls
+    back to net purchases so the report is not grossly understated; callers
+    can read ``cogs_basis`` / ``cogs_coverage_pct``.
+    """
     with get_connection() as conn:
-        def _sum(table, date_col):
+        def _sum(table, date_col, approved_only=False):
             q = f"SELECT COALESCE(SUM(total),0) FROM {table} WHERE 1=1"
             p = []
             if from_date:
                 q += f" AND {date_col}>=?"; p.append(from_date)
             if to_date:
                 q += f" AND {date_col}<=?"; p.append(to_date)
-            return conn.execute(q, p).fetchone()[0]
+            if approved_only:
+                # draft/rejected must not inflate sales / purchases
+                q += (
+                    " AND LOWER(COALESCE(status,'approved')) "
+                    "IN ('approved','posted','paid','partial','closed')"
+                )
+            return float(conn.execute(q, p).fetchone()[0] or 0)
 
-        gross_sales = _sum("sales_invoices", "invoice_date")
+        gross_sales = _sum("sales_invoices", "invoice_date", approved_only=True)
         sale_returns = _sum("sales_returns", "return_date")
         net_sales = gross_sales - sale_returns
-        gross_purchases = _sum("purchase_invoices", "invoice_date")
+        gross_purchases = _sum("purchase_invoices", "invoice_date", approved_only=True)
         purchase_returns = _sum("purchase_returns", "return_date")
         net_purchases = gross_purchases - purchase_returns
 
-        def _gl_debit(code_prefix):
-            q = """SELECT COALESCE(SUM(gl.debit),0) FROM general_ledger gl
-                   JOIN chart_of_accounts a ON gl.account_id=a.id WHERE a.code LIKE ?"""
-            p = [f"{code_prefix}%"]
+        def _gl_dates(q, params):
             if from_date:
-                q += " AND gl.entry_date>=?"; p.append(from_date)
+                q += " AND gl.entry_date>=?"
+                params.append(from_date)
             if to_date:
-                q += " AND gl.entry_date<=?"; p.append(to_date)
-            row = conn.execute(q, p).fetchone()
-            return row[0] if row else 0
+                q += " AND gl.entry_date<=?"
+                params.append(to_date)
+            return q, params
 
-        cogs = _gl_debit("5000")
-        if cogs == 0:
+        # Exact COGS account — never prefix-match (500001+ are income).
+        q = """SELECT COALESCE(SUM(gl.debit),0) FROM general_ledger gl
+               JOIN chart_of_accounts a ON gl.account_id=a.id WHERE a.code=?"""
+        p = ["5000"]
+        q, p = _gl_dates(q, p)
+        cogs_posted = float(conn.execute(q, p).fetchone()[0] or 0)
+
+        # Coverage: how many period sales invoices have a COGS GL debit
+        q_cov = """
+            SELECT COUNT(*) AS n_inv,
+                   SUM(CASE WHEN EXISTS (
+                       SELECT 1 FROM general_ledger gl
+                       JOIN chart_of_accounts a ON a.id=gl.account_id AND a.code='5000'
+                       WHERE gl.reference_no=si.document_no AND gl.debit>0
+                   ) THEN 1 ELSE 0 END) AS n_with_cogs
+            FROM sales_invoices si
+            WHERE LOWER(COALESCE(si.status,'approved'))
+                  IN ('approved','posted','paid','partial','closed')
+        """
+        p_cov = []
+        if from_date:
+            q_cov += " AND si.invoice_date>=?"
+            p_cov.append(from_date)
+        if to_date:
+            q_cov += " AND si.invoice_date<=?"
+            p_cov.append(to_date)
+        cov = conn.execute(q_cov, p_cov).fetchone()
+        n_inv = int(cov[0] or 0)
+        n_with = int(cov[1] or 0)
+        cogs_coverage_pct = (100.0 * n_with / n_inv) if n_inv else 0.0
+
+        # If inventory COGS is barely posted, use net purchases as a proxy so
+        # Gross Profit is not ~100% of sales. Prefer posted COGS once coverage
+        # is meaningful (>= 20% of invoices) or purchases are empty.
+        if cogs_posted > 0 and (cogs_coverage_pct >= 20.0 or net_purchases <= 0):
+            cogs = cogs_posted
+            cogs_basis = "gl_5000"
+        elif net_purchases > 0:
             cogs = net_purchases
+            cogs_basis = "net_purchases_proxy"
+        else:
+            cogs = cogs_posted
+            cogs_basis = "gl_5000"
 
-        operating_expenses = _gl_debit("6100") + _gl_debit("5200") + _gl_debit("5300")
+        # All expense-group accounts except COGS (already above the line).
+        q_ox = """
+            SELECT COALESCE(SUM(gl.debit)-SUM(gl.credit),0)
+            FROM general_ledger gl
+            JOIN chart_of_accounts a ON gl.account_id=a.id
+            LEFT JOIN account_groups ag
+              ON ag.id = COALESCE(a.account_group_id, a.group_id)
+            WHERE LOWER(COALESCE(ag.group_type,'')) = 'expense'
+              AND a.code != '5000'
+        """
+        p_ox = []
+        q_ox, p_ox = _gl_dates(q_ox, p_ox)
+        operating_expenses = float(conn.execute(q_ox, p_ox).fetchone()[0] or 0)
+        # When COGS proxy already uses net purchases, strip Purchase A/C from
+        # opex so purchases are not double-counted below the line.
+        if cogs_basis == "net_purchases_proxy":
+            q_pa = """
+                SELECT COALESCE(SUM(gl.debit)-SUM(gl.credit),0)
+                FROM general_ledger gl
+                JOIN chart_of_accounts a ON gl.account_id=a.id
+                WHERE a.code = '400001'
+            """
+            p_pa = []
+            q_pa, p_pa = _gl_dates(q_pa, p_pa)
+            purchase_ac = float(conn.execute(q_pa, p_pa).fetchone()[0] or 0)
+            if purchase_ac > 0:
+                operating_expenses = max(0.0, operating_expenses - purchase_ac)
 
         gross_profit = net_sales - cogs
         net_profit = gross_profit - operating_expenses
@@ -6514,6 +6593,11 @@ def get_profit_loss(from_date=None, to_date=None):
             "gross_sales": gross_sales, "sale_returns": sale_returns, "net_sales": net_sales,
             "gross_purchases": gross_purchases, "purchase_returns": purchase_returns,
             "net_purchases": net_purchases, "cogs": cogs,
+            "cogs_posted": cogs_posted,
+            "cogs_basis": cogs_basis,
+            "cogs_coverage_pct": round(cogs_coverage_pct, 2),
+            "cogs_invoices_with": n_with,
+            "cogs_invoices_total": n_inv,
             "operating_expenses": operating_expenses,
             "gross_profit": gross_profit, "net_profit": net_profit,
         }
