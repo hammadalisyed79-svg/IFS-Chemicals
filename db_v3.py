@@ -6081,9 +6081,121 @@ def _party_label(conn, party_type, party_id):
     return r["code"], r["name"]
 
 
+def _post_party_transfer_gl(conn, transfer_type, from_party_type, from_party_id,
+                            to_party_type, to_party_id, amount, transfer_date,
+                            label, transfer_id, doc_no, user_id):
+    """Post party-transfer GL to party COA subledgers (same accounts invoices use).
+
+    Historically set-offs hit AR/AP *control* accounts (1200/2000) while sales/
+    purchases hit per-party chart codes — Trial Balance then disagreed with
+    Customer/Supplier Ledger. Always post to ``_party_subledger_code`` instead.
+    """
+    amount = float(amount or 0)
+    if amount <= 0:
+        return
+    if transfer_type == "customer_to_supplier":
+        cust_id = from_party_id if from_party_type == "customer" else to_party_id
+        sup_id = from_party_id if from_party_type == "supplier" else to_party_id
+        # Dr supplier (reduce payable), Cr customer (reduce receivable)
+        post_gl(
+            conn, transfer_date, _party_subledger_code(conn, "supplier", sup_id),
+            amount, 0, label, "party_transfer", transfer_id, doc_no, user_id,
+        )
+        post_gl(
+            conn, transfer_date, _party_subledger_code(conn, "customer", cust_id),
+            0, amount, label, "party_transfer", transfer_id, doc_no, user_id,
+        )
+    elif transfer_type == "customer_to_customer":
+        # Cr from-customer, Dr to-customer
+        post_gl(
+            conn, transfer_date, _party_subledger_code(conn, "customer", from_party_id),
+            0, amount, label, "party_transfer", transfer_id, doc_no, user_id,
+        )
+        post_gl(
+            conn, transfer_date, _party_subledger_code(conn, "customer", to_party_id),
+            amount, 0, label, "party_transfer", transfer_id, doc_no, user_id,
+        )
+    elif transfer_type == "supplier_to_supplier":
+        # Dr from-supplier, Cr to-supplier
+        post_gl(
+            conn, transfer_date, _party_subledger_code(conn, "supplier", from_party_id),
+            amount, 0, label, "party_transfer", transfer_id, doc_no, user_id,
+        )
+        post_gl(
+            conn, transfer_date, _party_subledger_code(conn, "supplier", to_party_id),
+            0, amount, label, "party_transfer", transfer_id, doc_no, user_id,
+        )
+
+
+def _delete_party_transfer_gl(conn, transfer_id=None, doc_no=None):
+    """Remove all GL rows for a party transfer (by id and/or document no)."""
+    deleted = 0
+    if transfer_id is not None:
+        deleted += _delete_gl_reference(conn, "party_transfer", ref_id=int(transfer_id))
+    if doc_no:
+        deleted += _delete_gl_reference(conn, "party_transfer", ref_no=doc_no)
+    return deleted
+
+
+def repair_party_transfer_subledger_gl(*, user_id=None):
+    """Rebuild party_transfer GL onto party subledgers for every voucher.
+
+    Removes legacy AR/AP-control postings and missing same-type transfer GL,
+    then re-posts using ``_post_party_transfer_gl``. Auditable; safe to re-run.
+    """
+    from database import get_connection, rows_to_list
+
+    report = {"deleted_gl_rows": 0, "transfers": 0, "reposted": 0, "errors": []}
+    with get_connection() as conn:
+        # Wipe all legacy party_transfer GL (control AR/AP and any partials)
+        report["deleted_gl_rows"] = _delete_gl_reference(conn, "party_transfer")
+        rows = rows_to_list(conn.execute(
+            """SELECT id, document_no, transfer_date, transfer_type,
+                      from_party_type, from_party_id, to_party_type, to_party_id,
+                      amount, description
+               FROM party_transfers ORDER BY id"""
+        ).fetchall())
+        report["transfers"] = len(rows)
+        for t in rows:
+            try:
+                _post_party_transfer_gl(
+                    conn,
+                    t["transfer_type"],
+                    t["from_party_type"], t["from_party_id"],
+                    t["to_party_type"], t["to_party_id"],
+                    t["amount"], t["transfer_date"],
+                    t.get("description") or t["document_no"],
+                    t["id"], t["document_no"], user_id,
+                )
+                report["reposted"] += 1
+            except Exception as exc:
+                report["errors"].append({
+                    "id": t["id"], "document_no": t.get("document_no"), "error": str(exc),
+                })
+                if len(report["errors"]) > 20:
+                    break
+        if report["errors"]:
+            raise RuntimeError(
+                f"party_transfer GL repair aborted with {len(report['errors'])} errors: "
+                f"{report['errors'][:3]}"
+            )
+    try:
+        from db_audit import log_event
+        log_event(
+            "party_transfers", 0, "repair_gl", user_id=user_id, module="Finance",
+            summary=(
+                f"Repaired party_transfer GL → party subledgers "
+                f"(deleted={report['deleted_gl_rows']}, reposted={report['reposted']})"
+            ),
+        )
+    except Exception:
+        pass
+    return report
+
+
 def record_party_transfer(transfer_type, from_party_type, from_party_id, to_party_type, to_party_id,
                           amount, transfer_date, reference_no="", description="", user_id=None):
-    """Transfer balance between parties without cash — set-off posts AR/AP GL."""
+    """Transfer balance between parties without cash — posts party-subledger GL."""
     import database as db
     if transfer_type not in PARTY_TRANSFER_TYPES:
         raise ValueError("Invalid transfer type.")
@@ -6117,39 +6229,10 @@ def record_party_transfer(transfer_type, from_party_type, from_party_id, to_part
         else:
             auto = f"Supplier transfer: {from_lbl} → {to_lbl}"
         label = f"{auto} — {description.strip()}" if description.strip() else auto
-        if transfer_type == "customer_to_customer":
-            conn.execute(
-                "UPDATE customers SET current_balance=current_balance-?, modified_at=? WHERE id=?",
-                (amount, now(), from_party_id),
-            )
-            conn.execute(
-                "UPDATE customers SET current_balance=current_balance+?, modified_at=? WHERE id=?",
-                (amount, now(), to_party_id),
-            )
-        elif transfer_type == "supplier_to_supplier":
-            # Ledger: from = Debit (+Dr), to = Credit (−Cr)
-            conn.execute(
-                "UPDATE suppliers SET current_balance=current_balance+?, modified_at=? WHERE id=?",
-                (amount, now(), from_party_id),
-            )
-            conn.execute(
-                "UPDATE suppliers SET current_balance=current_balance-?, modified_at=? WHERE id=?",
-                (amount, now(), to_party_id),
-            )
-        else:
-            cust_id = from_party_id if from_party_type == "customer" else to_party_id
-            sup_id = from_party_id if from_party_type == "supplier" else to_party_id
-            conn.execute(
-                "UPDATE customers SET current_balance=current_balance-?, modified_at=? WHERE id=?",
-                (amount, now(), cust_id),
-            )
-            # Set-off credits customer AR and debits supplier (reduces payable → +Dr)
-            conn.execute(
-                "UPDATE suppliers SET current_balance=current_balance+?, modified_at=? WHERE id=?",
-                (amount, now(), sup_id),
-            )
-            post_gl(conn, transfer_date, gl_account_code("ap"), amount, 0, label, "party_transfer", 0, doc_no, user_id)
-            post_gl(conn, transfer_date, gl_account_code("ar"), 0, amount, label, "party_transfer", 0, doc_no, user_id)
+        _apply_party_transfer_balances(
+            conn, transfer_type, from_party_type, from_party_id,
+            to_party_type, to_party_id, amount, reverse=False,
+        )
         cur = conn.execute(
             """INSERT INTO party_transfers(document_no, transfer_date, transfer_type,
                from_party_type, from_party_id, to_party_type, to_party_id, amount,
@@ -6159,13 +6242,11 @@ def record_party_transfer(transfer_type, from_party_type, from_party_id, to_part
              to_party_type, to_party_id, amount, reference_no, label, user_id, now()),
         )
         tid = cur.lastrowid
-        # Fix set-off GL reference_id from 0 → transfer id (legacy rows still reverse by document_no)
-        if transfer_type == "customer_to_supplier":
-            conn.execute(
-                """UPDATE general_ledger SET reference_id=?
-                   WHERE reference_type='party_transfer' AND reference_no=? AND reference_id=0""",
-                (tid, doc_no),
-            )
+        _post_party_transfer_gl(
+            conn, transfer_type, from_party_type, from_party_id,
+            to_party_type, to_party_id, amount, transfer_date,
+            label, tid, doc_no, user_id,
+        )
         return {"id": tid, "document_no": doc_no}
 
 
@@ -6219,9 +6300,7 @@ def reverse_party_transfer(transfer_id, user_id, reason=""):
             conn, t["transfer_type"], t["from_party_type"], t["from_party_id"],
             t["to_party_type"], t["to_party_id"], t["amount"], reverse=True,
         )
-        if t["transfer_type"] == "customer_to_supplier":
-            _delete_gl_reference(conn, "party_transfer", ref_id=int(transfer_id))
-            _delete_gl_reference(conn, "party_transfer", ref_no=t.get("document_no"))
+        _delete_party_transfer_gl(conn, transfer_id=int(transfer_id), doc_no=t.get("document_no"))
         conn.execute("DELETE FROM party_transfers WHERE id=?", (transfer_id,))
     try:
         from db_audit import log_event
@@ -6260,9 +6339,7 @@ def update_party_transfer(transfer_id, transfer_type, from_party_type, from_part
             conn, old["transfer_type"], old["from_party_type"], old["from_party_id"],
             old["to_party_type"], old["to_party_id"], old["amount"], reverse=True,
         )
-        if old["transfer_type"] == "customer_to_supplier":
-            _delete_gl_reference(conn, "party_transfer", ref_id=int(transfer_id))
-            _delete_gl_reference(conn, "party_transfer", ref_no=old.get("document_no"))
+        _delete_party_transfer_gl(conn, transfer_id=int(transfer_id), doc_no=old.get("document_no"))
 
         doc_no = old["document_no"]
         fc, fn = _party_label(conn, from_party_type, from_party_id)
@@ -6281,11 +6358,11 @@ def update_party_transfer(transfer_id, transfer_type, from_party_type, from_part
             conn, transfer_type, from_party_type, from_party_id,
             to_party_type, to_party_id, amount, reverse=False,
         )
-        if transfer_type == "customer_to_supplier":
-            post_gl(conn, transfer_date, gl_account_code("ap"), amount, 0, label,
-                    "party_transfer", transfer_id, doc_no, user_id)
-            post_gl(conn, transfer_date, gl_account_code("ar"), 0, amount, label,
-                    "party_transfer", transfer_id, doc_no, user_id)
+        _post_party_transfer_gl(
+            conn, transfer_type, from_party_type, from_party_id,
+            to_party_type, to_party_id, amount, transfer_date,
+            label, transfer_id, doc_no, user_id,
+        )
 
         conn.execute(
             """UPDATE party_transfers SET transfer_date=?, transfer_type=?,
