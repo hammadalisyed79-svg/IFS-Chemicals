@@ -28,10 +28,11 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# env / secrets
+# env / secrets (keep example)
 .env
+.env.local
 .env*.local
-.env*
+!.env.example
 
 # vercel
 .vercel
