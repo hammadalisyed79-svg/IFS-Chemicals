@@ -1748,15 +1748,18 @@ def page_trial_balance():
         show_cols = [
             c for c in (
                 "code", "name", "group_type",
-                "opening_balance", "period_debit", "period_credit", "closing_balance",
+                "opening_balance", "period_debit", "period_credit", "account_balance",
             )
             if c in df.columns
         ]
+        if "account_balance" not in show_cols and "closing_balance" in df.columns:
+            show_cols.append("closing_balance")
         df = df[show_cols]
         opening = float(pd.to_numeric(df.get("opening_balance"), errors="coerce").fillna(0).sum()) if "opening_balance" in df.columns else 0.0
         total_deb = float(pd.to_numeric(df.get("period_debit"), errors="coerce").fillna(0).sum()) if "period_debit" in df.columns else 0.0
         total_cred = float(pd.to_numeric(df.get("period_credit"), errors="coerce").fillna(0).sum()) if "period_credit" in df.columns else 0.0
-        closing = float(pd.to_numeric(df.get("closing_balance"), errors="coerce").fillna(0).sum()) if "closing_balance" in df.columns else 0.0
+        bal_col = "account_balance" if "account_balance" in df.columns else "closing_balance"
+        closing = float(pd.to_numeric(df.get(bal_col), errors="coerce").fillna(0).sum()) if bal_col in df.columns else 0.0
         k1, k2, k3, k4, k5 = st.columns(5, gap="small")
         k1.markdown(
             f"<div class='txn-kpi-card'><p class='txn-kpi'>Accounts</p>"
@@ -1779,7 +1782,7 @@ def page_trial_balance():
             unsafe_allow_html=True,
         )
         k5.markdown(
-            f"<div class='txn-kpi-card'><p class='txn-kpi'>Closing</p>"
+            f"<div class='txn-kpi-card'><p class='txn-kpi'>Account Balance</p>"
             f"<p class='txn-kpi-val'>{fmt_signed_dr_cr(closing)}</p></div>",
             unsafe_allow_html=True,
         )
@@ -1790,7 +1793,8 @@ def page_trial_balance():
             "opening_balance": "Opening Balance",
             "period_debit": "Period Debit",
             "period_credit": "Period Credit",
-            "closing_balance": "Closing Balance",
+            "account_balance": "Account Balance",
+            "closing_balance": "Account Balance",
         })
         render_dataframe_html_table(display)
         export_df(df, "trial_balance", title="Trial Balance")

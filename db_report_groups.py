@@ -32,15 +32,23 @@ def summarize_trial_balance(rows, view_mode):
                     "period_debit": 0.0,
                     "period_credit": 0.0,
                     "closing_balance": 0.0,
+                    "account_balance": 0.0,
                     "balance": 0.0,
                 }
             out[k]["opening_balance"] += float(r.get("opening_balance") or 0)
             out[k]["period_debit"] += float(r.get("period_debit") or 0)
             out[k]["period_credit"] += float(r.get("period_credit") or 0)
             close = float(
-                r.get("closing_balance") if r.get("closing_balance") is not None else r.get("balance") or 0
+                r.get("account_balance")
+                if r.get("account_balance") is not None
+                else (
+                    r.get("closing_balance")
+                    if r.get("closing_balance") is not None
+                    else r.get("balance") or 0
+                )
             )
             out[k]["closing_balance"] += close
+            out[k]["account_balance"] += close
             out[k]["balance"] += close
         order = ("asset", "liability", "equity", "income", "expense", "other")
         return [out[k] for k in order if k in out] + [out[k] for k in out if k not in order]
@@ -66,15 +74,23 @@ def summarize_trial_balance(rows, view_mode):
                     "period_debit": 0.0,
                     "period_credit": 0.0,
                     "closing_balance": 0.0,
+                    "account_balance": 0.0,
                     "balance": 0.0,
                 }
             out[k]["opening_balance"] += float(r.get("opening_balance") or 0)
             out[k]["period_debit"] += float(r.get("period_debit") or 0)
             out[k]["period_credit"] += float(r.get("period_credit") or 0)
             close = float(
-                r.get("closing_balance") if r.get("closing_balance") is not None else r.get("balance") or 0
+                r.get("account_balance")
+                if r.get("account_balance") is not None
+                else (
+                    r.get("closing_balance")
+                    if r.get("closing_balance") is not None
+                    else r.get("balance") or 0
+                )
             )
             out[k]["closing_balance"] += close
+            out[k]["account_balance"] += close
             out[k]["balance"] += close
         rows_out = list(out.values())
         rows_out.sort(key=lambda x: (x["code"] == "—", x["code"]))

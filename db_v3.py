@@ -3918,8 +3918,10 @@ def get_trial_balance(from_date=None, to_date=None, account_group_id=None, view_
     with get_connection() as conn:
         rows = rows_to_list(conn.execute(q, p).fetchall())
     for r in rows:
-        # Alias for older callers / exports that still expect ``balance`` = closing
-        r["balance"] = r.get("closing_balance")
+        close = r.get("closing_balance")
+        # Aliases: account_balance (UI label), balance (legacy callers)
+        r["account_balance"] = close
+        r["balance"] = close
     mode = view_mode or TRIAL_VIEW_DETAIL
     return summarize_trial_balance(rows, mode)
 

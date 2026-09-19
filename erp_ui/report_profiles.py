@@ -103,7 +103,7 @@ REPORT_COLUMNS: dict[str, list[str]] = {
     ],
     "Trial Balance": [
         "code", "name", "group_type",
-        "opening_balance", "period_debit", "period_credit", "closing_balance",
+        "opening_balance", "period_debit", "period_credit", "account_balance",
     ],
     "Zero Movement Accounts": [
         "code", "name", "group_type", "group_name", "period_debit", "period_credit",
@@ -401,13 +401,16 @@ def summary_keys_for_report(report_title: str | None, df: pd.DataFrame) -> dict:
         pdr = _sum_col_any(df, "period_debit", "Period Debit")
         pcr = _sum_col_any(df, "period_credit", "Period Credit")
         closing = _sum_col_any(
-            df, "closing_balance", "Closing Balance", "balance", "Balance",
+            df,
+            "account_balance", "Account Balance",
+            "closing_balance", "Closing Balance",
+            "balance", "Balance",
         )
         return {
             "Total Opening": f"{abs(opening):,.2f} {'Dr' if opening >= 0 else 'Cr'}",
             "Total Period Debit": f"{pdr:,.2f}",
             "Total Period Credit": f"{pcr:,.2f}",
-            "Closing": f"{abs(closing):,.2f} {'Dr' if closing >= 0 else 'Cr'}",
+            "Account Balance": f"{abs(closing):,.2f} {'Dr' if closing >= 0 else 'Cr'}",
         }
     ledger_titles = (
         "Customer Ledger", "Supplier Ledger",
