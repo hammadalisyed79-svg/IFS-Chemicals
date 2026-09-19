@@ -101,7 +101,10 @@ REPORT_COLUMNS: dict[str, list[str]] = {
     "General Ledger": [
         "entry_date", "account_code", "account_name", "description", "reference_no", "debit", "credit",
     ],
-    "Trial Balance": ["code", "name", "group_type", "period_debit", "period_credit", "balance"],
+    "Trial Balance": [
+        "code", "name", "group_type",
+        "opening_balance", "period_debit", "period_credit", "closing_balance",
+    ],
     "Zero Movement Accounts": [
         "code", "name", "group_type", "group_name", "period_debit", "period_credit",
     ],
@@ -349,29 +352,29 @@ def summary_keys_for_report(report_title: str | None, df: pd.DataFrame) -> dict:
     if df is None or df.empty:
         return {}
     report_title = _report_profile_key(report_title) or report_title
+    def _sum_col_any(frame, *names):
+        for col in names:
+            if col in frame.columns:
+                try:
+                    raw = frame[col]
+                    if getattr(raw, "dtype", None) == object:
+                        s = pd.to_numeric(
+                            raw.astype(str).str.replace(",", "", regex=False),
+                            errors="coerce",
+                        )
+                    else:
+                        s = pd.to_numeric(raw, errors="coerce")
+                    return float(s.fillna(0).sum())
+                except Exception:
+                    pass
+        return 0.0
+
     if report_title == "Customer Outstanding":
         # KPIs must match visible columns: Period Debit/Credit + Closing.
         # (Older "Debit/Credit" KPIs summed closing receivable/payable sides and
         # looked wrong next to Period Debit/Credit in the table.)
-        def _sum_col(*names):
-            for col in names:
-                if col in df.columns:
-                    try:
-                        raw = df[col]
-                        if getattr(raw, "dtype", None) == object:
-                            s = pd.to_numeric(
-                                raw.astype(str).str.replace(",", "", regex=False),
-                                errors="coerce",
-                            )
-                        else:
-                            s = pd.to_numeric(raw, errors="coerce")
-                        return float(s.fillna(0).sum())
-                    except Exception:
-                        pass
-            return 0.0
-
-        pdr = _sum_col("period_debit", "Period Debit")
-        pcr = _sum_col("period_credit", "Period Credit")
+        pdr = _sum_col_any(df, "period_debit", "Period Debit")
+        pcr = _sum_col_any(df, "period_credit", "Period Credit")
         bal_raw = df["balance"] if "balance" in df.columns else df.get("Balance")
         if bal_raw is not None and getattr(bal_raw, "dtype", None) == object:
             bals = pd.to_numeric(
@@ -381,7 +384,7 @@ def summary_keys_for_report(report_title: str | None, df: pd.DataFrame) -> dict:
         else:
             bals = pd.to_numeric(bal_raw if bal_raw is not None else 0, errors="coerce").fillna(0)
         net = float(bals.sum())
-        opening = _sum_col("opening", "Opening")
+        opening = _sum_col_any(df, "opening", "Opening")
         out = {}
         if "opening" in df.columns or "Opening" in df.columns:
             out["Total Opening"] = (
@@ -391,6 +394,21 @@ def summary_keys_for_report(report_title: str | None, df: pd.DataFrame) -> dict:
         out["Total Period Credit"] = f"{pcr:,.2f}"
         out["Closing"] = f"{abs(net):,.2f} {'Dr' if net >= 0 else 'Cr'}"
         return out
+    if report_title == "Trial Balance":
+        opening = _sum_col_any(
+            df, "opening_balance", "Opening Balance", "opening", "Opening",
+        )
+        pdr = _sum_col_any(df, "period_debit", "Period Debit")
+        pcr = _sum_col_any(df, "period_credit", "Period Credit")
+        closing = _sum_col_any(
+            df, "closing_balance", "Closing Balance", "balance", "Balance",
+        )
+        return {
+            "Total Opening": f"{abs(opening):,.2f} {'Dr' if opening >= 0 else 'Cr'}",
+            "Total Period Debit": f"{pdr:,.2f}",
+            "Total Period Credit": f"{pcr:,.2f}",
+            "Closing": f"{abs(closing):,.2f} {'Dr' if closing >= 0 else 'Cr'}",
+        }
     ledger_titles = (
         "Customer Ledger", "Supplier Ledger",
         "Customer Ledger (Detailed)", "Supplier Ledger (Detailed)",

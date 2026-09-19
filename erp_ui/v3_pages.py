@@ -1731,7 +1731,7 @@ def page_general_ledger():
 
 
 def page_trial_balance():
-    from erp_ui.helpers import render_dataframe_html_table
+    from erp_ui.helpers import render_dataframe_html_table, fmt_signed_dr_cr
 
     hlp.std_page_header("Trial Balance", status="register", status_kind="shell")
     from erp_ui.report_grouping import finance_group_filters
@@ -1745,31 +1745,55 @@ def page_trial_balance():
     )
     if rows:
         df = pd.DataFrame(rows)
-        total_deb = total_cred = 0.0
-        for col in df.columns:
-            cl = str(col).lower()
-            if "debit" in cl:
-                total_deb = float(pd.to_numeric(df[col], errors="coerce").fillna(0).sum())
-            if "credit" in cl:
-                total_cred = float(pd.to_numeric(df[col], errors="coerce").fillna(0).sum())
-        k1, k2, k3 = st.columns(3, gap="small")
+        show_cols = [
+            c for c in (
+                "code", "name", "group_type",
+                "opening_balance", "period_debit", "period_credit", "closing_balance",
+            )
+            if c in df.columns
+        ]
+        df = df[show_cols]
+        opening = float(pd.to_numeric(df.get("opening_balance"), errors="coerce").fillna(0).sum()) if "opening_balance" in df.columns else 0.0
+        total_deb = float(pd.to_numeric(df.get("period_debit"), errors="coerce").fillna(0).sum()) if "period_debit" in df.columns else 0.0
+        total_cred = float(pd.to_numeric(df.get("period_credit"), errors="coerce").fillna(0).sum()) if "period_credit" in df.columns else 0.0
+        closing = float(pd.to_numeric(df.get("closing_balance"), errors="coerce").fillna(0).sum()) if "closing_balance" in df.columns else 0.0
+        k1, k2, k3, k4, k5 = st.columns(5, gap="small")
         k1.markdown(
             f"<div class='txn-kpi-card'><p class='txn-kpi'>Accounts</p>"
             f"<p class='txn-kpi-val'>{len(df):,}</p></div>",
             unsafe_allow_html=True,
         )
         k2.markdown(
-            f"<div class='txn-kpi-card'><p class='txn-kpi'>Total Debit</p>"
-            f"<p class='txn-kpi-val'>{fmt(total_deb)}</p></div>",
+            f"<div class='txn-kpi-card'><p class='txn-kpi'>Opening</p>"
+            f"<p class='txn-kpi-val'>{fmt_signed_dr_cr(opening)}</p></div>",
             unsafe_allow_html=True,
         )
         k3.markdown(
-            f"<div class='txn-kpi-card'><p class='txn-kpi'>Total Credit</p>"
+            f"<div class='txn-kpi-card'><p class='txn-kpi'>Period Debit</p>"
+            f"<p class='txn-kpi-val'>{fmt(total_deb)}</p></div>",
+            unsafe_allow_html=True,
+        )
+        k4.markdown(
+            f"<div class='txn-kpi-card'><p class='txn-kpi'>Period Credit</p>"
             f"<p class='txn-kpi-val'>{fmt(total_cred)}</p></div>",
             unsafe_allow_html=True,
         )
-        render_dataframe_html_table(df)
-        export_df(df, "trial_balance")
+        k5.markdown(
+            f"<div class='txn-kpi-card'><p class='txn-kpi'>Closing</p>"
+            f"<p class='txn-kpi-val'>{fmt_signed_dr_cr(closing)}</p></div>",
+            unsafe_allow_html=True,
+        )
+        display = df.rename(columns={
+            "code": "Code",
+            "name": "Name",
+            "group_type": "Group Type",
+            "opening_balance": "Opening Balance",
+            "period_debit": "Period Debit",
+            "period_credit": "Period Credit",
+            "closing_balance": "Closing Balance",
+        })
+        render_dataframe_html_table(display)
+        export_df(df, "trial_balance", title="Trial Balance")
 
 
 def page_balance_sheet():

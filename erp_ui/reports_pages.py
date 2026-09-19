@@ -150,8 +150,11 @@ REPORT_CATALOG = {
         ),
         _r("General Ledger", "GL entries by account and period (all accounts, or pick one).", account=True,
            account_group=True),
-        _r("Trial Balance", "Debit/credit balances by account.",
-           account_group=True, group_view=True),
+        _r(
+            "Trial Balance",
+            "Opening (before From) + Period Debit − Period Credit = Closing Balance by account.",
+            account_group=True, group_view=True,
+        ),
         _r(
             "Zero Movement Accounts",
             "Accounts with no debit, no credit, or neither (zero activity) in the selected period.",

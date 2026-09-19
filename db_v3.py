@@ -3869,26 +3869,57 @@ def get_account_ledger(account_id, from_date=None, to_date=None):
 
 
 def get_trial_balance(from_date=None, to_date=None, account_group_id=None, view_mode="detail"):
+    """Period trial balance with opening / period / closing columns.
+
+    Opening matches Account Ledger: COA ``opening_balance`` + GL before ``from_date``.
+    Closing = opening + period debit − period credit (same signed Dr+/Cr− convention).
+    """
     from database import get_connection, rows_to_list
     from db_report_groups import summarize_trial_balance, TRIAL_VIEW_DETAIL
 
+    # Conditional aggregates so one GL join yields opening (pre-from), period, and closing.
     q = """SELECT a.code, a.name, g.group_type,
                   a.group_id AS master_group_id, mg.code AS group_code, mg.name AS group_name,
-                  a.opening_balance + COALESCE(SUM(gl.debit),0) - COALESCE(SUM(gl.credit),0) AS balance,
-                  COALESCE(SUM(gl.debit),0) AS period_debit, COALESCE(SUM(gl.credit),0) AS period_credit
+                  ROUND(
+                    a.opening_balance
+                    + COALESCE(SUM(CASE WHEN ? IS NOT NULL AND gl.entry_date < ? THEN gl.debit ELSE 0 END), 0)
+                    - COALESCE(SUM(CASE WHEN ? IS NOT NULL AND gl.entry_date < ? THEN gl.credit ELSE 0 END), 0)
+                  , 2) AS opening_balance,
+                  COALESCE(SUM(CASE
+                    WHEN (? IS NULL OR gl.entry_date >= ?)
+                     AND (? IS NULL OR gl.entry_date <= ?)
+                    THEN gl.debit ELSE 0 END), 0) AS period_debit,
+                  COALESCE(SUM(CASE
+                    WHEN (? IS NULL OR gl.entry_date >= ?)
+                     AND (? IS NULL OR gl.entry_date <= ?)
+                    THEN gl.credit ELSE 0 END), 0) AS period_credit,
+                  ROUND(
+                    a.opening_balance
+                    + COALESCE(SUM(CASE WHEN (? IS NULL OR gl.entry_date <= ?) THEN gl.debit ELSE 0 END), 0)
+                    - COALESCE(SUM(CASE WHEN (? IS NULL OR gl.entry_date <= ?) THEN gl.credit ELSE 0 END), 0)
+                  , 2) AS closing_balance
            FROM chart_of_accounts a
            JOIN account_groups g ON a.account_group_id=g.id
            LEFT JOIN master_groups mg ON a.group_id=mg.id AND mg.entity_type='account'
            LEFT JOIN general_ledger gl ON gl.account_id=a.id
-               AND (? IS NULL OR gl.entry_date>=?) AND (? IS NULL OR gl.entry_date<=?)
            WHERE a.is_active=1"""
-    p = [from_date, from_date, to_date, to_date]
+    p = [
+        from_date, from_date,
+        from_date, from_date,
+        from_date, from_date, to_date, to_date,
+        from_date, from_date, to_date, to_date,
+        to_date, to_date,
+        to_date, to_date,
+    ]
     if account_group_id:
         q += " AND a.group_id=?"
         p.append(account_group_id)
     q += " GROUP BY a.id ORDER BY a.code"
     with get_connection() as conn:
         rows = rows_to_list(conn.execute(q, p).fetchall())
+    for r in rows:
+        # Alias for older callers / exports that still expect ``balance`` = closing
+        r["balance"] = r.get("closing_balance")
     mode = view_mode or TRIAL_VIEW_DETAIL
     return summarize_trial_balance(rows, mode)
 
