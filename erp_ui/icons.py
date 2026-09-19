@@ -35,6 +35,7 @@ SCREEN_ICONS = {
     "Products": "▤",
     "General Ledger": "▥",
     "Trial Balance": "▥",
+    "Zero Movement Accounts": "▥",
     "Gate Pass": "⛊",
     "Weighbridge": "⚖",
 }

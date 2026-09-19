@@ -102,6 +102,9 @@ REPORT_COLUMNS: dict[str, list[str]] = {
         "entry_date", "account_code", "account_name", "description", "reference_no", "debit", "credit",
     ],
     "Trial Balance": ["code", "name", "group_type", "period_debit", "period_credit", "balance"],
+    "Zero Movement Accounts": [
+        "code", "name", "group_type", "group_name", "period_debit", "period_credit",
+    ],
     "Balance Sheet": ["group_type", "code", "name", "balance"],
     "Journal Register": ["document_no", "voucher_date", "description", "total_debit", "total_credit", "status"],
     "Daily Activity Report": [
@@ -184,6 +187,7 @@ REPORT_LAYOUT = {
     "Profit & Loss": "portrait_full",
     "Balance Sheet": "portrait_full",
     "Trial Balance": "portrait_full",
+    "Zero Movement Accounts": "portrait_full",
     "Cash Book": "portrait_full",
     "Bank Book": "portrait_full",
     "Item Wise Sale (Detail)": "portrait_full",

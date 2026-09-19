@@ -432,6 +432,10 @@ def page_profit_loss():
     return _page()
 
 
+def page_zero_movement_accounts():
+    from erp_ui.finance_report_pages import page_zero_movement_accounts as _page
+    return _page()
+
 
 # ---------------------------------------------------------------------------
 # User Management
@@ -569,6 +573,7 @@ PAGES = {
     "Party Transfer": fin.page_party_transfer,
     "General Ledger": v3.page_general_ledger,
     "Trial Balance": v3.page_trial_balance,
+    "Zero Movement Accounts": page_zero_movement_accounts,
     "Profit & Loss Report": page_profit_loss,
     "Balance Sheet": v3.page_balance_sheet,
     "Fiscal Year Closing": fiscal.page_fiscal_year_closing,

@@ -3892,6 +3892,62 @@ def get_trial_balance(from_date=None, to_date=None, account_group_id=None, view_
     mode = view_mode or TRIAL_VIEW_DETAIL
     return summarize_trial_balance(rows, mode)
 
+
+def get_accounts_no_activity(
+    from_date=None,
+    to_date=None,
+    mode="both",
+    include_inactive=False,
+    account_group_id=None,
+):
+    """COA accounts with no debit, no credit, or neither in the selected period.
+
+    mode:
+      - debit: period debit = 0 (credits may exist)
+      - credit: period credit = 0 (debits may exist)
+      - both: period debit = 0 AND period credit = 0 (no movement; includes accounts with no GL rows)
+    Accounts with no GL lines in the period are treated as zero debit and zero credit.
+    """
+    from database import get_connection, rows_to_list
+
+    mode_key = (mode or "both").strip().lower()
+    if mode_key not in ("debit", "credit", "both"):
+        mode_key = "both"
+
+    q = """SELECT a.id, a.code, a.name, g.group_type,
+                  mg.code AS group_code, mg.name AS group_name,
+                  COALESCE(SUM(gl.debit), 0) AS period_debit,
+                  COALESCE(SUM(gl.credit), 0) AS period_credit
+           FROM chart_of_accounts a
+           JOIN account_groups g ON a.account_group_id = g.id
+           LEFT JOIN master_groups mg ON a.group_id = mg.id AND mg.entity_type = 'account'
+           LEFT JOIN general_ledger gl ON gl.account_id = a.id
+               AND (? IS NULL OR gl.entry_date >= ?)
+               AND (? IS NULL OR gl.entry_date <= ?)
+           WHERE 1=1"""
+    p = [from_date, from_date, to_date, to_date]
+    if not include_inactive:
+        q += " AND a.is_active = 1"
+    if account_group_id:
+        q += " AND a.group_id = ?"
+        p.append(account_group_id)
+    q += " GROUP BY a.id"
+    if mode_key == "debit":
+        q += " HAVING COALESCE(SUM(gl.debit), 0) = 0"
+    elif mode_key == "credit":
+        q += " HAVING COALESCE(SUM(gl.credit), 0) = 0"
+    else:
+        q += " HAVING COALESCE(SUM(gl.debit), 0) = 0 AND COALESCE(SUM(gl.credit), 0) = 0"
+    q += " ORDER BY a.code"
+
+    with get_connection() as conn:
+        rows = rows_to_list(conn.execute(q, p).fetchall())
+    for r in rows:
+        r["period_debit"] = float(r.get("period_debit") or 0)
+        r["period_credit"] = float(r.get("period_credit") or 0)
+        r["filter_mode"] = mode_key
+    return rows
+
 def get_balance_sheet(as_of=None, account_group_id=None, view_mode="detail"):
     from database import get_connection, rows_to_list
     from db_report_groups import summarize_balance_sheet_rows, TRIAL_VIEW_DETAIL  # noqa: F401

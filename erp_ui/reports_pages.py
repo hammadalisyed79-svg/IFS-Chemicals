@@ -152,6 +152,11 @@ REPORT_CATALOG = {
            account_group=True),
         _r("Trial Balance", "Debit/credit balances by account.",
            account_group=True, group_view=True),
+        _r(
+            "Zero Movement Accounts",
+            "Accounts with no debit, no credit, or neither (zero activity) in the selected period.",
+            date=True,
+        ),
         _r("Profit & Loss", "Income and expense summary.", date=True),
         _r("Balance Sheet", "Assets, liabilities, equity — use period end date as “as at”.", date=True,
            account_group=True, group_view=True),
@@ -384,6 +389,19 @@ def _render_filters(meta: dict, key: str = "rpt"):
             # Widget keys own session state — do not assign rpt_fd/rpt_td after instantiation.
             fd = c1.date_input("From", key=f"{key}_fd")
             td = c2.date_input("To", key=f"{key}_td")
+        if (meta.get("title") or "") == "Zero Movement Accounts":
+            st.selectbox(
+                "Activity filter",
+                ["Debit", "Credit", "Both"],
+                index=2,
+                key=f"{key}_zna_mode",
+                help="Debit: no debits · Credit: no credits · Both: no activity either side",
+            )
+            st.checkbox(
+                "Include inactive accounts",
+                value=False,
+                key=f"{key}_zna_inactive",
+            )
     else:
         fd = str(date.today().replace(day=1))
         td = str(date.today())
@@ -558,6 +576,12 @@ def _render_filters(meta: dict, key: str = "rpt"):
     gf["include_linked"] = bool(include_linked)
     if (meta.get("title") or "") in ("Production Consumption", "Production Consumption (by Order)"):
         gf["consumption_view"] = "day" if str(cons_view).startswith("Day") else "order"
+    if (meta.get("title") or "") == "Zero Movement Accounts":
+        mode_lbl = st.session_state.get(f"{key}_zna_mode") or "Both"
+        mode_map = {"Debit": "debit", "Credit": "credit", "Both": "both"}
+        gf["activity_mode"] = mode_map.get(mode_lbl, "both")
+        gf["activity_mode_label"] = mode_lbl
+        gf["include_inactive"] = bool(st.session_state.get(f"{key}_zna_inactive"))
     return str(fd), str(td), cid, sid, pid, wid, eid, payroll_id, gf, aid, po_id
 
 
@@ -1004,6 +1028,10 @@ def _business_reports_tab():
                         export_filters["View"] = "Day register"
                     elif report in ("Production Consumption", "Production Consumption (by Order)"):
                         export_filters["View"] = "By production number"
+                    if report == "Zero Movement Accounts":
+                        export_filters["Filter"] = (gf or {}).get("activity_mode_label") or "Both"
+                        if (gf or {}).get("include_inactive"):
+                            export_filters["Inactive"] = "Included"
                     st.session_state["rpt_meta"] = (
                         report,
                         period_lbl,
@@ -1360,6 +1388,24 @@ def _run_report(report, fd, td, cid, sid, pid, wid, eid, payroll_id=None, gf=Non
         return pd.DataFrame(db.get_trial_balance(
             fd, td, account_group_id=gf.get("account_group_id"), view_mode=fvm,
         ))
+    if report == "Zero Movement Accounts":
+        mode = (gf or {}).get("activity_mode") or "both"
+        rows = db.get_accounts_no_activity(
+            fd, td,
+            mode=mode,
+            include_inactive=bool((gf or {}).get("include_inactive")),
+        )
+        df = pd.DataFrame(rows)
+        if not df.empty:
+            keep = [
+                c for c in (
+                    "code", "name", "group_type", "group_name",
+                    "period_debit", "period_credit",
+                )
+                if c in df.columns
+            ]
+            df = df[keep]
+        return df
     if report == "Profit & Loss":
         return profit_loss_dataframe(db.get_profit_loss(fd, td))
     if report == "Balance Sheet":
