@@ -25,3 +25,15 @@ _tmp_*.py
 *.bundle
 data/documents/
 ifs-chemicals-push.bundle
+
+
+
+# marketing website (Next.js)
+website/node_modules/
+website/.next/
+website/.vercel/
+website/.env
+website/.env.local
+website/.env*.local
+!website/.env.example
+website/next-env.d.ts
