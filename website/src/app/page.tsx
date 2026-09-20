@@ -21,10 +21,10 @@ export default function HomePage() {
 
         <div className="container-site relative flex min-h-[min(92svh,860px)] flex-col justify-end pb-[calc(5.5rem+var(--dock-h,0px))] pt-20 md:justify-center md:pb-24 md:pt-24">
           <p className="animate-rise text-[11px] font-semibold uppercase tracking-[0.22em] text-white/70">
-            Manufacturer · Gujrat, Pakistan
+            IFS Chemicals · Gujrat, Pakistan
           </p>
           <h1 className="animate-rise-delay font-display mt-5 max-w-2xl text-[2.35rem] font-semibold text-white sm:text-5xl md:text-6xl lg:text-[4.25rem]">
-            Cleaning solutions engineered for everyday performance.
+            Innovative Future Solutions for everyday performance.
           </h1>
           <p className="animate-rise-delay-2 mt-5 max-w-lg text-[1.05rem] leading-relaxed text-white/78 md:mt-6 md:text-lg">
             Detergent powders, hygiene care, and packaging systems for retail
