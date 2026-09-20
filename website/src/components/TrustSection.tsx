@@ -15,14 +15,9 @@ const gallery = [
     label: "PET systems",
   },
   {
-    src: "/images/about-team.jpg",
-    alt: "IFS Chemicals operations",
-    label: "Operations",
-  },
-  {
     src: "/images/products/flexible-packaging.jpg",
     alt: "Flexible packaging formats",
-    label: "Packaging lines",
+    label: "Flexible packaging",
   },
   {
     src: "/images/products/corrugated-box.jpg",
