@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { FormEvent, useState } from "react";
 import { useQuote } from "@/components/QuoteProvider";
+import { trackEvent } from "@/lib/analytics";
 
 export function QuoteForm() {
   const { lines, setQty, remove, clear, count } = useQuote();
@@ -68,6 +69,11 @@ export function QuoteForm() {
       setMessage(
         "Thank you. Your quote request has been received — our commercial team will respond shortly.",
       );
+      trackEvent("generate_lead", {
+        inquiry_type: "quote",
+        method: "quote_form",
+        item_count: lines.length,
+      });
       if (typeof json.whatsappFollowUp === "string") {
         setWhatsappFollowUp(json.whatsappFollowUp);
       }

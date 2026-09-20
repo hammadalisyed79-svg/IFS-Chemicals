@@ -27,6 +27,8 @@ In **Vercel → ifs-website → Settings → Environment Variables**, set:
 | Variable | Purpose |
 |----------|---------|
 | `DATABASE_URL` | Store inquiries in Neon (required for inbox) |
+| `LEADS_ADMIN_SECRET` | Unlock `/admin/leads` staff inbox |
+| `NEXT_PUBLIC_GA_MEASUREMENT_ID` | Optional GA4 measurement ID (`G-…`) |
 | `RESEND_API_KEY` | Optional email notify |
 | `CONTACT_NOTIFY_EMAIL` | Optional recipient (default `info@ifschemicals.com`) |
 | `CONTACT_NOTIFY_WEBHOOK_URL` | Optional Slack/Discord/Make webhook |
@@ -66,6 +68,12 @@ Optional: set `DATABASE_URL` in Vercel project env for contact form storage.
 - `/quote` — build a multi-SKU list (localStorage), submit as `inquiryType: quote`
 - Contact API stores optional `quote_items` JSON in Neon
 - Partner portal remains the place for authorised trade pricing / ERP tools
+
+## Growth & ops (Phase 6)
+
+- Staff inbox: https://ifschemicals.com/admin/leads (set `LEADS_ADMIN_SECRET` in Vercel)
+- Optional GA4 via `NEXT_PUBLIC_GA_MEASUREMENT_ID` — fires `generate_lead` on contact/quote success
+- `/admin/` disallowed in robots.txt
 
 ## GoDaddy DNS cutover (apex is currently Parked)
 

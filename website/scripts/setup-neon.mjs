@@ -30,4 +30,5 @@ await sql`ALTER TABLE contact_inquiries ADD COLUMN IF NOT EXISTS inquiry_type TE
 await sql`ALTER TABLE contact_inquiries ADD COLUMN IF NOT EXISTS city TEXT`;
 await sql`ALTER TABLE contact_inquiries ADD COLUMN IF NOT EXISTS volume TEXT`;
 await sql`ALTER TABLE contact_inquiries ADD COLUMN IF NOT EXISTS brand TEXT`;
-console.log("contact_inquiries table is ready (Phase 2 columns included).");
+await sql`ALTER TABLE contact_inquiries ADD COLUMN IF NOT EXISTS quote_items TEXT`;
+console.log("contact_inquiries table is ready (Phase 2–5 columns included).");

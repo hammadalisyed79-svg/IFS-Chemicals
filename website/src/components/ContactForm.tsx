@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useMemo, useState } from "react";
+import { trackEvent } from "@/lib/analytics";
 
 type InquiryType = "general" | "distributor" | "b2b";
 
@@ -36,6 +37,10 @@ export function ContactForm() {
       if (!res.ok) throw new Error(json.error || "Failed to send");
       setStatus("ok");
       setMessage("Thank you. We have received your inquiry and will respond shortly.");
+      trackEvent("generate_lead", {
+        inquiry_type: String(data.inquiryType || inquiryType),
+        method: "contact_form",
+      });
       if (typeof json.whatsappFollowUp === "string") {
         setWhatsappFollowUp(json.whatsappFollowUp);
       }
