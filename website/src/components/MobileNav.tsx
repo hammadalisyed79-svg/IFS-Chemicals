@@ -131,7 +131,7 @@ export function MobileNav() {
                 </a>
               </div>
               <p className="pt-1 text-center text-[11px] tracking-[0.12em] text-[var(--muted)] uppercase">
-                Gujrat · Pakistan
+                Innovative Future Solutions
               </p>
             </div>
           </div>,

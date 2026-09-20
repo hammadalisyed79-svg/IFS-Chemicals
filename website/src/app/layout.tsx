@@ -33,21 +33,21 @@ export const viewport: Viewport = {
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
   title: {
-    default: "IFS Chemicals — Detergent & Packaging Manufacturer in Gujrat",
+    default: "IFS Chemicals — Innovative Future Solutions",
     template: "%s · IFS Chemicals",
   },
   description:
-    "IFS Chemicals manufactures detergent powders, dishwash & toilet cleaners, bars & oil, flexible packaging, corrugated boxes, and PET bottles in Gujrat, Pakistan.",
+    "IFS Chemicals manufactures detergent powders, hygiene care products, and packaging systems for retail brands, distributors, and professional buyers.",
   keywords: [
     "IFS Chemicals",
+    "Innovative Future Solutions",
     "detergent powder Pakistan",
-    "Gujrat manufacturer",
     "Happy detergent",
     "Train detergent",
     "dishwash liquid",
     "flexible packaging",
     "PET bottle blowing",
-    "Made in Pakistan",
+    "corrugated packaging",
   ],
   authors: [{ name: "IFS Chemicals" }],
   creator: "IFS Chemicals",
@@ -58,9 +58,9 @@ export const metadata: Metadata = {
   },
   alternates: { canonical: siteUrl },
   openGraph: {
-    title: "IFS Chemicals — Detergent & Packaging Manufacturer in Gujrat",
+    title: "IFS Chemicals — Innovative Future Solutions",
     description:
-      "High-quality cleaning solutions and packaging materials from Gujrat, Pakistan. Made in Pakistan.",
+      "Cleaning formulations and packaging systems for retail and professional markets.",
     url: siteUrl,
     siteName: "IFS Chemicals",
     type: "website",
@@ -69,9 +69,9 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "IFS Chemicals — Made in Gujrat, Pakistan",
+    title: "IFS Chemicals — Innovative Future Solutions",
     description:
-      "Detergent powders, dishwash care, and packaging manufactured in Gujrat.",
+      "Detergent powders, hygiene care, and packaging systems for commercial buyers.",
     images: [defaultOgImage.url],
   },
   robots: {

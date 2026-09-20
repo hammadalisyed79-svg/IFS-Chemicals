@@ -131,7 +131,7 @@ export function ContactForm() {
               name="city"
               required
               autoComplete="address-level2"
-              placeholder="e.g. Gujrat"
+              placeholder="City / region"
               className={field}
             />
           </label>

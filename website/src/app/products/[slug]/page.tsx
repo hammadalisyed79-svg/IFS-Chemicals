@@ -37,7 +37,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     title: `${item.name} — ${family.name}`,
     description:
       item.summary ||
-      `${item.name}: ${item.pack}. ${item.use}. Manufactured by IFS Chemicals in Gujrat, Pakistan.`,
+      `${item.name}: ${item.pack}. ${item.use}. Manufactured by IFS Chemicals.`,
     path: `/products/${item.slug}`,
   });
 }
@@ -294,7 +294,7 @@ function ItemDetail({
                   Origin
                 </dt>
                 <dd className="mt-1.5 text-[15px] font-medium text-[var(--ink)]">
-                  Gujrat, Pakistan
+                  Pakistan
                 </dd>
               </div>
               <div>

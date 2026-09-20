@@ -22,9 +22,9 @@ export function SiteFooter() {
             className="h-11 w-auto"
           />
           <p className="mt-6 max-w-md text-[15px] leading-relaxed text-white/65">
-            Manufacturing partner for cleaning solutions and packaging systems —
-            delivering consistent quality for households, retailers, and industrial
-            buyers across Pakistan.
+            Cleaning formulations and packaging systems for retail brands,
+            distributors, and professional buyers — delivered with consistent
+            quality and commercial reliability.
           </p>
           <div className="mt-7 flex flex-wrap gap-x-6 gap-y-2 text-[13px] font-medium tracking-wide">
             {social.map((s) => (
@@ -89,7 +89,7 @@ export function SiteFooter() {
       <div className="border-t border-white/10">
         <div className="container-site flex flex-col gap-2 py-5 text-[12px] text-white/40 sm:flex-row sm:items-center sm:justify-between">
           <p>© {new Date().getFullYear()} IFS Chemicals. All rights reserved.</p>
-          <p>Innovative Future Solutions · Gujrat, Pakistan</p>
+          <p>Innovative Future Solutions</p>
         </div>
       </div>
     </footer>

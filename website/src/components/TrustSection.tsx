@@ -6,7 +6,7 @@ import { mapsSearchUrl, trustPillars } from "@/lib/seo";
 const gallery = [
   {
     src: "/images/factory.jpg",
-    alt: "IFS Chemicals manufacturing facility in Gujrat",
+    alt: "IFS Chemicals manufacturing facility",
     label: "Production facility",
   },
   {
@@ -33,11 +33,12 @@ export function TrustSection() {
         <div className="max-w-2xl">
           <p className="eyebrow">Operations</p>
           <h2 className="font-display mt-3 text-3xl font-semibold text-[var(--ink)] md:text-5xl">
-            Built in Gujrat. Delivered with consistency.
+            Controlled production. Consistent commercial supply.
           </h2>
           <p className="lead mt-4">
-            Our manufacturing base at {contact.address} supports national
-            distribution with controlled production and packaging capability.
+            Our manufacturing operations combine process discipline with
+            integrated packaging capability to support reliable national and
+            regional distribution.
           </p>
         </div>
 
@@ -79,7 +80,7 @@ export function TrustSection() {
         <div className="surface-card mt-14 flex flex-col gap-5 px-6 py-7 sm:flex-row sm:items-center sm:justify-between sm:px-8">
           <div>
             <p className="font-display text-lg font-semibold text-[var(--ink)]">
-              Visit our location
+              Headquarters
             </p>
             <p className="mt-1 text-sm text-[var(--muted)]">{contact.address}</p>
           </div>

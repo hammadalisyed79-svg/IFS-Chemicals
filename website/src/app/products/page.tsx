@@ -7,7 +7,7 @@ import { pageMeta } from "@/lib/seo";
 export const metadata: Metadata = pageMeta({
   title: "Products — Detergent, Hygiene Care & Packaging",
   description:
-    "IFS Chemicals product platforms: detergent powders, dishwash and toilet care, bars and oil, flexible packaging, corrugated boxes, and PET bottle blowing — manufactured in Gujrat, Pakistan.",
+    "IFS Chemicals product platforms: detergent powders, dishwash and toilet care, bars and oil, flexible packaging, corrugated boxes, and PET bottle blowing.",
   path: "/products",
 });
 
@@ -27,7 +27,7 @@ export default function ProductsPage() {
         <div className="container-site relative pb-16 pt-14 md:pb-24 md:pt-20">
           <p className="eyebrow !text-white/70">Products</p>
           <h1 className="font-display mt-4 max-w-3xl text-3xl font-semibold sm:text-4xl md:text-6xl">
-            Product platforms for retail and professional supply.
+            Product platforms for retail and professional markets.
           </h1>
           <p className="mt-5 max-w-xl text-[1.05rem] leading-relaxed text-white/70">
             Explore our catalogue — from automated detergent production to

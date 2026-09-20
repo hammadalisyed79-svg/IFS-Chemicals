@@ -5,9 +5,9 @@ import { contact, highlights } from "@/lib/content";
 import { mapsSearchUrl, pageMeta, trustPillars } from "@/lib/seo";
 
 export const metadata: Metadata = pageMeta({
-  title: "About — Manufacturer in Gujrat, Pakistan",
+  title: "About — Innovative Future Solutions",
   description:
-    "IFS Chemicals manufactures cleaning solutions and packaging materials at Bridge Canal Saroki, Gujrat. Automated production and Made in Pakistan quality for retail and B2B partners.",
+    "IFS Chemicals manufactures cleaning formulations and packaging systems with disciplined process control for retail brands, distributors, and professional buyers.",
   path: "/about",
 });
 
@@ -17,7 +17,7 @@ export default function AboutPage() {
       <div className="relative overflow-hidden bg-[var(--navy)] text-white">
         <Image
           src="/images/factory.jpg"
-          alt="IFS Chemicals manufacturing facility in Gujrat"
+          alt="IFS Chemicals manufacturing facility"
           fill
           className="object-cover opacity-35"
           sizes="100vw"
@@ -30,9 +30,8 @@ export default function AboutPage() {
             Innovative Future Solutions.
           </h1>
           <p className="mt-5 max-w-xl text-[1.05rem] leading-relaxed text-white/75 md:text-lg">
-            A manufacturing partner for cleaning solutions and packaging
-            materials — serving households, retailers, and professional buyers
-            from Gujrat, Pakistan.
+            A manufacturing partner for cleaning formulations and packaging
+            systems — serving households, retailers, and professional buyers.
           </p>
         </div>
       </div>
@@ -40,20 +39,20 @@ export default function AboutPage() {
       <div className="container-site grid gap-14 py-16 md:grid-cols-2 md:gap-16 md:py-24">
         <div className="space-y-5 text-[1.05rem] leading-relaxed text-[var(--muted)]">
           <p>
-            IFS Chemicals develops and produces high-quality cleaning solutions
-            and packaging materials with a focus on process control, product
+            IFS Chemicals develops and produces cleaning formulations and
+            packaging materials with a focus on process control, product
             consistency, and long-term supply partnerships.
           </p>
           <p>
-            Our portfolio spans detergent powders from a fully automated
-            imported plant, dishwash liquids and toilet cleaners, bars and oils,
-            through to flexible packaging, corrugated cartons, and PET bottle
-            blowing — covering the path from formulation to finished pack.
+            Our portfolio spans detergent powders from a fully automated plant,
+            dishwash liquids and toilet cleaners, bars and oils, through to
+            flexible packaging, corrugated cartons, and PET bottle blowing —
+            covering the path from formulation to finished pack.
           </p>
           <p>
-            Operations are based at {contact.address}. Distributors and
-            commercial partners can contact us for supply, branding, and custom
-            packaging requirements.
+            Distributors and commercial partners may contact us for supply,
+            branding support, and custom packaging programmes. Headquarters:{" "}
+            {contact.address}.
           </p>
           <a
             href={mapsSearchUrl}
@@ -129,9 +128,12 @@ export default function AboutPage() {
         </div>
       </div>
 
-      <div className="container-site py-16 md:py-20">
-        <Link href="/contact" className="btn btn-primary">
-          Contact IFS
+      <div className="container-site flex flex-wrap gap-3 py-16 md:py-20">
+        <Link href="/quote" className="btn btn-accent">
+          Request a quote
+        </Link>
+        <Link href="/contact" className="btn btn-outline">
+          Contact commercial team
         </Link>
       </div>
     </div>

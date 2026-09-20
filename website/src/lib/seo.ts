@@ -7,7 +7,7 @@ export const defaultOgImage = {
   url: "/images/og.jpg",
   width: 1200,
   height: 630,
-  alt: "IFS Chemicals product range — Made in Gujrat, Pakistan",
+  alt: "IFS Chemicals — cleaning formulations and packaging systems",
 };
 
 export function pageMeta({
@@ -76,7 +76,7 @@ export function localBusinessJsonLd() {
         "@id": `${siteUrl}/#localbusiness`,
         name: "IFS Chemicals",
         description:
-          "Manufacturer of detergent powders, dishwash & toilet cleaners, bars & oil, and packaging materials in Gujrat, Pakistan.",
+          "Manufacturer of detergent powders, hygiene care products, and packaging systems for retail and professional markets.",
         url: siteUrl,
         image: [`${siteUrl}/images/factory.jpg`, `${siteUrl}/images/og.jpg`],
         telephone: contact.phone,
@@ -119,15 +119,15 @@ export const mapsSearchUrl = `https://www.google.com/maps/search/?api=1&query=${
 
 export const trustPillars = [
   {
-    title: "Made in Gujrat, Pakistan",
-    body: "Formulated and packed at Bridge Canal Saroki — supporting retail and professional buyers nationwide.",
+    title: "Process discipline",
+    body: "Production systems designed for repeatable quality, batch consistency, and dependable commercial supply.",
   },
   {
     title: "Automated production",
-    body: "Detergent powders manufactured on a fully automated imported plant with consistent quality control.",
+    body: "Detergent powders manufactured on a fully automated plant with rigorous process and quality controls.",
   },
   {
-    title: "End-to-end capability",
-    body: "Cleaning lines plus flexible packaging, corrugated cartons, and PET blowing under one manufacturing group.",
+    title: "Integrated capability",
+    body: "Cleaning formulations together with flexible packaging, corrugated cartons, and PET blowing under one group.",
   },
 ] as const;

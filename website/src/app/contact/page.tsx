@@ -6,7 +6,7 @@ import { mapsSearchUrl, pageMeta } from "@/lib/seo";
 export const metadata: Metadata = pageMeta({
   title: "Contact — Quotes, Distributors & B2B",
   description:
-    "Contact IFS Chemicals in Gujrat for product quotes, distributor onboarding, and B2B supply. Call +92 321 6001040, WhatsApp, or send an inquiry online.",
+    "Contact IFS Chemicals for product quotes, distributor onboarding, and B2B supply. Call +92 321 6001040, WhatsApp, or send an enquiry online.",
   path: "/contact",
 });
 
@@ -20,7 +20,7 @@ export default function ContactPage() {
             Speak with our commercial team.
           </h1>
           <p className="mt-5 max-w-xl text-[1.05rem] leading-relaxed text-white/70">
-            Request a quote, discuss distributor onboarding, or inquire about
+            Request a quote, discuss distributor onboarding, or enquire about
             packaging and private-label programmes.
           </p>
         </div>

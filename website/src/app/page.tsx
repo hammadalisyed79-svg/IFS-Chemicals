@@ -21,7 +21,7 @@ export default function HomePage() {
 
         <div className="container-site relative flex min-h-[min(92svh,860px)] flex-col justify-end pb-[calc(5.5rem+var(--dock-h,0px))] pt-20 md:justify-center md:pb-24 md:pt-24">
           <p className="animate-rise text-[11px] font-semibold uppercase tracking-[0.22em] text-white/70">
-            IFS Chemicals · Gujrat, Pakistan
+            IFS Chemicals
           </p>
           <h1 className="animate-rise-delay font-display mt-5 max-w-2xl text-[2.35rem] font-semibold text-white sm:text-5xl md:text-6xl lg:text-[4.25rem]">
             Innovative Future Solutions for everyday performance.
@@ -29,7 +29,7 @@ export default function HomePage() {
           <p className="animate-rise-delay-2 mt-5 max-w-lg text-[1.05rem] leading-relaxed text-white/78 md:mt-6 md:text-lg">
             Detergent powders, hygiene care, and packaging systems for retail
             brands and professional buyers — manufactured to international
-            standards from our facility in Pakistan.
+            quality standards.
           </p>
           <div className="animate-rise-delay-2 mt-9 flex flex-col gap-3 sm:mt-10 sm:flex-row">
             <Link href="/products" className="btn btn-accent">
@@ -62,11 +62,12 @@ export default function HomePage() {
           <div className="max-w-2xl">
             <p className="eyebrow">Capabilities</p>
             <h2 className="font-display mt-3 text-3xl font-semibold text-[var(--ink)] md:text-5xl">
-              Six product platforms. One manufacturing standard.
+              An integrated portfolio of cleaning and packaging platforms.
             </h2>
             <p className="lead mt-4 max-w-xl">
-              From formulation to finished packaging, IFS supports brand owners
-              and distributors with reliable supply and consistent quality.
+              From formulation through finished packaging, IFS Chemicals supplies
+              brand owners and distributors with reliable quality and commercial
+              continuity.
             </p>
           </div>
           <Link href="/products" className="btn btn-outline shrink-0 self-start md:self-auto">
@@ -107,7 +108,7 @@ export default function HomePage() {
         <div className="absolute inset-y-0 right-0 hidden w-[48%] lg:block">
           <Image
             src="/images/factory.jpg"
-            alt="IFS Chemicals manufacturing facility in Gujrat, Pakistan"
+            alt="IFS Chemicals manufacturing facility"
             fill
             className="object-cover opacity-50"
             sizes="48vw"
@@ -120,16 +121,16 @@ export default function HomePage() {
               Company
             </p>
             <h2 className="font-display mt-3 text-3xl font-semibold md:text-5xl">
-              A manufacturing partner you can scale with.
+              A manufacturing partner built for long-term supply.
             </h2>
             <p className="mt-5 text-[1.05rem] leading-relaxed text-white/70">
-              IFS Chemicals develops and produces cleaning solutions and packaging
+              IFS Chemicals develops cleaning formulations and packaging
               materials with a focus on process control, product consistency, and
-              long-term supply partnerships.
+              durable commercial partnerships.
             </p>
             <p className="mt-4 text-[1.05rem] leading-relaxed text-white/70">
-              Based at Bridge Canal Saroki, Gujrat, we support distributors and
-              professional clients across Pakistan.
+              We support distributors, retailers, and professional buyers with
+              reliable supply programmes and responsive commercial service.
             </p>
             <Link
               href="/about"
@@ -146,7 +147,7 @@ export default function HomePage() {
           <div>
             <p className="eyebrow">Contact</p>
             <h2 className="font-display mt-3 text-3xl font-semibold text-[var(--ink)] md:text-4xl">
-              Start a supply or distribution conversation.
+              Discuss supply, distribution, or private label.
             </h2>
             <p className="lead mt-4">
               Share your requirements and our commercial team will respond with
@@ -183,7 +184,7 @@ export default function HomePage() {
               Inquiry form
             </h3>
             <p className="mt-2 text-sm text-[var(--muted)]">
-              General, distributor, and B2B requests welcome.
+              General, distributor, and B2B enquiries.
             </p>
             <div className="mt-6">
               <ContactForm />

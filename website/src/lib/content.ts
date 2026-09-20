@@ -2,7 +2,7 @@ export const brand = {
   name: "IFS Chemicals",
   tagline: "Innovative Future Solutions",
   short:
-    "Manufacturer of cleaning solutions and packaging systems for retail and professional markets.",
+    "Industrial manufacturer of cleaning formulations and packaging systems for retail and professional markets.",
 };
 
 export type CatalogItem = {
@@ -29,7 +29,7 @@ export const products: ProductFamily[] = [
     slug: "detergent-powder",
     name: "Detergent Powder",
     blurb:
-      "Manufactured on a fully automated imported detergent powder plant for domestic and commercial laundry.",
+      "Produced on a fully automated detergent powder plant for domestic and commercial laundry applications.",
     image: "/images/products/happy-detergent.jpg",
     items: [
       {
@@ -179,7 +179,7 @@ export const products: ProductFamily[] = [
       },
       {
         src: "/images/factory.jpg",
-        alt: "IFS Chemicals manufacturing facility in Gujrat",
+        alt: "IFS Chemicals manufacturing facility",
         label: "Manufacturing facility",
       },
       {
@@ -234,7 +234,7 @@ export const products: ProductFamily[] = [
       },
       {
         src: "/images/factory.jpg",
-        alt: "IFS Chemicals plant in Gujrat",
+        alt: "IFS Chemicals manufacturing plant",
         label: "Plant",
       },
       {
@@ -327,9 +327,9 @@ export const products: ProductFamily[] = [
 ];
 
 export const highlights = [
-  "Fully automated manufacturing with process control",
-  "Formulated for efficient, consistent cleaning performance",
-  "Supply programmes for retail and professional buyers",
+  "Automated production with disciplined process control",
+  "Formulations engineered for consistent cleaning performance",
+  "Commercial supply programmes for retail and professional buyers",
 ] as const;
 
 export const contact = {
