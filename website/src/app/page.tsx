@@ -1,100 +1,144 @@
+import Image from "next/image";
 import Link from "next/link";
-import { contact, products } from "@/lib/content";
+import { contact, highlights, products } from "@/lib/content";
 import { ContactForm } from "@/components/ContactForm";
 
 export default function HomePage() {
   return (
     <>
-      <section className="relative min-h-[calc(100svh-4.5rem)] overflow-hidden bg-[var(--ink)] text-[var(--foam)]">
-        <div className="pointer-events-none absolute inset-0">
-          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_70%_35%,rgba(24,196,168,0.28),transparent_55%),radial-gradient(ellipse_at_15%_80%,rgba(232,165,75,0.18),transparent_45%),linear-gradient(160deg,#07141c_0%,#0b2a2a_55%,#07141c_100%)]" />
-          <div className="hero-grid absolute inset-0 animate-drift" />
-          <div className="absolute -right-24 top-24 h-[420px] w-[420px] rounded-full border border-[var(--teal-bright)]/20" />
-          <div className="absolute -right-8 top-40 h-[280px] w-[280px] rounded-full border border-[var(--amber)]/25" />
-        </div>
+      <section className="relative min-h-[calc(100svh-5.5rem)] overflow-hidden bg-[var(--navy)] text-white">
+        <Image
+          src="/images/hero/products-showcase.jpg"
+          alt="IFS Chemicals product range"
+          fill
+          priority
+          className="animate-kenburns object-cover object-[center_35%]"
+          sizes="100vw"
+        />
+        <div className="absolute inset-0 bg-gradient-to-r from-[var(--navy)] via-[var(--navy)]/88 to-[var(--navy)]/35" />
+        <div className="absolute inset-0 bg-gradient-to-t from-[var(--navy)] via-transparent to-[var(--navy)]/40" />
 
-        <div className="relative mx-auto flex min-h-[calc(100svh-4.5rem)] max-w-6xl flex-col justify-end px-5 pb-16 pt-16 md:justify-center md:px-8 md:pb-24 md:pt-20">
-          <p className="animate-rise text-xs font-semibold uppercase tracking-[0.28em] text-[var(--teal-bright)]">
-            Gujrat · Pakistan
-          </p>
-          <h1 className="animate-rise-delay font-display mt-4 max-w-4xl text-5xl font-extrabold leading-[0.95] tracking-tight md:text-7xl lg:text-8xl">
-            <span className="brand-shimmer">IFS Chemicals</span>
+        <div className="relative mx-auto flex min-h-[calc(100svh-5.5rem)] max-w-6xl flex-col justify-end px-5 pb-16 pt-20 md:justify-center md:px-8 md:pb-24">
+          <Image
+            src="/images/logo.png"
+            alt="IFS Chemicals"
+            width={320}
+            height={90}
+            className="animate-rise h-16 w-auto md:h-20"
+            priority
+          />
+          <div className="brand-rule mt-5 h-1 w-24 bg-[var(--red)]" />
+          <h1 className="animate-rise-delay font-display mt-6 max-w-2xl text-4xl font-bold leading-[1.05] tracking-tight md:text-6xl lg:text-7xl">
+            Cleaning power, engineered in Gujrat.
           </h1>
-          <p className="animate-rise-delay-2 mt-6 max-w-xl text-lg leading-relaxed text-[var(--foam)]/80 md:text-xl">
-            Cleaning solutions and packaging materials engineered for everyday
-            brilliance — from detergent powders to PET, corrugated, and flexible
-            packs.
+          <p className="animate-rise-delay-2 mt-5 max-w-lg text-base leading-relaxed text-white/80 md:text-lg">
+            Detergent powders, dishwash care, and packaging — manufactured for
+            homes, retailers, and B2B partners across Pakistan.
           </p>
-          <div className="animate-rise-delay-2 mt-10 flex flex-wrap gap-3">
+          <div className="animate-rise-delay-2 mt-9 flex flex-wrap gap-3">
             <Link
               href="/products"
-              className="bg-[var(--teal-bright)] px-6 py-3 text-sm font-bold text-[var(--ink)] transition hover:bg-[var(--foam)]"
+              className="bg-[var(--red)] px-6 py-3.5 text-sm font-bold uppercase tracking-[0.1em] text-white transition hover:bg-[var(--red-deep)]"
             >
-              Explore products
+              View products
             </Link>
             <Link
               href="/contact"
-              className="border border-[var(--foam)]/35 px-6 py-3 text-sm font-semibold text-[var(--foam)] transition hover:border-[var(--foam)] hover:bg-[var(--foam)]/10"
+              className="border border-white/40 px-6 py-3.5 text-sm font-semibold uppercase tracking-[0.1em] text-white transition hover:border-white hover:bg-white/10"
             >
-              Talk to us
+              Request a quote
             </Link>
           </div>
+          <p className="animate-rise-delay-2 mt-8 text-xs font-semibold uppercase tracking-[0.28em] text-white/55">
+            Made in Pakistan
+          </p>
+        </div>
+      </section>
+
+      <section className="border-b border-[var(--line)] bg-white">
+        <div className="mx-auto grid max-w-6xl divide-y divide-[var(--line)] md:grid-cols-3 md:divide-x md:divide-y-0">
+          {highlights.map((item) => (
+            <p
+              key={item}
+              className="px-5 py-7 text-sm font-semibold leading-snug text-[var(--ink)] md:px-8 md:py-9 md:text-[15px]"
+            >
+              <span className="mb-2 block h-1 w-8 bg-[var(--blue)]" />
+              {item}
+            </p>
+          ))}
         </div>
       </section>
 
       <section className="mx-auto max-w-6xl px-5 py-20 md:px-8 md:py-28">
-        <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[var(--teal)]">
-          What we make
-        </p>
-        <h2 className="font-display mt-3 max-w-2xl text-3xl font-bold tracking-tight text-[var(--ink)] md:text-5xl">
-          Six product families. One manufacturing standard.
-        </h2>
-        <div className="mt-12 grid gap-px bg-[var(--line)] sm:grid-cols-2 lg:grid-cols-3">
+        <div className="max-w-2xl">
+          <p className="text-xs font-bold uppercase tracking-[0.22em] text-[var(--red)]">
+            Product families
+          </p>
+          <h2 className="font-display mt-3 text-3xl font-bold tracking-tight text-[var(--ink)] md:text-5xl">
+            From formula to finished pack.
+          </h2>
+          <p className="mt-4 text-base leading-relaxed text-[var(--muted)] md:text-lg">
+            Six manufacturing lines serving retail brands and industrial buyers —
+            detergents, dishwash, toilet care, and packaging.
+          </p>
+        </div>
+
+        <div className="mt-12 grid gap-x-6 gap-y-10 sm:grid-cols-2 lg:grid-cols-3">
           {products.map((p) => (
-            <Link
-              key={p.slug}
-              href={`/products#${p.slug}`}
-              className="group bg-[var(--foam)] p-7 transition hover:bg-white"
-            >
-              <h3 className="font-display text-xl font-bold text-[var(--ink)] group-hover:text-[var(--teal)]">
+            <Link key={p.slug} href={`/products#${p.slug}`} className="group block">
+              <div className="relative aspect-[4/3] overflow-hidden bg-[#e8edf3]">
+                <Image
+                  src={p.image}
+                  alt={p.name}
+                  fill
+                  className="object-contain p-6 transition duration-500 group-hover:scale-[1.04]"
+                  sizes="(max-width: 768px) 100vw, 33vw"
+                />
+              </div>
+              <h3 className="font-display mt-4 text-xl font-bold text-[var(--ink)] group-hover:text-[var(--blue)]">
                 {p.name}
               </h3>
-              <p className="mt-3 text-sm leading-relaxed text-[var(--ink-soft)]/80">
-                {p.blurb}
-              </p>
+              <p className="mt-2 text-sm leading-relaxed text-[var(--muted)]">{p.blurb}</p>
             </Link>
           ))}
         </div>
       </section>
 
-      <section className="bg-[var(--ink-soft)] text-[var(--foam)]">
-        <div className="mx-auto grid max-w-6xl gap-10 px-5 py-20 md:grid-cols-2 md:px-8 md:py-28">
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[var(--teal-bright)]">
-              About
+      <section className="relative overflow-hidden bg-[var(--navy)] text-white">
+        <div className="absolute inset-y-0 right-0 hidden w-1/2 lg:block">
+          <Image
+            src="/images/factory.jpg"
+            alt="IFS Chemicals manufacturing facility"
+            fill
+            className="object-cover opacity-55"
+            sizes="50vw"
+          />
+          <div className="absolute inset-0 bg-gradient-to-r from-[var(--navy)] to-transparent" />
+        </div>
+        <div className="relative mx-auto max-w-6xl px-5 py-20 md:px-8 md:py-28">
+          <div className="max-w-xl">
+            <p className="text-xs font-bold uppercase tracking-[0.22em] text-[var(--red)]">
+              About IFS
             </p>
             <h2 className="font-display mt-3 text-3xl font-bold tracking-tight md:text-5xl">
               Trusted cleaning power, made in Pakistan.
             </h2>
-          </div>
-          <div className="space-y-4 text-base leading-relaxed text-[var(--foam)]/80 md:pt-8">
-            <p>
-              IFS Chemicals is a leading manufacturer of high-quality cleaning
-              solutions and packaging materials. With a strong commitment to
-              innovation, quality, and customer satisfaction, we serve domestic
-              and commercial needs across detergent, dishwash, toilet care, and
-              packaging.
+            <p className="mt-5 text-base leading-relaxed text-white/75 md:text-lg">
+              IFS Chemicals manufactures high-quality cleaning solutions and
+              packaging materials with a strong commitment to innovation, quality,
+              and customer satisfaction. Our detergent powders are produced using
+              the latest technology and high-quality ingredients — ensuring
+              cleanliness, hygiene, and convenience wash after wash.
             </p>
-            <p>
-              Our detergent powders are manufactured using the latest technology
-              and high-quality ingredients — ensuring cleanliness, hygiene, and
-              convenience wash after wash.
+            <p className="mt-4 text-base leading-relaxed text-white/75">
+              B2B partnerships are encouraged. We serve companies and professional
+              clients with reliable supply from Bridge Canal Saroki, Gujrat.
             </p>
             <Link
               href="/about"
-              className="inline-block pt-2 text-sm font-semibold text-[var(--teal-bright)] hover:underline"
+              className="mt-8 inline-block border border-white/35 px-5 py-3 text-sm font-semibold uppercase tracking-[0.1em] transition hover:bg-white hover:text-[var(--navy)]"
             >
-              More about IFS →
+              More about us
             </Link>
           </div>
         </div>
@@ -103,22 +147,22 @@ export default function HomePage() {
       <section className="mx-auto max-w-6xl px-5 py-20 md:px-8 md:py-28">
         <div className="grid gap-12 lg:grid-cols-2">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[var(--teal)]">
+            <p className="text-xs font-bold uppercase tracking-[0.22em] text-[var(--red)]">
               Contact
             </p>
             <h2 className="font-display mt-3 text-3xl font-bold tracking-tight md:text-4xl">
               Request a quote or distributor intro.
             </h2>
-            <ul className="mt-8 space-y-3 text-sm text-[var(--ink-soft)]">
-              <li>{contact.address}</li>
+            <ul className="mt-8 space-y-3 text-[var(--muted)]">
+              <li className="text-[var(--ink)]">{contact.address}</li>
               <li>
-                <a className="font-semibold text-[var(--ink)]" href={contact.phoneHref}>
+                <a className="text-xl font-bold text-[var(--blue)]" href={contact.phoneHref}>
                   {contact.phone}
                 </a>
               </li>
               {contact.emails.map((e) => (
                 <li key={e}>
-                  <a className="hover:text-[var(--teal)]" href={`mailto:${e}`}>
+                  <a className="hover:text-[var(--blue)]" href={`mailto:${e}`}>
                     {e}
                   </a>
                 </li>

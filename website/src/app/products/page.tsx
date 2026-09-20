@@ -1,4 +1,6 @@
 import type { Metadata } from "next";
+import Image from "next/image";
+import Link from "next/link";
 import { products } from "@/lib/content";
 
 export const metadata: Metadata = {
@@ -9,34 +11,89 @@ export const metadata: Metadata = {
 
 export default function ProductsPage() {
   return (
-    <div className="bg-[var(--foam)]">
-      <div className="bg-[var(--ink)] px-5 pb-16 pt-16 text-[var(--foam)] md:px-8">
-        <div className="mx-auto max-w-6xl">
-          <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[var(--teal-bright)]">
+    <div className="bg-[var(--paper)]">
+      <div className="relative overflow-hidden bg-[var(--navy)] text-white">
+        <Image
+          src="/images/hero/banner-1.jpg"
+          alt=""
+          fill
+          className="object-cover opacity-30"
+          sizes="100vw"
+          priority
+        />
+        <div className="relative mx-auto max-w-6xl px-5 pb-16 pt-16 md:px-8 md:pb-20 md:pt-20">
+          <p className="text-xs font-bold uppercase tracking-[0.22em] text-[var(--red)]">
             Products
           </p>
           <h1 className="font-display mt-3 max-w-3xl text-4xl font-bold tracking-tight md:text-6xl">
             Built for homes, shops, and industrial supply.
           </h1>
+          <p className="mt-4 max-w-xl text-white/75">
+            Explore our full catalog — from automated detergent powder production
+            to packaging lines that finish the pack.
+          </p>
         </div>
       </div>
-      <div className="mx-auto max-w-6xl space-y-16 px-5 py-16 md:px-8 md:py-24">
+
+      <div className="sticky top-[4.5rem] z-30 border-b border-[var(--line)] bg-white/95 backdrop-blur">
+        <div className="mx-auto flex max-w-6xl gap-2 overflow-x-auto px-5 py-3 md:px-8">
+          {products.map((p) => (
+            <a
+              key={p.slug}
+              href={`#${p.slug}`}
+              className="whitespace-nowrap px-3 py-1.5 text-xs font-bold uppercase tracking-[0.08em] text-[var(--muted)] transition hover:bg-[var(--navy)] hover:text-white"
+            >
+              {p.name}
+            </a>
+          ))}
+        </div>
+      </div>
+
+      <div className="mx-auto max-w-6xl space-y-24 px-5 py-16 md:px-8 md:py-24">
         {products.map((p) => (
-          <section key={p.slug} id={p.slug} className="scroll-mt-24">
-            <h2 className="font-display text-2xl font-bold md:text-3xl">{p.name}</h2>
-            <p className="mt-2 max-w-2xl text-[var(--ink-soft)]/85">{p.blurb}</p>
-            <ul className="mt-6 grid gap-2 sm:grid-cols-2">
+          <section key={p.slug} id={p.slug} className="scroll-mt-36">
+            <div className="max-w-2xl">
+              <h2 className="font-display text-3xl font-bold md:text-4xl">{p.name}</h2>
+              <p className="mt-3 text-[var(--muted)]">{p.blurb}</p>
+            </div>
+            <div className="mt-8 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
               {p.items.map((item) => (
-                <li
-                  key={item}
-                  className="border-l-2 border-[var(--teal)] bg-white px-4 py-3 text-sm font-medium"
-                >
-                  {item}
-                </li>
+                <article key={item.name} className="bg-white">
+                  <div className="relative aspect-square overflow-hidden bg-[#eef2f7]">
+                    <Image
+                      src={item.image}
+                      alt={item.name}
+                      fill
+                      className="object-contain p-5"
+                      sizes="(max-width: 768px) 100vw, 33vw"
+                    />
+                  </div>
+                  <div className="border-t border-[var(--line)] px-4 py-4">
+                    <h3 className="font-display text-lg font-bold text-[var(--ink)]">
+                      {item.name}
+                    </h3>
+                  </div>
+                </article>
               ))}
-            </ul>
+            </div>
           </section>
         ))}
+
+        <div className="border border-[var(--line)] bg-white px-6 py-10 text-center md:px-10">
+          <h2 className="font-display text-2xl font-bold md:text-3xl">
+            Need bulk supply or private label?
+          </h2>
+          <p className="mx-auto mt-3 max-w-lg text-[var(--muted)]">
+            Talk to our team for B2B pricing, distributor arrangements, and custom
+            packaging.
+          </p>
+          <Link
+            href="/contact"
+            className="mt-6 inline-block bg-[var(--red)] px-6 py-3 text-sm font-bold uppercase tracking-[0.1em] text-white hover:bg-[var(--red-deep)]"
+          >
+            Contact sales
+          </Link>
+        </div>
       </div>
     </div>
   );

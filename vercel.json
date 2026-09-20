@@ -1,0 +1,5 @@
+{
+  "framework": "nextjs",
+  "installCommand": "cp -a website/. . && npm install",
+  "buildCommand": "npm run build"
+}

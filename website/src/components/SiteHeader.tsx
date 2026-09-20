@@ -1,3 +1,4 @@
+import Image from "next/image";
 import Link from "next/link";
 import { contact } from "@/lib/content";
 
@@ -10,40 +11,60 @@ const links = [
 
 export function SiteHeader() {
   return (
-    <header className="sticky top-0 z-40 border-b border-white/10 bg-[var(--ink)]/95 backdrop-blur-md">
-      <div className="mx-auto flex max-w-6xl items-center justify-between gap-6 px-5 py-4 md:px-8">
-        <Link href="/" className="group flex flex-col leading-none">
-          <span className="font-display text-xl font-extrabold tracking-tight text-[var(--foam)] md:text-2xl">
-            IFS Chemicals
-          </span>
-          <span className="mt-1 text-[10px] font-medium uppercase tracking-[0.22em] text-[var(--teal-bright)]/90">
-            Innovative Future Solutions
-          </span>
-        </Link>
-        <nav className="hidden items-center gap-7 md:flex">
-          {links.map((l) => (
-            <Link
-              key={l.href}
-              href={l.href}
-              className="text-sm font-medium text-[var(--foam)]/80 transition hover:text-[var(--foam)]"
-            >
-              {l.label}
-            </Link>
-          ))}
+    <header className="sticky top-0 z-50 border-b border-white/10 bg-[var(--navy)]/95 text-white backdrop-blur-md">
+      <div className="hidden border-b border-white/10 bg-[var(--red)] text-[13px] sm:block">
+        <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-5 py-1.5 md:px-8">
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-1">
+            <a href={contact.phoneHref} className="hover:underline">
+              {contact.phone}
+            </a>
+            <a href={`mailto:${contact.emails[0]}`} className="hover:underline">
+              {contact.emails[0]}
+            </a>
+          </div>
           <a
             href={contact.erpUrl}
             target="_blank"
             rel="noreferrer"
-            className="rounded-full border border-[var(--teal-bright)]/40 bg-[var(--teal-bright)]/10 px-4 py-2 text-sm font-semibold text-[var(--teal-bright)] transition hover:bg-[var(--teal-bright)] hover:text-[var(--ink)]"
+            className="font-semibold tracking-wide"
           >
             ERP Login
           </a>
+        </div>
+      </div>
+      <div className="mx-auto flex max-w-6xl items-center justify-between gap-6 px-5 py-3 md:px-8">
+        <Link href="/" className="flex items-center gap-3">
+          <Image
+            src="/images/logo.png"
+            alt="IFS Chemicals"
+            width={200}
+            height={56}
+            className="h-11 w-auto md:h-12"
+            priority
+          />
+        </Link>
+        <nav className="hidden items-center gap-8 md:flex">
+          {links.map((l) => (
+            <Link
+              key={l.href}
+              href={l.href}
+              className="text-sm font-semibold uppercase tracking-[0.14em] text-white/85 transition hover:text-white"
+            >
+              {l.label}
+            </Link>
+          ))}
+          <Link
+            href="/contact"
+            className="bg-[var(--red)] px-4 py-2.5 text-sm font-semibold uppercase tracking-[0.08em] text-white transition hover:bg-[var(--red-deep)]"
+          >
+            Get a quote
+          </Link>
         </nav>
         <div className="flex items-center gap-4 md:hidden">
-          <Link href="/products" className="text-sm font-medium text-[var(--foam)]/90">
+          <Link href="/products" className="text-sm font-semibold">
             Products
           </Link>
-          <a href={contact.phoneHref} className="text-sm font-semibold text-[var(--teal-bright)]">
+          <a href={contact.phoneHref} className="text-sm font-bold text-[var(--red)]">
             Call
           </a>
         </div>

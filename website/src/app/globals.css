@@ -3,14 +3,21 @@
 @tailwind utilities;
 
 :root {
-  --ink: #07141c;
-  --ink-soft: #1a2f3d;
-  --mist: #d7ece8;
-  --foam: #f3faf8;
-  --teal: #0d8f7c;
-  --teal-bright: #18c4a8;
-  --amber: #e8a54b;
-  --line: rgba(7, 20, 28, 0.12);
+  --navy: #071833;
+  --blue: #0b5ea8;
+  --blue-deep: #084a86;
+  --red: #c41e26;
+  --red-deep: #9e161d;
+  --paper: #f4f6f9;
+  --white: #ffffff;
+  --ink: #0d1526;
+  --muted: #5a6578;
+  --line: rgba(7, 24, 51, 0.12);
+  --foam: var(--white);
+  --ink-soft: #1c2a44;
+  --teal: var(--blue);
+  --teal-bright: #3d8fd4;
+  --amber: var(--red);
 }
 
 html {
@@ -19,31 +26,23 @@ html {
 
 body {
   color: var(--ink);
-  background: var(--foam);
+  background: var(--paper);
   font-family: var(--font-body), system-ui, sans-serif;
 }
 
 ::selection {
-  background: var(--teal-bright);
-  color: var(--ink);
+  background: var(--blue);
+  color: white;
 }
 
 .font-display {
   font-family: var(--font-display), system-ui, sans-serif;
 }
 
-.hero-grid {
-  background-image:
-    linear-gradient(rgba(24, 196, 168, 0.08) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(24, 196, 168, 0.08) 1px, transparent 1px);
-  background-size: 48px 48px;
-  mask-image: radial-gradient(ellipse 80% 70% at 60% 40%, black 20%, transparent 75%);
-}
-
 @keyframes rise {
   from {
     opacity: 0;
-    transform: translateY(18px);
+    transform: translateY(22px);
   }
   to {
     opacity: 1;
@@ -51,46 +50,41 @@ body {
   }
 }
 
-@keyframes drift {
-  0%,
-  100% {
-    transform: translate3d(0, 0, 0);
+@keyframes kenburns {
+  from {
+    transform: scale(1.08);
   }
-  50% {
-    transform: translate3d(-12px, 10px, 0);
+  to {
+    transform: scale(1);
   }
 }
 
-@keyframes shimmer {
-  0% {
-    background-position: 0% 50%;
+@keyframes line-draw {
+  from {
+    transform: scaleX(0);
   }
-  100% {
-    background-position: 100% 50%;
+  to {
+    transform: scaleX(1);
   }
 }
 
 .animate-rise {
-  animation: rise 0.9s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: rise 0.85s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 .animate-rise-delay {
-  animation: rise 0.9s cubic-bezier(0.22, 1, 0.36, 1) 0.15s both;
+  animation: rise 0.85s cubic-bezier(0.22, 1, 0.36, 1) 0.12s both;
 }
 
 .animate-rise-delay-2 {
-  animation: rise 0.9s cubic-bezier(0.22, 1, 0.36, 1) 0.3s both;
+  animation: rise 0.85s cubic-bezier(0.22, 1, 0.36, 1) 0.24s both;
 }
 
-.animate-drift {
-  animation: drift 14s ease-in-out infinite;
+.animate-kenburns {
+  animation: kenburns 14s ease-out both;
 }
 
-.brand-shimmer {
-  background: linear-gradient(105deg, #f3faf8 0%, #18c4a8 35%, #f3faf8 55%, #e8a54b 85%, #f3faf8 100%);
-  background-size: 220% 100%;
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-  animation: shimmer 8s linear infinite;
+.brand-rule {
+  transform-origin: left;
+  animation: line-draw 0.9s cubic-bezier(0.22, 1, 0.36, 1) 0.35s both;
 }

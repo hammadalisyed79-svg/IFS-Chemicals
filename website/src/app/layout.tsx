@@ -1,16 +1,16 @@
 import type { Metadata } from "next";
-import { Manrope, Syne } from "next/font/google";
+import { Outfit, Source_Sans_3 } from "next/font/google";
 import "./globals.css";
 import { SiteHeader } from "@/components/SiteHeader";
 import { SiteFooter } from "@/components/SiteFooter";
 
-const display = Syne({
+const display = Outfit({
   subsets: ["latin"],
   variable: "--font-display",
-  weight: ["600", "700", "800"],
+  weight: ["500", "600", "700", "800"],
 });
 
-const body = Manrope({
+const body = Source_Sans_3({
   subsets: ["latin"],
   variable: "--font-body",
   weight: ["400", "500", "600", "700"],
@@ -31,6 +31,7 @@ export const metadata: Metadata = {
     url: "https://ifschemicals.com",
     siteName: "IFS Chemicals",
     type: "website",
+    images: [{ url: "/images/hero/products-showcase.jpg" }],
   },
 };
 

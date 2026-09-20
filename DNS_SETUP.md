@@ -53,3 +53,26 @@ nslookup erp.ifschemicals.com
 ```
 
 Marketing site source: `website/` in this repo and `C:\ifs-chemicals` on the server.
+
+## Vercel project notes
+
+| Vercel project | Purpose |
+|----------------|---------|
+| **ifs-website** | Correct Next.js marketing deploy (`ifs-website-phi.vercel.app`) |
+| **ifs-chemicals** | Same GitHub repo — must build from `website/` (root `vercel.json` copies that folder for install/build). Do not treat the Python ERP root as a Next.js app. |
+
+## EasyHost WordPress (previous production) — restore apex to old host
+
+The site that was live on EasyHost ~10–15 days ago is **WordPress + WooCommerce** still served at IP **`170.249.216.178`**. It was never stored as `public_html` on this Windows server.
+
+Local archive + how-to: **`C:\ifs-chemicals-easyhost`** (does not replace the Vercel Next.js app).
+
+To make **public** `ifschemicals.com` show EasyHost again (instead of Vercel):
+
+| Action | Type | Name | Value |
+|--------|------|------|-------|
+| Change | A | @ | **170.249.216.178** |
+| Change | A / CNAME | www | **170.249.216.178** (or CNAME to apex) |
+| Keep | A | erp | **138.201.139.157** |
+
+Temporary preview without DNS change: run `C:\ifs-chemicals-easyhost\VIEW_LIVE_VIA_HOSTS.ps1` (edits local hosts).
