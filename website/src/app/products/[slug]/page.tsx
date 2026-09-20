@@ -151,10 +151,10 @@ function FamilyDetail({ family }: { family: ProductFamily }) {
                     src={shot.src}
                     alt={shot.alt}
                     fill
-                    className="object-cover transition duration-700 group-hover:scale-[1.04]"
+                    className="object-contain p-3 transition duration-700 group-hover:scale-[1.02] sm:p-4"
                     sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
                   />
-                  <div className="absolute inset-0 bg-gradient-to-t from-[var(--navy)]/75 via-transparent to-transparent" />
+                  <div className="absolute inset-0 bg-gradient-to-t from-[var(--navy)]/70 via-transparent to-transparent pointer-events-none" />
                   <figcaption className="absolute inset-x-0 bottom-0 px-4 pb-4 text-[12px] font-medium tracking-[0.06em] text-white">
                     {shot.label}
                   </figcaption>

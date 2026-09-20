@@ -10,8 +10,8 @@ const gallery = [
     label: "Production facility",
   },
   {
-    src: "/images/pet-blowing.jpg",
-    alt: "PET bottle blowing equipment",
+    src: "/images/products/pet-bottle.jpg",
+    alt: "PET bottle blowing process",
     label: "PET systems",
   },
   {
@@ -20,9 +20,14 @@ const gallery = [
     label: "Operations",
   },
   {
-    src: "/images/packaging.jpg",
-    alt: "Flexible packaging production",
+    src: "/images/products/flexible-packaging.jpg",
+    alt: "Flexible packaging formats",
     label: "Packaging lines",
+  },
+  {
+    src: "/images/products/corrugated-box.jpg",
+    alt: "Corrugated box styles",
+    label: "Corrugated cartons",
   },
 ] as const;
 
@@ -51,7 +56,7 @@ export function TrustSection() {
                 src={shot.src}
                 alt={shot.alt}
                 fill
-                className="object-cover transition duration-700 group-hover:scale-[1.04]"
+                className="object-contain p-3 transition duration-700 group-hover:scale-[1.02]"
                 sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
               />
               <div className="absolute inset-0 bg-gradient-to-t from-[var(--navy)]/80 via-transparent to-transparent" />

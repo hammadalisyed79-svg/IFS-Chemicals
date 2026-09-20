@@ -76,7 +76,7 @@ export default function AboutPage() {
           </div>
           <div className="relative min-h-[160px] overflow-hidden bg-[var(--paper-2)]">
             <Image
-              src="/images/pet-blowing.jpg"
+              src="/images/products/pet-bottle.jpg"
               alt="PET bottle blowing"
               fill
               className="object-cover"

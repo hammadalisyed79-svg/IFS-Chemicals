@@ -165,26 +165,26 @@ export const products: ProductFamily[] = [
     name: "Flexible Packaging",
     blurb:
       "Custom flexible packaging with durable laminates and print-ready finishes for brand owners.",
-    image: "/images/packaging.jpg",
+    image: "/images/products/flexible-packaging.jpg",
     gallery: [
       {
-        src: "/images/packaging.jpg",
-        alt: "Flexible packaging production at IFS Chemicals",
-        label: "Flexible packaging line",
+        src: "/images/products/flexible-packaging.jpg",
+        alt: "Flexible packaging formats — film, pouches, and shrink sleeves",
+        label: "Film & pouch formats",
+      },
+      {
+        src: "/images/products/flexible-pouches.jpg",
+        alt: "Stand-up pouches, zipper bags, and spout pouches",
+        label: "Pouches & bags",
       },
       {
         src: "/images/factory.jpg",
-        alt: "IFS Chemicals manufacturing facility",
+        alt: "IFS Chemicals manufacturing facility in Gujrat",
         label: "Manufacturing facility",
       },
       {
-        src: "/images/about-team.jpg",
-        alt: "IFS Chemicals operations",
-        label: "Operations",
-      },
-      {
-        src: "/images/hero/products-showcase.jpg",
-        alt: "Finished retail packs",
+        src: "/images/products/bahar-dishwash.jpg",
+        alt: "Finished liquid packs using flexible packaging",
         label: "Finished packs",
       },
     ],
@@ -192,7 +192,7 @@ export const products: ProductFamily[] = [
       {
         slug: "flexible-pouches",
         name: "Pouches",
-        image: "/images/packaging.jpg",
+        image: "/images/products/flexible-pouches.jpg",
         pack: "Custom sizes",
         use: "Retail & industrial fill",
         summary:
@@ -201,7 +201,7 @@ export const products: ProductFamily[] = [
       {
         slug: "flexible-laminates",
         name: "Laminates",
-        image: "/images/packaging.jpg",
+        image: "/images/products/flexible-laminates.jpg",
         pack: "Rolls / sheets",
         use: "Barrier & print layers",
         summary: "Laminate structures for barrier performance and brand print layers.",
@@ -209,7 +209,7 @@ export const products: ProductFamily[] = [
       {
         slug: "printed-rolls",
         name: "Printed rolls",
-        image: "/images/packaging.jpg",
+        image: "/images/products/printed-rolls.jpg",
         pack: "Printed film rolls",
         use: "Brand packaging lines",
         summary: "Printed film rolls for continuous packaging and brand-owner lines.",
@@ -220,26 +220,26 @@ export const products: ProductFamily[] = [
     slug: "corrugated",
     name: "Corrugated Box",
     blurb: "Protective corrugated packaging for shipping, retail, and industrial supply.",
-    image: "/images/corrugated.jpg",
+    image: "/images/products/corrugated-box.jpg",
     gallery: [
       {
-        src: "/images/corrugated.jpg",
-        alt: "Corrugated carton packaging",
-        label: "Corrugated cartons",
+        src: "/images/products/corrugated-box.jpg",
+        alt: "Corrugated box styles — RSC, HSC, telescope, trays, and folders",
+        label: "Box style range",
       },
       {
-        src: "/images/packaging.jpg",
-        alt: "Packaging capability",
-        label: "Packaging capability",
+        src: "/images/products/corrugated-shippers.jpg",
+        alt: "Shipper and slotted container styles",
+        label: "Shippers & cartons",
       },
       {
         src: "/images/factory.jpg",
-        alt: "IFS plant",
+        alt: "IFS Chemicals plant in Gujrat",
         label: "Plant",
       },
       {
         src: "/images/hero/banner-1.jpg",
-        alt: "IFS product shipping context",
+        alt: "IFS product supply context",
         label: "Supply ready",
       },
     ],
@@ -247,7 +247,7 @@ export const products: ProductFamily[] = [
       {
         slug: "corrugated-shippers",
         name: "Shippers",
-        image: "/images/corrugated.jpg",
+        image: "/images/products/corrugated-shippers.jpg",
         pack: "Multi-ply cartons",
         use: "Transit protection",
         summary: "Multi-ply shipper cartons for transit protection across retail and industrial supply.",
@@ -255,7 +255,7 @@ export const products: ProductFamily[] = [
       {
         slug: "retail-cartons",
         name: "Retail cartons",
-        image: "/images/corrugated.jpg",
+        image: "/images/products/retail-cartons.jpg",
         pack: "Shelf-ready boxes",
         use: "Retail display & pack",
         summary: "Shelf-ready retail cartons for display and secondary packaging.",
@@ -263,7 +263,7 @@ export const products: ProductFamily[] = [
       {
         slug: "custom-die-cuts",
         name: "Custom die-cuts",
-        image: "/images/corrugated.jpg",
+        image: "/images/products/custom-die-cuts.jpg",
         pack: "Die-cut to order",
         use: "Brand-fit packaging",
         summary: "Custom die-cut corrugated formats fitted to brand and product requirements.",
@@ -274,12 +274,17 @@ export const products: ProductFamily[] = [
     slug: "pet-bottle",
     name: "PET Bottle Blowing",
     blurb: "PET bottle blowing for liquid household and commercial products.",
-    image: "/images/pet-blowing.jpg",
+    image: "/images/products/pet-bottle.jpg",
     gallery: [
       {
-        src: "/images/pet-blowing.jpg",
-        alt: "PET bottle blowing equipment",
-        label: "PET blowing",
+        src: "/images/products/pet-bottle.jpg",
+        alt: "PET injection stretch blow molding process diagram",
+        label: "ISBM process",
+      },
+      {
+        src: "/images/products/pet-standard-necks.jpg",
+        alt: "PET preform injection and blow stages",
+        label: "Preform to bottle",
       },
       {
         src: "/images/factory.jpg",
@@ -287,13 +292,8 @@ export const products: ProductFamily[] = [
         label: "Facility",
       },
       {
-        src: "/images/packaging.jpg",
-        alt: "Packaging systems",
-        label: "Packaging systems",
-      },
-      {
         src: "/images/products/bahar-dishwash.jpg",
-        alt: "Liquid product packaging",
+        alt: "Liquid product in PET-compatible packaging",
         label: "Liquid packs",
       },
     ],
@@ -301,7 +301,7 @@ export const products: ProductFamily[] = [
       {
         slug: "pet-standard-necks",
         name: "Standard necks",
-        image: "/images/pet-blowing.jpg",
+        image: "/images/products/pet-standard-necks.jpg",
         pack: "Common neck finishes",
         use: "Liquids & cleaners",
         summary: "Standard PET neck finishes for liquid household and commercial products.",
@@ -309,7 +309,7 @@ export const products: ProductFamily[] = [
       {
         slug: "pet-custom-profiles",
         name: "Custom profiles",
-        image: "/images/pet-blowing.jpg",
+        image: "/images/products/pet-custom-profiles.jpg",
         pack: "Custom bottle shapes",
         use: "Private-label brands",
         summary: "Custom PET bottle profiles for private-label and brand-differentiated packs.",
@@ -317,7 +317,7 @@ export const products: ProductFamily[] = [
       {
         slug: "pet-bulk-supply",
         name: "Bulk supply",
-        image: "/images/pet-blowing.jpg",
+        image: "/images/products/pet-bulk-supply.jpg",
         pack: "Volume production",
         use: "OEM / contract fill",
         summary: "Volume PET bottle supply for OEM and contract-fill programmes.",
