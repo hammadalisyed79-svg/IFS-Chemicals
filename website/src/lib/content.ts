@@ -42,6 +42,15 @@ export const products: ProductFamily[] = [
           "Industrial base powder for reformulation and private-label programmes requiring consistent bulk supply.",
       },
       {
+        slug: "lighter-density-base-powder",
+        name: "Lighter Density Base Powder",
+        image: "/images/products/lighter-density-base-powder.jpg",
+        pack: "Industrial bulk sacks",
+        use: "B2B / spray-dry grade base",
+        summary:
+          "Lighter-density detergent base powder for reformulation and private-label programmes that require free-flowing bulk characteristics.",
+      },
+      {
         slug: "happy-detergent",
         name: "Happy Detergent Powder",
         image: "/images/products/happy-detergent.jpg",
