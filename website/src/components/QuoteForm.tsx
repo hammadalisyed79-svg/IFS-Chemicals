@@ -13,7 +13,7 @@ export function QuoteForm() {
   const [whatsappFollowUp, setWhatsappFollowUp] = useState<string | null>(null);
 
   const field =
-    "w-full min-h-11 border border-[var(--line)] bg-white px-3.5 py-3 text-base outline-none transition focus:border-[var(--blue)] focus:ring-2 focus:ring-[var(--blue)]/15 sm:text-sm";
+    "w-full min-h-12 border border-[var(--line)] bg-white px-3.5 py-3.5 text-base outline-none transition focus:border-[var(--blue)] focus:ring-2 focus:ring-[var(--blue)]/15 sm:min-h-11 sm:py-3 sm:text-sm";
 
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -257,9 +257,11 @@ export function QuoteForm() {
               <button
                 type="submit"
                 disabled={status === "sending" || lines.length === 0}
-                className="btn btn-accent w-full disabled:opacity-60"
+                className="btn btn-accent sticky bottom-[calc(var(--dock-h)+0.65rem)] z-20 w-full shadow-[0_10px_30px_rgba(185,28,34,0.35)] disabled:opacity-60 md:static md:shadow-[0_8px_20px_rgba(185,28,34,0.22)]"
               >
-                {status === "sending" ? "Sending…" : "Submit quote request"}
+                {status === "sending"
+                  ? "Sending…"
+                  : `Submit quote${count ? ` · ${count}` : ""}`}
               </button>
               {message && status === "err" ? (
                 <p className="text-sm text-red-700" role="status">

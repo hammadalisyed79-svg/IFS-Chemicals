@@ -53,7 +53,7 @@ export function ContactForm() {
   }
 
   const field =
-    "w-full min-h-11 border border-[var(--line)] bg-white px-3.5 py-3 text-base outline-none transition focus:border-[var(--blue)] focus:ring-2 focus:ring-[var(--blue)]/15 sm:text-sm";
+    "w-full min-h-12 border border-[var(--line)] bg-white px-3.5 py-3.5 text-base outline-none transition focus:border-[var(--blue)] focus:ring-2 focus:ring-[var(--blue)]/15 sm:min-h-11 sm:py-3 sm:text-sm";
 
   return (
     <form onSubmit={onSubmit} className="space-y-4">

@@ -7,35 +7,36 @@ import { TrustSection } from "@/components/TrustSection";
 export default function HomePage() {
   return (
     <>
-      <section className="relative min-h-[min(92svh,860px)] overflow-hidden bg-[var(--navy)] text-white">
+      <section className="hero-mobile relative min-h-[min(92svh,860px)] overflow-hidden bg-[var(--navy)] text-white">
         <Image
           src="/images/hero/products-showcase.jpg"
           alt="IFS Chemicals product portfolio"
           fill
           priority
-          className="animate-kenburns object-cover object-[75%_42%] sm:object-[70%_40%] md:object-[64%_38%]"
+          className="animate-kenburns object-cover object-[72%_38%] sm:object-[70%_40%] md:object-[64%_38%]"
           sizes="100vw"
         />
-        <div className="absolute inset-0 bg-gradient-to-r from-[var(--navy)] via-[var(--navy)]/90 to-[var(--navy)]/20 md:via-[var(--navy)]/88 md:to-transparent" />
-        <div className="absolute inset-0 bg-gradient-to-t from-[var(--navy)] via-transparent to-[var(--navy)]/35" />
+        <div className="absolute inset-0 bg-gradient-to-b from-[var(--navy)]/80 via-[var(--navy)]/55 to-[var(--navy)] md:bg-gradient-to-r md:from-[var(--navy)] md:via-[var(--navy)]/88 md:to-transparent" />
+        <div className="absolute inset-0 hidden bg-gradient-to-t from-[var(--navy)] via-transparent to-[var(--navy)]/35 md:block" />
 
-        <div className="container-site relative flex min-h-[min(92svh,860px)] flex-col justify-end pb-14 pt-20 md:justify-center md:pb-24 md:pt-24">
+        <div className="hero-mobile-copy container-site relative flex min-h-[min(88svh,720px)] flex-col justify-end pb-10 pt-16 md:min-h-[min(92svh,860px)] md:justify-center md:pb-24 md:pt-24">
+          <div className="mb-5 h-px w-12 origin-left bg-[var(--red)] brand-rule md:mb-0 md:hidden" />
           <p className="animate-rise text-[11px] font-semibold uppercase tracking-[0.22em] text-white/55">
             Manufacturer · Gujrat, Pakistan
           </p>
-          <h1 className="animate-rise-delay font-display mt-5 max-w-2xl text-[2.5rem] font-semibold text-white sm:text-5xl md:text-6xl lg:text-[4.25rem]">
+          <h1 className="animate-rise-delay font-display mt-4 max-w-2xl text-[2.15rem] font-semibold leading-[1.08] text-white sm:mt-5 sm:text-5xl md:text-6xl lg:text-[4.25rem]">
             Cleaning solutions engineered for everyday performance.
           </h1>
-          <p className="animate-rise-delay-2 mt-6 max-w-lg text-[1.05rem] leading-relaxed text-white/78 md:text-lg">
+          <p className="animate-rise-delay-2 mt-4 max-w-lg text-[0.98rem] leading-relaxed text-white/78 sm:mt-6 sm:text-[1.05rem] md:text-lg">
             Detergent powders, hygiene care, and packaging systems for retail
             brands and professional buyers — manufactured to international
             standards from our facility in Pakistan.
           </p>
-          <div className="animate-rise-delay-2 mt-10 flex flex-col gap-3 sm:flex-row">
-            <Link href="/products" className="btn btn-accent">
+          <div className="animate-rise-delay-2 mt-8 grid grid-cols-1 gap-3 sm:mt-10 sm:flex sm:flex-row">
+            <Link href="/products" className="btn btn-accent w-full sm:w-auto">
               Explore products
             </Link>
-            <Link href="/quote" className="btn btn-ghost">
+            <Link href="/quote" className="btn btn-ghost w-full sm:w-auto">
               Request a quote
             </Link>
           </div>
@@ -57,7 +58,7 @@ export default function HomePage() {
         </div>
       </section>
 
-      <section className="container-site py-20 md:py-28">
+      <section className="container-site py-14 md:py-28">
         <div className="flex flex-col gap-6 md:flex-row md:items-end md:justify-between">
           <div className="max-w-2xl">
             <p className="eyebrow">Capabilities</p>
@@ -141,7 +142,7 @@ export default function HomePage() {
         </div>
       </section>
 
-      <section className="container-site py-20 md:py-28">
+      <section className="container-site py-14 md:py-28">
         <div className="grid gap-12 lg:grid-cols-2 lg:gap-16">
           <div>
             <p className="eyebrow">Contact</p>

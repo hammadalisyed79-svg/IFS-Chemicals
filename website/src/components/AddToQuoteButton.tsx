@@ -24,13 +24,13 @@ export function AddToQuoteButton({
 
   if (justAdded || inQuote) {
     return (
-      <div className="flex flex-wrap items-center gap-3">
-        <button type="button" onClick={onClick} className={className}>
+      <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:flex-wrap sm:items-center">
+        <button type="button" onClick={onClick} className={`${className} w-full sm:w-auto`}>
           {justAdded ? "Added to quote" : "Add another unit"}
         </button>
         <Link
           href="/quote"
-          className="text-sm font-semibold text-[var(--blue)] transition hover:underline"
+          className="text-center text-sm font-semibold text-[var(--blue)] transition hover:underline sm:text-left"
         >
           View quote →
         </Link>
@@ -39,7 +39,7 @@ export function AddToQuoteButton({
   }
 
   return (
-    <button type="button" onClick={onClick} className={className}>
+    <button type="button" onClick={onClick} className={`${className} w-full sm:w-auto`}>
       Add to quote
     </button>
   );

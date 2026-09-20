@@ -7,6 +7,7 @@ import { WhatsAppFloat } from "@/components/WhatsAppFloat";
 import { JsonLd } from "@/components/JsonLd";
 import { QuoteProvider } from "@/components/QuoteProvider";
 import { Analytics } from "@/components/Analytics";
+import { MobileDock } from "@/components/MobileDock";
 import { defaultOgImage, siteUrl } from "@/lib/seo";
 
 const display = Archivo({
@@ -24,6 +25,8 @@ const body = IBM_Plex_Sans({
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
+  maximumScale: 5,
+  viewportFit: "cover",
   themeColor: "#0a1628",
 };
 
@@ -90,9 +93,10 @@ export default function RootLayout({
         <QuoteProvider>
           <JsonLd />
           <SiteHeader />
-          <main>{children}</main>
+          <main className="pb-2 md:pb-0">{children}</main>
           <SiteFooter />
           <WhatsAppFloat />
+          <MobileDock />
         </QuoteProvider>
       </body>
     </html>

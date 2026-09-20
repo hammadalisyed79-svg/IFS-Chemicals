@@ -307,7 +307,7 @@ function ItemDetail({
               </div>
             </dl>
             <div className="mt-8 flex flex-col gap-4">
-              <div className="flex flex-wrap gap-3">
+              <div className="flex w-full flex-col gap-3 sm:flex-row sm:flex-wrap">
                 <AddToQuoteButton slug={item.slug} className="btn btn-accent" />
                 <a
                   href={`${contact.whatsapp}?text=${encodeURIComponent(
@@ -315,7 +315,7 @@ function ItemDetail({
                   )}`}
                   target="_blank"
                   rel="noreferrer"
-                  className="btn btn-outline"
+                  className="btn btn-outline w-full sm:w-auto"
                 >
                   WhatsApp inquiry
                 </a>
