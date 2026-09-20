@@ -11,8 +11,8 @@ const links = [
 
 export function SiteHeader() {
   return (
-    <header className="sticky top-0 z-50 border-b border-white/10 bg-[var(--navy)]/95 text-white backdrop-blur-md">
-      <div className="hidden border-b border-white/10 bg-[var(--red)] text-[13px] sm:block">
+    <header className="sticky top-0 z-50 border-b border-black/10 bg-[#071833] text-white shadow-sm">
+      <div className="hidden bg-[#c41e26] text-[13px] sm:block">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-5 py-1.5 md:px-8">
           <div className="flex flex-wrap items-center gap-x-5 gap-y-1">
             <a href={contact.phoneHref} className="hover:underline">
@@ -48,23 +48,23 @@ export function SiteHeader() {
             <Link
               key={l.href}
               href={l.href}
-              className="text-sm font-semibold uppercase tracking-[0.14em] text-white/85 transition hover:text-white"
+              className="text-sm font-semibold uppercase tracking-[0.14em] text-white/90 transition hover:text-white"
             >
               {l.label}
             </Link>
           ))}
           <Link
             href="/contact"
-            className="bg-[var(--red)] px-4 py-2.5 text-sm font-semibold uppercase tracking-[0.08em] text-white transition hover:bg-[var(--red-deep)]"
+            className="bg-[#c41e26] px-4 py-2.5 text-sm font-semibold uppercase tracking-[0.08em] text-white transition hover:bg-[#9e161d]"
           >
             Get a quote
           </Link>
         </nav>
         <div className="flex items-center gap-4 md:hidden">
-          <Link href="/products" className="text-sm font-semibold">
+          <Link href="/products" className="text-sm font-semibold text-white">
             Products
           </Link>
-          <a href={contact.phoneHref} className="text-sm font-bold text-[var(--red)]">
+          <a href={contact.phoneHref} className="text-sm font-bold text-[#ff6b6b]">
             Call
           </a>
         </div>
