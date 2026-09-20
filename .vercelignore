@@ -1,0 +1,37 @@
+# Keep Vercel website deploys free of the ERP Python tree and heavy artifacts.
+# Next.js sources live under website/ (copied in installCommand).
+
+# Python / ERP runtime
+requirements.txt
+requirements-*.txt
+Pipfile
+Pipfile.lock
+pyproject.toml
+*.py
+erp_core/
+erp_ui/
+api/
+application/
+venv/
+.venv/
+__pycache__/
+
+# Databases & backups
+*.db
+*.sqlite
+*.sqlite3
+backups/
+data/
+
+# Local / generated
+reports/
+tools/
+archive/
+client_dist/
+certs/
+.agents/
+.pytest_cache/
+.streamlit/
+node_modules/
+website/node_modules/
+website/.next/
