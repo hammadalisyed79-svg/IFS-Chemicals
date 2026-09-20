@@ -60,6 +60,13 @@ Optional: set `DATABASE_URL` in Vercel project env for contact form storage.
 - Packaging / PET / corrugated platform pages include capability galleries
 - Distributor price lists stay behind the partner portal (`erp.ifschemicals.com`) — public site links to request access / open portal
 
+## Commerce (Phase 5)
+
+- Light **quote list** only — no cart checkout, no payments on this site
+- `/quote` — build a multi-SKU list (localStorage), submit as `inquiryType: quote`
+- Contact API stores optional `quote_items` JSON in Neon
+- Partner portal remains the place for authorised trade pricing / ERP tools
+
 ## GoDaddy DNS cutover (apex is currently Parked)
 
 In GoDaddy → DNS for `ifschemicals.com` (nameservers `ns19`/`ns20.domaincontrol.com`):

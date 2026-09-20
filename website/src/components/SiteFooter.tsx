@@ -50,6 +50,11 @@ export function SiteFooter() {
                 </Link>
               </li>
             ))}
+            <li>
+              <Link href="/quote" className="transition hover:text-white">
+                Request a quote
+              </Link>
+            </li>
           </ul>
         </div>
         <div className="md:col-span-4">

@@ -76,7 +76,7 @@ export function MobileNav() {
           </nav>
           <div className="mt-auto flex flex-col gap-3 pt-10">
             <Link
-              href="/contact"
+              href="/quote"
               onClick={() => setOpen(false)}
               className="btn btn-accent w-full"
             >

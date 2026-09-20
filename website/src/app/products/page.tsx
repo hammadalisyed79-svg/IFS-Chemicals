@@ -121,7 +121,10 @@ export default function ProductsPage() {
             trade price lists in the partner portal.
           </p>
           <div className="mt-8 flex flex-wrap justify-center gap-3">
-            <Link href="/contact" className="btn btn-accent">
+            <Link href="/quote" className="btn btn-accent">
+              Build a quote
+            </Link>
+            <Link href="/contact" className="btn btn-outline">
               Contact sales
             </Link>
             <a

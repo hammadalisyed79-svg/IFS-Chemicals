@@ -5,6 +5,7 @@ import { SiteHeader } from "@/components/SiteHeader";
 import { SiteFooter } from "@/components/SiteFooter";
 import { WhatsAppFloat } from "@/components/WhatsAppFloat";
 import { JsonLd } from "@/components/JsonLd";
+import { QuoteProvider } from "@/components/QuoteProvider";
 import { defaultOgImage, siteUrl } from "@/lib/seo";
 
 const display = Archivo({
@@ -84,11 +85,13 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={`${display.variable} ${body.variable} antialiased`}>
-        <JsonLd />
-        <SiteHeader />
-        <main>{children}</main>
-        <SiteFooter />
-        <WhatsAppFloat />
+        <QuoteProvider>
+          <JsonLd />
+          <SiteHeader />
+          <main>{children}</main>
+          <SiteFooter />
+          <WhatsAppFloat />
+        </QuoteProvider>
       </body>
     </html>
   );

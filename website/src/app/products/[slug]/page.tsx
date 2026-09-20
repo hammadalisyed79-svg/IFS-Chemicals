@@ -10,6 +10,7 @@ import {
   type ProductFamily,
 } from "@/lib/content";
 import { pageMeta, siteUrl } from "@/lib/seo";
+import { AddToQuoteButton } from "@/components/AddToQuoteButton";
 
 type Props = { params: Promise<{ slug: string }> };
 
@@ -305,20 +306,24 @@ function ItemDetail({
                 </dd>
               </div>
             </dl>
-            <div className="mt-8 flex flex-wrap gap-3">
-              <Link href="/contact" className="btn btn-accent">
-                Request a quote
-              </Link>
-              <a
-                href={`${contact.whatsapp}?text=${encodeURIComponent(
-                  `Hello — I am interested in ${item.name} from IFS Chemicals.`,
-                )}`}
-                target="_blank"
-                rel="noreferrer"
-                className="btn btn-outline"
-              >
-                WhatsApp inquiry
-              </a>
+            <div className="mt-8 flex flex-col gap-4">
+              <div className="flex flex-wrap gap-3">
+                <AddToQuoteButton slug={item.slug} className="btn btn-accent" />
+                <a
+                  href={`${contact.whatsapp}?text=${encodeURIComponent(
+                    `Hello — I am interested in ${item.name} from IFS Chemicals.`,
+                  )}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="btn btn-outline"
+                >
+                  WhatsApp inquiry
+                </a>
+              </div>
+              <p className="text-sm text-[var(--muted)]">
+                No online checkout. Add SKUs to a quote list and our commercial
+                team will respond with pricing.
+              </p>
             </div>
           </div>
         </div>

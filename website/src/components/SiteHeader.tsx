@@ -2,6 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { contact } from "@/lib/content";
 import { MobileNav } from "@/components/MobileNav";
+import { QuoteNavLink } from "@/components/QuoteNavLink";
 
 const links = [
   { href: "/", label: "Home" },
@@ -57,7 +58,7 @@ export function SiteHeader() {
             priority
           />
         </Link>
-        <nav className="hidden items-center gap-9 md:flex">
+        <nav className="hidden items-center gap-8 md:flex">
           {links.map((l) => (
             <Link
               key={l.href}
@@ -67,19 +68,13 @@ export function SiteHeader() {
               {l.label}
             </Link>
           ))}
-          <Link href="/contact" className="btn btn-accent">
+          <QuoteNavLink />
+          <Link href="/quote" className="btn btn-accent">
             Request a quote
           </Link>
         </nav>
         <div className="flex items-center gap-3 md:hidden">
-          <a
-            href={contact.whatsapp}
-            target="_blank"
-            rel="noreferrer"
-            className="text-[13px] font-semibold text-[var(--blue)]"
-          >
-            WhatsApp
-          </a>
+          <QuoteNavLink className="text-[13px] font-semibold text-[var(--blue)]" />
           <MobileNav />
         </div>
       </div>

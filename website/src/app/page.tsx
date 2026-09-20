@@ -35,8 +35,8 @@ export default function HomePage() {
             <Link href="/products" className="btn btn-accent">
               Explore products
             </Link>
-            <Link href="/contact" className="btn btn-ghost">
-              Speak with sales
+            <Link href="/quote" className="btn btn-ghost">
+              Request a quote
             </Link>
           </div>
         </div>
