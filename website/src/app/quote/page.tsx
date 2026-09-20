@@ -15,7 +15,7 @@ export default function QuotePage() {
     <div className="bg-[var(--paper)]">
       <div className="bg-[var(--navy)] text-white">
         <div className="container-site pb-12 pt-10 md:pb-20 md:pt-16">
-          <p className="eyebrow !text-white/50">Commerce</p>
+          <p className="eyebrow !text-white/70">Commerce</p>
           <h1 className="font-display mt-4 max-w-3xl text-[1.85rem] font-semibold leading-tight sm:text-4xl md:text-5xl">
             Request a quote — no online checkout.
           </h1>

@@ -15,7 +15,7 @@ export default function ContactPage() {
     <div className="bg-[var(--paper)]">
       <div className="bg-[var(--navy)] text-white">
         <div className="container-site pb-16 pt-14 md:pb-20 md:pt-20">
-          <p className="eyebrow !text-white/50">Contact</p>
+          <p className="eyebrow !text-white/70">Contact</p>
           <h1 className="font-display mt-4 max-w-3xl text-3xl font-semibold sm:text-4xl md:text-6xl">
             Speak with our commercial team.
           </h1>

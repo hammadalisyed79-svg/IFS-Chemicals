@@ -182,6 +182,11 @@ button {
   .container-site {
     padding-inline: 1rem;
   }
+
+  /* Footer sits above dock; keep last links tappable */
+  footer {
+    padding-bottom: 1.25rem;
+  }
 }
 
 .mobile-dock {

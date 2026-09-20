@@ -116,15 +116,15 @@ function FamilyDetail({ family }: { family: ProductFamily }) {
             <span className="mx-2">/</span>
             <span className="text-white/80">{family.name}</span>
           </nav>
-          <p className="eyebrow mt-6 !text-white/50">Product platform</p>
+          <p className="eyebrow mt-6 !text-white/70">Product platform</p>
           <h1 className="font-display mt-3 max-w-3xl text-3xl font-semibold sm:text-4xl md:text-5xl">
             {family.name}
           </h1>
           <p className="mt-5 max-w-xl text-[1.05rem] leading-relaxed text-white/70">
             {family.blurb}
           </p>
-          <div className="mt-8 flex flex-wrap gap-3">
-            <Link href="/contact" className="btn btn-accent">
+          <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+            <Link href="/quote" className="btn btn-accent">
               Request a quote
             </Link>
             <Link href="/products" className="btn btn-ghost">

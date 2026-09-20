@@ -25,7 +25,7 @@ export default function AboutPage() {
         />
         <div className="absolute inset-0 bg-gradient-to-r from-[var(--navy)] via-[var(--navy)]/88 to-[var(--navy)]/35" />
         <div className="container-site relative pb-16 pt-14 md:pb-24 md:pt-20">
-          <p className="eyebrow !text-white/50">Company</p>
+          <p className="eyebrow !text-white/70">Company</p>
           <h1 className="font-display mt-4 max-w-3xl text-3xl font-semibold sm:text-4xl md:text-6xl">
             Innovative Future Solutions.
           </h1>

@@ -100,12 +100,6 @@ export function SiteHeader() {
           </Link>
         </nav>
         <div className="flex items-center gap-2 md:hidden">
-          <Link
-            href="/quote"
-            className="inline-flex h-10 items-center bg-[var(--red)] px-3.5 text-[12px] font-semibold tracking-[0.03em] text-white"
-          >
-            Quote
-          </Link>
           <MobileNav />
         </div>
       </div>

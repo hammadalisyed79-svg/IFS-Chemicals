@@ -19,8 +19,8 @@ export default function HomePage() {
         <div className="absolute inset-0 bg-gradient-to-r from-[var(--navy)] via-[var(--navy)]/90 to-[var(--navy)]/25 md:via-[var(--navy)]/88 md:to-transparent" />
         <div className="absolute inset-0 bg-gradient-to-t from-[var(--navy)] via-transparent to-[var(--navy)]/35" />
 
-        <div className="container-site relative flex min-h-[min(92svh,860px)] flex-col justify-end pb-16 pt-20 md:justify-center md:pb-24 md:pt-24">
-          <p className="animate-rise text-[11px] font-semibold uppercase tracking-[0.22em] text-white/55">
+        <div className="container-site relative flex min-h-[min(92svh,860px)] flex-col justify-end pb-[calc(5.5rem+var(--dock-h,0px))] pt-20 md:justify-center md:pb-24 md:pt-24">
+          <p className="animate-rise text-[11px] font-semibold uppercase tracking-[0.22em] text-white/70">
             Manufacturer · Gujrat, Pakistan
           </p>
           <h1 className="animate-rise-delay font-display mt-5 max-w-2xl text-[2.35rem] font-semibold text-white sm:text-5xl md:text-6xl lg:text-[4.25rem]">
