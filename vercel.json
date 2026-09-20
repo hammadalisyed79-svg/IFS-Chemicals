@@ -1,5 +1,5 @@
 {
   "framework": "nextjs",
-  "installCommand": "cp -a website/. . && rm -f requirements.txt requirements-*.txt Pipfile Pipfile.lock pyproject.toml && npm install",
+  "installCommand": "cp -a website/. . && rm -rf api application erp_core erp_ui archive client_dist deploy && rm -f requirements.txt requirements-*.txt Pipfile Pipfile.lock pyproject.toml && npm install",
   "buildCommand": "npm run build"
 }

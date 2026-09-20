@@ -1,6 +1,9 @@
 # Keep Vercel website deploys free of the ERP Python tree and heavy artifacts.
 # Next.js sources live under website/ (copied in installCommand).
 
+# Critical: ERP FastAPI folder must not ship — it steals /api/* from Next.js
+/api/
+
 # Python / ERP runtime
 requirements.txt
 requirements-*.txt
@@ -10,7 +13,6 @@ pyproject.toml
 *.py
 erp_core/
 erp_ui/
-api/
 application/
 venv/
 .venv/
