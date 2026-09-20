@@ -7,38 +7,36 @@ import { TrustSection } from "@/components/TrustSection";
 export default function HomePage() {
   return (
     <>
-      <section className="hero-mobile relative min-h-[min(92svh,860px)] overflow-hidden bg-[var(--navy)] text-white">
+      <section className="relative min-h-[min(92svh,860px)] overflow-hidden bg-[var(--navy)] text-white">
         <Image
           src="/images/hero/products-showcase.jpg"
           alt="IFS Chemicals product portfolio"
           fill
           priority
-          className="animate-kenburns object-cover object-[72%_38%] sm:object-[70%_40%] md:object-[64%_38%]"
+          className="animate-kenburns object-cover object-[70%_40%] md:object-[64%_38%]"
           sizes="100vw"
         />
-        <div className="absolute inset-0 bg-gradient-to-b from-[var(--navy)]/80 via-[var(--navy)]/55 to-[var(--navy)] md:bg-gradient-to-r md:from-[var(--navy)] md:via-[var(--navy)]/88 md:to-transparent" />
-        <div className="absolute inset-0 hidden bg-gradient-to-t from-[var(--navy)] via-transparent to-[var(--navy)]/35 md:block" />
+        <div className="absolute inset-0 bg-gradient-to-r from-[var(--navy)] via-[var(--navy)]/90 to-[var(--navy)]/25 md:via-[var(--navy)]/88 md:to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-t from-[var(--navy)] via-transparent to-[var(--navy)]/35" />
 
-        <div className="hero-mobile-copy container-site relative flex min-h-[min(78svh,640px)] flex-col justify-end pb-8 pt-14 md:min-h-[min(92svh,860px)] md:justify-center md:pb-24 md:pt-24">
-          <p className="animate-rise text-[10px] font-semibold uppercase tracking-[0.2em] text-white/55 md:text-[11px] md:tracking-[0.22em]">
+        <div className="container-site relative flex min-h-[min(92svh,860px)] flex-col justify-end pb-16 pt-20 md:justify-center md:pb-24 md:pt-24">
+          <p className="animate-rise text-[11px] font-semibold uppercase tracking-[0.22em] text-white/55">
             Manufacturer · Gujrat, Pakistan
           </p>
-          <h1 className="animate-rise-delay font-display mt-3 max-w-2xl text-[1.85rem] font-semibold leading-[1.12] text-white sm:mt-5 sm:text-5xl md:text-6xl lg:text-[4.25rem]">
+          <h1 className="animate-rise-delay font-display mt-5 max-w-2xl text-[2.35rem] font-semibold text-white sm:text-5xl md:text-6xl lg:text-[4.25rem]">
             Cleaning solutions engineered for everyday performance.
           </h1>
-          <p className="animate-rise-delay-2 mt-3 max-w-lg text-[0.94rem] leading-relaxed text-white/75 sm:mt-6 sm:text-[1.05rem] md:text-lg">
+          <p className="animate-rise-delay-2 mt-5 max-w-lg text-[1.05rem] leading-relaxed text-white/78 md:mt-6 md:text-lg">
             Detergent powders, hygiene care, and packaging systems for retail
             brands and professional buyers — manufactured to international
             standards from our facility in Pakistan.
           </p>
-          <div className="animate-rise-delay-2 mt-6 grid grid-cols-2 gap-2.5 sm:mt-10 sm:flex sm:flex-row sm:gap-3">
-            <Link href="/products" className="btn btn-accent w-full sm:w-auto">
-              <span className="sm:hidden">Products</span>
-              <span className="hidden sm:inline">Explore products</span>
+          <div className="animate-rise-delay-2 mt-9 flex flex-col gap-3 sm:mt-10 sm:flex-row">
+            <Link href="/products" className="btn btn-accent">
+              Explore products
             </Link>
-            <Link href="/quote" className="btn btn-ghost w-full sm:w-auto">
-              <span className="sm:hidden">Get a quote</span>
-              <span className="hidden sm:inline">Request a quote</span>
+            <Link href="/quote" className="btn btn-ghost">
+              Request a quote
             </Link>
           </div>
         </div>
