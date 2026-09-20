@@ -1,11 +1,14 @@
 import type { Metadata } from "next";
 import { contact } from "@/lib/content";
 import { ContactForm } from "@/components/ContactForm";
+import { mapsSearchUrl, pageMeta } from "@/lib/seo";
 
-export const metadata: Metadata = {
-  title: "Contact",
-  description: "Contact IFS Chemicals in Gujrat — phone, email, and inquiry form.",
-};
+export const metadata: Metadata = pageMeta({
+  title: "Contact — Quotes, Distributors & B2B",
+  description:
+    "Contact IFS Chemicals in Gujrat for product quotes, distributor onboarding, and B2B supply. Call +92 321 6001040, WhatsApp, or send an inquiry online.",
+  path: "/contact",
+});
 
 export default function ContactPage() {
   return (
@@ -27,10 +30,18 @@ export default function ContactPage() {
       <div className="mx-auto grid max-w-6xl gap-12 px-5 py-16 md:grid-cols-2 md:px-8 md:py-24">
         <div className="space-y-5">
           <div>
-            <p className="text-xs font-bold uppercase tracking-[0.18em] text-[var(--red)]">
+            <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#c41e26]">
               Address
             </p>
             <p className="mt-2 text-lg text-[var(--ink)]">{contact.address}</p>
+            <a
+              href={mapsSearchUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="mt-2 inline-block text-sm font-semibold text-[#0b5ea8] underline"
+            >
+              Open in Google Maps
+            </a>
           </div>
           <div>
             <p className="text-xs font-bold uppercase tracking-[0.18em] text-[var(--red)]">

@@ -4,6 +4,8 @@ import "./globals.css";
 import { SiteHeader } from "@/components/SiteHeader";
 import { SiteFooter } from "@/components/SiteFooter";
 import { WhatsAppFloat } from "@/components/WhatsAppFloat";
+import { JsonLd } from "@/components/JsonLd";
+import { defaultOgImage, siteUrl } from "@/lib/seo";
 
 const display = Outfit({
   subsets: ["latin"],
@@ -24,40 +26,53 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
+  metadataBase: new URL(siteUrl),
   title: {
-    default: "IFS Chemicals — Innovative Future Solutions",
+    default: "IFS Chemicals — Detergent & Packaging Manufacturer in Gujrat",
     template: "%s · IFS Chemicals",
   },
   description:
-    "Leading manufacturer of detergent powders, dishwash & toilet cleaners, bars & oil, and packaging materials in Gujrat, Pakistan.",
-  metadataBase: new URL("https://ifschemicals.com"),
+    "IFS Chemicals manufactures detergent powders, dishwash & toilet cleaners, bars & oil, flexible packaging, corrugated boxes, and PET bottles in Gujrat, Pakistan.",
+  keywords: [
+    "IFS Chemicals",
+    "detergent powder Pakistan",
+    "Gujrat manufacturer",
+    "Happy detergent",
+    "Train detergent",
+    "dishwash liquid",
+    "flexible packaging",
+    "PET bottle blowing",
+    "Made in Pakistan",
+  ],
+  authors: [{ name: "IFS Chemicals" }],
+  creator: "IFS Chemicals",
+  publisher: "IFS Chemicals",
   icons: {
     icon: [{ url: "/images/icon.png", type: "image/png" }],
     apple: [{ url: "/images/icon.png" }],
   },
+  alternates: { canonical: siteUrl },
   openGraph: {
-    title: "IFS Chemicals — Innovative Future Solutions",
+    title: "IFS Chemicals — Detergent & Packaging Manufacturer in Gujrat",
     description:
-      "High-quality cleaning solutions and packaging materials from Gujrat, Pakistan.",
-    url: "https://ifschemicals.com",
+      "High-quality cleaning solutions and packaging materials from Gujrat, Pakistan. Made in Pakistan.",
+    url: siteUrl,
     siteName: "IFS Chemicals",
     type: "website",
     locale: "en_PK",
-    images: [
-      {
-        url: "/images/og.jpg",
-        width: 1200,
-        height: 630,
-        alt: "IFS Chemicals product range",
-      },
-    ],
+    images: [defaultOgImage],
   },
   twitter: {
     card: "summary_large_image",
-    title: "IFS Chemicals — Innovative Future Solutions",
+    title: "IFS Chemicals — Made in Gujrat, Pakistan",
     description:
-      "Cleaning solutions and packaging materials manufactured in Gujrat, Pakistan.",
-    images: ["/images/og.jpg"],
+      "Detergent powders, dishwash care, and packaging manufactured in Gujrat.",
+    images: [defaultOgImage.url],
+  },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: { index: true, follow: true },
   },
 };
 
@@ -69,6 +84,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={`${display.variable} ${body.variable} antialiased`}>
+        <JsonLd />
         <SiteHeader />
         <main>{children}</main>
         <SiteFooter />

@@ -47,6 +47,13 @@ npx vercel deploy --prod --yes
 
 Optional: set `DATABASE_URL` in Vercel project env for contact form storage.
 
+## SEO (Phase 3)
+
+- Sitemap: https://ifschemicals.com/sitemap.xml
+- Robots: https://ifschemicals.com/robots.txt
+- LocalBusiness JSON-LD is embedded site-wide
+- Claim / verify the business in [Google Business Profile](https://business.google.com/) using address Bridge Canal Saroki, Gujrat, and link the website URL
+
 ## GoDaddy DNS cutover (apex is currently Parked)
 
 In GoDaddy → DNS for `ifschemicals.com` (nameservers `ns19`/`ns20.domaincontrol.com`):

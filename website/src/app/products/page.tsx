@@ -2,12 +2,14 @@ import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import { products } from "@/lib/content";
+import { pageMeta } from "@/lib/seo";
 
-export const metadata: Metadata = {
-  title: "Products",
+export const metadata: Metadata = pageMeta({
+  title: "Products — Detergent, Dishwash, Packaging & PET",
   description:
-    "Detergent powders, bars & oil, dishwash & toilet cleaners, flexible packaging, corrugated boxes, and PET bottle blowing.",
-};
+    "Browse IFS Chemicals products: Happy, Train, JagMag, Lashkara & Bahar detergents, dishwash bars and liquids, toilet cleaners, flexible packaging, corrugated boxes, and PET bottle blowing.",
+  path: "/products",
+});
 
 export default function ProductsPage() {
   return (

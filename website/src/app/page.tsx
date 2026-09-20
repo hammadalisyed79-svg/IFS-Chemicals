@@ -2,6 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { contact, highlights, products } from "@/lib/content";
 import { ContactForm } from "@/components/ContactForm";
+import { TrustSection } from "@/components/TrustSection";
 
 export default function HomePage() {
   return (
@@ -106,11 +107,13 @@ export default function HomePage() {
         </div>
       </section>
 
+      <TrustSection />
+
       <section className="relative overflow-hidden bg-[#071833] text-white">
         <div className="absolute inset-y-0 right-0 hidden w-1/2 lg:block">
           <Image
             src="/images/factory.jpg"
-            alt="IFS Chemicals manufacturing facility"
+            alt="IFS Chemicals manufacturing facility in Gujrat, Pakistan"
             fill
             className="object-cover opacity-55"
             sizes="50vw"
