@@ -22,12 +22,20 @@
 
 html {
   scroll-behavior: smooth;
+  -webkit-text-size-adjust: 100%;
 }
 
 body {
   color: var(--ink);
   background: var(--paper);
   font-family: var(--font-body), system-ui, sans-serif;
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+}
+
+a,
+button {
+  -webkit-tap-highlight-color: transparent;
 }
 
 ::selection {

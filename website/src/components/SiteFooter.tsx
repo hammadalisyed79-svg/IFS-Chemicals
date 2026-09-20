@@ -2,10 +2,17 @@ import Image from "next/image";
 import Link from "next/link";
 import { contact, products } from "@/lib/content";
 
+const social = [
+  { label: "Facebook", href: contact.social.facebook },
+  { label: "Instagram", href: contact.social.instagram },
+  { label: "LinkedIn", href: contact.social.linkedin },
+  { label: "WhatsApp", href: contact.whatsapp },
+];
+
 export function SiteFooter() {
   return (
-    <footer className="bg-[var(--navy)] text-white">
-      <div className="mx-auto grid max-w-6xl gap-12 px-5 py-16 md:grid-cols-12 md:px-8">
+    <footer className="bg-[#071833] text-white">
+      <div className="mx-auto grid max-w-6xl gap-12 px-5 py-14 md:grid-cols-12 md:px-8 md:py-16">
         <div className="md:col-span-5">
           <Image
             src="/images/logo.png"
@@ -19,9 +26,22 @@ export function SiteFooter() {
             packaging materials — built on innovation, quality, and customer
             trust. Made in Pakistan.
           </p>
+          <div className="mt-6 flex flex-wrap gap-x-5 gap-y-2 text-sm font-semibold">
+            {social.map((s) => (
+              <a
+                key={s.label}
+                href={s.href}
+                target="_blank"
+                rel="noreferrer"
+                className="text-white/80 underline-offset-4 hover:text-white hover:underline"
+              >
+                {s.label}
+              </a>
+            ))}
+          </div>
         </div>
         <div className="md:col-span-3">
-          <p className="text-xs font-bold uppercase tracking-[0.2em] text-[var(--red)]">
+          <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#ff6b6b]">
             Products
           </p>
           <ul className="mt-4 space-y-2 text-sm text-white/75">
@@ -35,7 +55,7 @@ export function SiteFooter() {
           </ul>
         </div>
         <div className="md:col-span-4">
-          <p className="text-xs font-bold uppercase tracking-[0.2em] text-[var(--red)]">
+          <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#ff6b6b]">
             Contact
           </p>
           <ul className="mt-4 space-y-2 text-sm text-white/75">

@@ -31,38 +31,56 @@ export function ContactForm() {
   }
 
   const field =
-    "w-full border border-[var(--line)] bg-white px-3 py-2.5 outline-none ring-[var(--blue)]/25 focus:ring-2";
+    "w-full min-h-11 border border-[var(--line)] bg-white px-3 py-3 text-base outline-none ring-[#0b5ea8]/25 focus:ring-2 sm:text-sm";
 
   return (
     <form onSubmit={onSubmit} className="space-y-4">
       <div className="grid gap-4 sm:grid-cols-2">
         <label className="block text-sm">
           <span className="mb-1.5 block font-medium text-[var(--ink-soft)]">Name</span>
-          <input name="name" required className={field} />
+          <input name="name" required autoComplete="name" className={field} />
         </label>
         <label className="block text-sm">
           <span className="mb-1.5 block font-medium text-[var(--ink-soft)]">Phone</span>
-          <input name="phone" className={field} />
+          <input
+            name="phone"
+            type="tel"
+            inputMode="tel"
+            autoComplete="tel"
+            className={field}
+          />
         </label>
       </div>
       <label className="block text-sm">
         <span className="mb-1.5 block font-medium text-[var(--ink-soft)]">Email</span>
-        <input name="email" type="email" required className={field} />
+        <input
+          name="email"
+          type="email"
+          inputMode="email"
+          autoComplete="email"
+          required
+          className={field}
+        />
       </label>
       <label className="block text-sm">
         <span className="mb-1.5 block font-medium text-[var(--ink-soft)]">Message</span>
-        <textarea name="message" required rows={5} className={`${field} resize-y`} />
+        <textarea
+          name="message"
+          required
+          rows={5}
+          className={`${field} min-h-[8rem] resize-y`}
+        />
       </label>
       <button
         type="submit"
         disabled={status === "sending"}
-        className="bg-[var(--navy)] px-6 py-3 text-sm font-bold uppercase tracking-[0.08em] text-white transition hover:bg-[var(--blue)] disabled:opacity-60"
+        className="min-h-12 w-full bg-[#071833] px-6 py-3 text-sm font-bold uppercase tracking-[0.08em] text-white transition hover:bg-[#0b5ea8] disabled:opacity-60 sm:w-auto"
       >
         {status === "sending" ? "Sending…" : "Send inquiry"}
       </button>
       {message ? (
         <p
-          className={`text-sm ${status === "ok" ? "text-[var(--blue)]" : "text-red-700"}`}
+          className={`text-sm ${status === "ok" ? "text-[#0b5ea8]" : "text-red-700"}`}
           role="status"
         >
           {message}

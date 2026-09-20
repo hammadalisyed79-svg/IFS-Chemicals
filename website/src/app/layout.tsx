@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Outfit, Source_Sans_3 } from "next/font/google";
 import "./globals.css";
 import { SiteHeader } from "@/components/SiteHeader";
@@ -16,6 +16,12 @@ const body = Source_Sans_3({
   weight: ["400", "500", "600", "700"],
 });
 
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  themeColor: "#071833",
+};
+
 export const metadata: Metadata = {
   title: {
     default: "IFS Chemicals — Innovative Future Solutions",
@@ -24,6 +30,10 @@ export const metadata: Metadata = {
   description:
     "Leading manufacturer of detergent powders, dishwash & toilet cleaners, bars & oil, and packaging materials in Gujrat, Pakistan.",
   metadataBase: new URL("https://ifschemicals.com"),
+  icons: {
+    icon: [{ url: "/images/icon.png", type: "image/png" }],
+    apple: [{ url: "/images/icon.png" }],
+  },
   openGraph: {
     title: "IFS Chemicals — Innovative Future Solutions",
     description:
@@ -31,7 +41,22 @@ export const metadata: Metadata = {
     url: "https://ifschemicals.com",
     siteName: "IFS Chemicals",
     type: "website",
-    images: [{ url: "/images/hero/products-showcase.jpg" }],
+    locale: "en_PK",
+    images: [
+      {
+        url: "/images/og.jpg",
+        width: 1200,
+        height: 630,
+        alt: "IFS Chemicals product range",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "IFS Chemicals — Innovative Future Solutions",
+    description:
+      "Cleaning solutions and packaging materials manufactured in Gujrat, Pakistan.",
+    images: ["/images/og.jpg"],
   },
 };
 

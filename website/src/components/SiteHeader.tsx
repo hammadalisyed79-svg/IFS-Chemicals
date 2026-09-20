@@ -1,6 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { contact } from "@/lib/content";
+import { MobileNav } from "@/components/MobileNav";
 
 const links = [
   { href: "/", label: "Home" },
@@ -22,24 +23,34 @@ export function SiteHeader() {
               {contact.emails[0]}
             </a>
           </div>
-          <a
-            href={contact.erpUrl}
-            target="_blank"
-            rel="noreferrer"
-            className="font-semibold tracking-wide"
-          >
-            ERP Login
-          </a>
+          <div className="flex items-center gap-4">
+            <a
+              href={contact.social.facebook}
+              target="_blank"
+              rel="noreferrer"
+              className="hover:underline"
+            >
+              Facebook
+            </a>
+            <a
+              href={contact.erpUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="font-semibold tracking-wide"
+            >
+              ERP Login
+            </a>
+          </div>
         </div>
       </div>
-      <div className="mx-auto flex max-w-6xl items-center justify-between gap-6 px-5 py-3 md:px-8">
-        <Link href="/" className="flex items-center gap-3">
+      <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-5 py-3 md:px-8">
+        <Link href="/" className="flex shrink-0 items-center gap-3">
           <Image
             src="/images/logo.png"
             alt="IFS Chemicals"
             width={200}
             height={56}
-            className="h-11 w-auto md:h-12"
+            className="h-10 w-auto md:h-12"
             priority
           />
         </Link>
@@ -60,13 +71,16 @@ export function SiteHeader() {
             Get a quote
           </Link>
         </nav>
-        <div className="flex items-center gap-4 md:hidden">
-          <Link href="/products" className="text-sm font-semibold text-white">
-            Products
-          </Link>
-          <a href={contact.phoneHref} className="text-sm font-bold text-[#ff6b6b]">
-            Call
+        <div className="flex items-center gap-3 md:hidden">
+          <a
+            href={contact.whatsapp}
+            target="_blank"
+            rel="noreferrer"
+            className="text-sm font-bold text-[#7dffa3]"
+          >
+            WhatsApp
           </a>
+          <MobileNav />
         </div>
       </div>
     </header>

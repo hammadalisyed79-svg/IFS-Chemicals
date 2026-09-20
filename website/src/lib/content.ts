@@ -8,6 +8,8 @@ export const brand = {
 export type CatalogItem = {
   name: string;
   image: string;
+  pack: string;
+  use: string;
 };
 
 export type ProductFamily = {
@@ -26,11 +28,36 @@ export const products: ProductFamily[] = [
       "Manufactured on a fully automated imported detergent powder plant for domestic and commercial laundry.",
     image: "/images/products/happy-detergent.jpg",
     items: [
-      { name: "Detergent Base Powder", image: "/images/products/detergent-base.jpg" },
-      { name: "Happy Detergent Powder", image: "/images/products/happy-detergent.jpg" },
-      { name: "JagMag Detergent Powder", image: "/images/products/jagmag.jpg" },
-      { name: "Lashkara Detergent Powder", image: "/images/products/lashkara.jpg" },
-      { name: "Train Detergent Powder", image: "/images/products/train-detergent.jpg" },
+      {
+        name: "Detergent Base Powder",
+        image: "/images/products/detergent-base.jpg",
+        pack: "Industrial bulk sacks",
+        use: "B2B / reformulation base",
+      },
+      {
+        name: "Happy Detergent Powder",
+        image: "/images/products/happy-detergent.jpg",
+        pack: "Retail pouches",
+        use: "Household laundry",
+      },
+      {
+        name: "JagMag Detergent Powder",
+        image: "/images/products/jagmag.jpg",
+        pack: "Retail pouches",
+        use: "Everyday wash & brightness",
+      },
+      {
+        name: "Lashkara Detergent Powder",
+        image: "/images/products/lashkara.jpg",
+        pack: "Retail pouches",
+        use: "Tough stain removal",
+      },
+      {
+        name: "Train Detergent Powder",
+        image: "/images/products/train-detergent.jpg",
+        pack: "Retail pouches",
+        use: "Domestic & commercial laundry",
+      },
     ],
   },
   {
@@ -39,10 +66,30 @@ export const products: ProductFamily[] = [
     blurb: "Suitable for domestic and commercial use — dishwash bars, detergent bars, and cooking oil.",
     image: "/images/products/happy-bar.jpg",
     items: [
-      { name: "Bahar Rapeseed Oil", image: "/images/products/bahar-oil.jpg" },
-      { name: "Happy Dishwash & Detergent Bar", image: "/images/products/happy-bar.jpg" },
-      { name: "Ring Dishwash Bar", image: "/images/products/ring-bar.jpg" },
-      { name: "Train Dishwash Bar", image: "/images/products/train-bar.jpg" },
+      {
+        name: "Bahar Rapeseed Oil",
+        image: "/images/products/bahar-oil.jpg",
+        pack: "Bottles & bulk",
+        use: "Cooking / kitchen",
+      },
+      {
+        name: "Happy Dishwash & Detergent Bar",
+        image: "/images/products/happy-bar.jpg",
+        pack: "Bar packs",
+        use: "Utensils & laundry bar",
+      },
+      {
+        name: "Ring Dishwash Bar",
+        image: "/images/products/ring-bar.jpg",
+        pack: "Bar packs",
+        use: "Kitchen dishwash",
+      },
+      {
+        name: "Train Dishwash Bar",
+        image: "/images/products/train-bar.jpg",
+        pack: "Bar packs",
+        use: "Domestic & commercial kitchens",
+      },
     ],
   },
   {
@@ -51,10 +98,30 @@ export const products: ProductFamily[] = [
     blurb: "Concentrated formulas for efficient cleaning and everyday hygiene.",
     image: "/images/products/bahar-dishwash.jpg",
     items: [
-      { name: "Bahar Dishwash Liquid", image: "/images/products/bahar-dishwash.jpg" },
-      { name: "Bahar Toilet Cleaner", image: "/images/products/bahar-toilet.jpg" },
-      { name: "Happy Dishwash Liquid", image: "/images/products/happy-dishwash.jpg" },
-      { name: "Happy Toilet Cleaner", image: "/images/products/happy-toilet.jpg" },
+      {
+        name: "Bahar Dishwash Liquid",
+        image: "/images/products/bahar-dishwash.jpg",
+        pack: "Bottles & refill pouches",
+        use: "Kitchen grease cutting",
+      },
+      {
+        name: "Bahar Toilet Cleaner",
+        image: "/images/products/bahar-toilet.jpg",
+        pack: "Bottles",
+        use: "Bathroom hygiene",
+      },
+      {
+        name: "Happy Dishwash Liquid",
+        image: "/images/products/happy-dishwash.jpg",
+        pack: "Bottles & refill pouches",
+        use: "Everyday dishwash",
+      },
+      {
+        name: "Happy Toilet Cleaner",
+        image: "/images/products/happy-toilet.jpg",
+        pack: "Bottles",
+        use: "Toilet & ceramic clean",
+      },
     ],
   },
   {
@@ -63,9 +130,24 @@ export const products: ProductFamily[] = [
     blurb: "Custom flexible packaging with durable laminates and print-ready finishes for brand owners.",
     image: "/images/packaging.jpg",
     items: [
-      { name: "Pouches", image: "/images/packaging.jpg" },
-      { name: "Laminates", image: "/images/packaging.jpg" },
-      { name: "Printed rolls", image: "/images/packaging.jpg" },
+      {
+        name: "Pouches",
+        image: "/images/packaging.jpg",
+        pack: "Custom sizes",
+        use: "Retail & industrial fill",
+      },
+      {
+        name: "Laminates",
+        image: "/images/packaging.jpg",
+        pack: "Rolls / sheets",
+        use: "Barrier & print layers",
+      },
+      {
+        name: "Printed rolls",
+        image: "/images/packaging.jpg",
+        pack: "Printed film rolls",
+        use: "Brand packaging lines",
+      },
     ],
   },
   {
@@ -74,9 +156,24 @@ export const products: ProductFamily[] = [
     blurb: "Protective corrugated packaging for shipping, retail, and industrial supply.",
     image: "/images/corrugated.jpg",
     items: [
-      { name: "Shippers", image: "/images/corrugated.jpg" },
-      { name: "Retail cartons", image: "/images/corrugated.jpg" },
-      { name: "Custom die-cuts", image: "/images/corrugated.jpg" },
+      {
+        name: "Shippers",
+        image: "/images/corrugated.jpg",
+        pack: "Multi-ply cartons",
+        use: "Transit protection",
+      },
+      {
+        name: "Retail cartons",
+        image: "/images/corrugated.jpg",
+        pack: "Shelf-ready boxes",
+        use: "Retail display & pack",
+      },
+      {
+        name: "Custom die-cuts",
+        image: "/images/corrugated.jpg",
+        pack: "Die-cut to order",
+        use: "Brand-fit packaging",
+      },
     ],
   },
   {
@@ -85,9 +182,24 @@ export const products: ProductFamily[] = [
     blurb: "PET bottle blowing for liquid household and commercial products.",
     image: "/images/pet-blowing.jpg",
     items: [
-      { name: "Standard necks", image: "/images/pet-blowing.jpg" },
-      { name: "Custom profiles", image: "/images/pet-blowing.jpg" },
-      { name: "Bulk supply", image: "/images/pet-blowing.jpg" },
+      {
+        name: "Standard necks",
+        image: "/images/pet-blowing.jpg",
+        pack: "Common neck finishes",
+        use: "Liquids & cleaners",
+      },
+      {
+        name: "Custom profiles",
+        image: "/images/pet-blowing.jpg",
+        pack: "Custom bottle shapes",
+        use: "Private-label brands",
+      },
+      {
+        name: "Bulk supply",
+        image: "/images/pet-blowing.jpg",
+        pack: "Volume production",
+        use: "OEM / contract fill",
+      },
     ],
   },
 ];
@@ -106,8 +218,8 @@ export const contact = {
   address: "Bridge Canal Saroki, Gujrat, Pakistan",
   erpUrl: "https://erp.ifschemicals.com/",
   social: {
-    facebook: "https://www.facebook.com/",
-    linkedin: "https://www.linkedin.com/",
-    instagram: "https://www.instagram.com/",
+    facebook: "https://www.facebook.com/ifschemicals/",
+    instagram: "https://www.instagram.com/ifschemicals/",
+    linkedin: "https://www.linkedin.com/in/hammad-syed-b877111a3",
   },
 };
