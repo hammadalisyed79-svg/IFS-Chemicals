@@ -3,6 +3,7 @@ import { Outfit, Source_Sans_3 } from "next/font/google";
 import "./globals.css";
 import { SiteHeader } from "@/components/SiteHeader";
 import { SiteFooter } from "@/components/SiteFooter";
+import { WhatsAppFloat } from "@/components/WhatsAppFloat";
 
 const display = Outfit({
   subsets: ["latin"],
@@ -71,6 +72,7 @@ export default function RootLayout({
         <SiteHeader />
         <main>{children}</main>
         <SiteFooter />
+        <WhatsAppFloat />
       </body>
     </html>
   );

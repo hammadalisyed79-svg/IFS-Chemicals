@@ -1,15 +1,28 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useMemo, useState } from "react";
+
+type InquiryType = "general" | "distributor" | "b2b";
 
 export function ContactForm() {
   const [status, setStatus] = useState<"idle" | "sending" | "ok" | "err">("idle");
   const [message, setMessage] = useState("");
+  const [inquiryType, setInquiryType] = useState<InquiryType>("general");
+  const [whatsappFollowUp, setWhatsappFollowUp] = useState<string | null>(null);
+
+  const needsB2b = inquiryType === "distributor" || inquiryType === "b2b";
+
+  const typeLabel = useMemo(() => {
+    if (inquiryType === "distributor") return "Distributor inquiry";
+    if (inquiryType === "b2b") return "B2B / bulk inquiry";
+    return "General inquiry";
+  }, [inquiryType]);
 
   async function onSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setStatus("sending");
     setMessage("");
+    setWhatsappFollowUp(null);
     const form = e.currentTarget;
     const data = Object.fromEntries(new FormData(form).entries());
 
@@ -23,7 +36,11 @@ export function ContactForm() {
       if (!res.ok) throw new Error(json.error || "Failed to send");
       setStatus("ok");
       setMessage("Thanks — we received your message and will reply soon.");
+      if (typeof json.whatsappFollowUp === "string") {
+        setWhatsappFollowUp(json.whatsappFollowUp);
+      }
       form.reset();
+      setInquiryType("general");
     } catch (err) {
       setStatus("err");
       setMessage(err instanceof Error ? err.message : "Something went wrong");
@@ -35,6 +52,41 @@ export function ContactForm() {
 
   return (
     <form onSubmit={onSubmit} className="space-y-4">
+      <fieldset>
+        <legend className="mb-2 text-sm font-medium text-[var(--ink-soft)]">
+          Inquiry type
+        </legend>
+        <div className="grid gap-2 sm:grid-cols-3">
+          {(
+            [
+              ["general", "General"],
+              ["distributor", "Distributor"],
+              ["b2b", "B2B / bulk"],
+            ] as const
+          ).map(([value, label]) => (
+            <label
+              key={value}
+              className={`flex min-h-11 cursor-pointer items-center justify-center border px-3 py-2 text-sm font-semibold ${
+                inquiryType === value
+                  ? "border-[#071833] bg-[#071833] text-white"
+                  : "border-[var(--line)] bg-white text-[var(--ink)]"
+              }`}
+            >
+              <input
+                type="radio"
+                name="inquiryType"
+                value={value}
+                checked={inquiryType === value}
+                onChange={() => setInquiryType(value)}
+                className="sr-only"
+              />
+              {label}
+            </label>
+          ))}
+        </div>
+        <p className="mt-2 text-xs text-[var(--muted)]">{typeLabel}</p>
+      </fieldset>
+
       <div className="grid gap-4 sm:grid-cols-2">
         <label className="block text-sm">
           <span className="mb-1.5 block font-medium text-[var(--ink-soft)]">Name</span>
@@ -51,6 +103,7 @@ export function ContactForm() {
           />
         </label>
       </div>
+
       <label className="block text-sm">
         <span className="mb-1.5 block font-medium text-[var(--ink-soft)]">Email</span>
         <input
@@ -62,15 +115,59 @@ export function ContactForm() {
           className={field}
         />
       </label>
+
+      {needsB2b ? (
+        <div className="grid gap-4 sm:grid-cols-3">
+          <label className="block text-sm sm:col-span-1">
+            <span className="mb-1.5 block font-medium text-[var(--ink-soft)]">
+              City <span className="text-[#c41e26]">*</span>
+            </span>
+            <input
+              name="city"
+              required
+              autoComplete="address-level2"
+              placeholder="e.g. Gujrat"
+              className={field}
+            />
+          </label>
+          <label className="block text-sm sm:col-span-1">
+            <span className="mb-1.5 block font-medium text-[var(--ink-soft)]">
+              Monthly volume
+            </span>
+            <input
+              name="volume"
+              placeholder="e.g. 200 cartons"
+              className={field}
+            />
+          </label>
+          <label className="block text-sm sm:col-span-1">
+            <span className="mb-1.5 block font-medium text-[var(--ink-soft)]">
+              Brand / interest
+            </span>
+            <input
+              name="brand"
+              placeholder="Happy, Train, private label…"
+              className={field}
+            />
+          </label>
+        </div>
+      ) : null}
+
       <label className="block text-sm">
         <span className="mb-1.5 block font-medium text-[var(--ink-soft)]">Message</span>
         <textarea
           name="message"
           required
           rows={5}
+          placeholder={
+            needsB2b
+              ? "Tell us about territory, products needed, and timeline…"
+              : "How can we help?"
+          }
           className={`${field} min-h-[8rem] resize-y`}
         />
       </label>
+
       <button
         type="submit"
         disabled={status === "sending"}
@@ -78,13 +175,25 @@ export function ContactForm() {
       >
         {status === "sending" ? "Sending…" : "Send inquiry"}
       </button>
+
       {message ? (
-        <p
-          className={`text-sm ${status === "ok" ? "text-[#0b5ea8]" : "text-red-700"}`}
-          role="status"
-        >
-          {message}
-        </p>
+        <div className="space-y-2" role="status">
+          <p
+            className={`text-sm ${status === "ok" ? "text-[#0b5ea8]" : "text-red-700"}`}
+          >
+            {message}
+          </p>
+          {status === "ok" && whatsappFollowUp ? (
+            <a
+              href={whatsappFollowUp}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex text-sm font-semibold text-[#128C7E] underline"
+            >
+              Also message us on WhatsApp →
+            </a>
+          ) : null}
+        </div>
       ) : null}
     </form>
   );

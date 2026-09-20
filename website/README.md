@@ -14,7 +14,7 @@ npm install
 npm run dev
 ```
 
-Optional Neon (contact form persistence):
+Optional Neon (contact form persistence) + notify:
 
 ```bash
 cp .env.example .env.local
@@ -22,7 +22,16 @@ cp .env.example .env.local
 npm run db:setup   # optional; API also creates the table on first save
 ```
 
-Without `DATABASE_URL`, inquiries still succeed and are logged to the server console.
+In **Vercel → ifs-website → Settings → Environment Variables**, set:
+
+| Variable | Purpose |
+|----------|---------|
+| `DATABASE_URL` | Store inquiries in Neon (required for inbox) |
+| `RESEND_API_KEY` | Optional email notify |
+| `CONTACT_NOTIFY_EMAIL` | Optional recipient (default `info@ifschemicals.com`) |
+| `CONTACT_NOTIFY_WEBHOOK_URL` | Optional Slack/Discord/Make webhook |
+
+Without `DATABASE_URL`, inquiries still succeed (console log + WhatsApp follow-up link). The floating WhatsApp button is always available.
 
 ## Deploy (Vercel)
 

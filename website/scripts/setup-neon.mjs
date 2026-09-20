@@ -1,7 +1,7 @@
 ﻿/**
- * Optional: create contact_inquiries table.
+ * Optional: create/upgrade contact_inquiries table for Phase 2 fields.
  * Usage: DATABASE_URL=... node scripts/setup-neon.mjs
- * Contact API also auto-creates the table on first successful save.
+ * Contact API also auto-migrates columns on first successful save.
  */
 import { neon } from "@neondatabase/serverless";
 
@@ -19,7 +19,15 @@ await sql`
     email TEXT NOT NULL,
     phone TEXT,
     message TEXT NOT NULL,
+    inquiry_type TEXT NOT NULL DEFAULT 'general',
+    city TEXT,
+    volume TEXT,
+    brand TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
   )
 `;
-console.log("contact_inquiries table is ready.");
+await sql`ALTER TABLE contact_inquiries ADD COLUMN IF NOT EXISTS inquiry_type TEXT NOT NULL DEFAULT 'general'`;
+await sql`ALTER TABLE contact_inquiries ADD COLUMN IF NOT EXISTS city TEXT`;
+await sql`ALTER TABLE contact_inquiries ADD COLUMN IF NOT EXISTS volume TEXT`;
+await sql`ALTER TABLE contact_inquiries ADD COLUMN IF NOT EXISTS brand TEXT`;
+console.log("contact_inquiries table is ready (Phase 2 columns included).");
