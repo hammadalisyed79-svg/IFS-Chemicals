@@ -35,7 +35,7 @@ export function ContactForm() {
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Failed to send");
       setStatus("ok");
-      setMessage("Thanks — we received your message and will reply soon.");
+      setMessage("Thank you. We have received your inquiry and will respond shortly.");
       if (typeof json.whatsappFollowUp === "string") {
         setWhatsappFollowUp(json.whatsappFollowUp);
       }
@@ -48,7 +48,7 @@ export function ContactForm() {
   }
 
   const field =
-    "w-full min-h-11 border border-[var(--line)] bg-white px-3 py-3 text-base outline-none ring-[#0b5ea8]/25 focus:ring-2 sm:text-sm";
+    "w-full min-h-11 border border-[var(--line)] bg-white px-3.5 py-3 text-base outline-none transition focus:border-[var(--blue)] focus:ring-2 focus:ring-[var(--blue)]/15 sm:text-sm";
 
   return (
     <form onSubmit={onSubmit} className="space-y-4">
@@ -66,10 +66,10 @@ export function ContactForm() {
           ).map(([value, label]) => (
             <label
               key={value}
-              className={`flex min-h-11 cursor-pointer items-center justify-center border px-3 py-2 text-sm font-semibold ${
+              className={`flex min-h-11 cursor-pointer items-center justify-center border px-3 py-2 text-sm font-medium transition ${
                 inquiryType === value
-                  ? "border-[#071833] bg-[#071833] text-white"
-                  : "border-[var(--line)] bg-white text-[var(--ink)]"
+                  ? "border-[var(--navy)] bg-[var(--navy)] text-white"
+                  : "border-[var(--line)] bg-white text-[var(--ink)] hover:border-[var(--ink-soft)]"
               }`}
             >
               <input
@@ -120,7 +120,7 @@ export function ContactForm() {
         <div className="grid gap-4 sm:grid-cols-3">
           <label className="block text-sm sm:col-span-1">
             <span className="mb-1.5 block font-medium text-[var(--ink-soft)]">
-              City <span className="text-[#c41e26]">*</span>
+              City <span className="text-[var(--red)]">*</span>
             </span>
             <input
               name="city"
@@ -161,7 +161,7 @@ export function ContactForm() {
           rows={5}
           placeholder={
             needsB2b
-              ? "Tell us about territory, products needed, and timeline…"
+              ? "Describe territory, products required, and timeline…"
               : "How can we help?"
           }
           className={`${field} min-h-[8rem] resize-y`}
@@ -171,15 +171,15 @@ export function ContactForm() {
       <button
         type="submit"
         disabled={status === "sending"}
-        className="min-h-12 w-full bg-[#071833] px-6 py-3 text-sm font-bold uppercase tracking-[0.08em] text-white transition hover:bg-[#0b5ea8] disabled:opacity-60 sm:w-auto"
+        className="btn btn-primary min-h-12 w-full disabled:opacity-60 sm:w-auto"
       >
-        {status === "sending" ? "Sending…" : "Send inquiry"}
+        {status === "sending" ? "Sending…" : "Submit inquiry"}
       </button>
 
       {message ? (
         <div className="space-y-2" role="status">
           <p
-            className={`text-sm ${status === "ok" ? "text-[#0b5ea8]" : "text-red-700"}`}
+            className={`text-sm ${status === "ok" ? "text-[var(--blue)]" : "text-red-700"}`}
           >
             {message}
           </p>

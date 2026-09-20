@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Outfit, Source_Sans_3 } from "next/font/google";
+import { Archivo, IBM_Plex_Sans } from "next/font/google";
 import "./globals.css";
 import { SiteHeader } from "@/components/SiteHeader";
 import { SiteFooter } from "@/components/SiteFooter";
@@ -7,13 +7,13 @@ import { WhatsAppFloat } from "@/components/WhatsAppFloat";
 import { JsonLd } from "@/components/JsonLd";
 import { defaultOgImage, siteUrl } from "@/lib/seo";
 
-const display = Outfit({
+const display = Archivo({
   subsets: ["latin"],
   variable: "--font-display",
-  weight: ["500", "600", "700", "800"],
+  weight: ["500", "600", "700"],
 });
 
-const body = Source_Sans_3({
+const body = IBM_Plex_Sans({
   subsets: ["latin"],
   variable: "--font-body",
   weight: ["400", "500", "600", "700"],
@@ -22,7 +22,7 @@ const body = Source_Sans_3({
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  themeColor: "#071833",
+  themeColor: "#0a1628",
 };
 
 export const metadata: Metadata = {

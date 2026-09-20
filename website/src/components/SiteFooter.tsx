@@ -11,29 +11,29 @@ const social = [
 
 export function SiteFooter() {
   return (
-    <footer className="bg-[#071833] text-white">
-      <div className="mx-auto grid max-w-6xl gap-12 px-5 py-14 md:grid-cols-12 md:px-8 md:py-16">
+    <footer className="bg-[var(--navy)] text-white">
+      <div className="container-site grid gap-12 py-16 md:grid-cols-12 md:py-20">
         <div className="md:col-span-5">
           <Image
             src="/images/logo.png"
             alt="IFS Chemicals"
             width={220}
             height={62}
-            className="h-12 w-auto"
+            className="h-11 w-auto"
           />
-          <p className="mt-5 max-w-md text-sm leading-relaxed text-white/70">
-            A leading manufacturer of high-quality cleaning solutions and
-            packaging materials — built on innovation, quality, and customer
-            trust. Made in Pakistan.
+          <p className="mt-6 max-w-md text-[15px] leading-relaxed text-white/65">
+            Manufacturing partner for cleaning solutions and packaging systems —
+            delivering consistent quality for households, retailers, and industrial
+            buyers across Pakistan.
           </p>
-          <div className="mt-6 flex flex-wrap gap-x-5 gap-y-2 text-sm font-semibold">
+          <div className="mt-7 flex flex-wrap gap-x-6 gap-y-2 text-[13px] font-medium tracking-wide">
             {social.map((s) => (
               <a
                 key={s.label}
                 href={s.href}
                 target="_blank"
                 rel="noreferrer"
-                className="text-white/80 underline-offset-4 hover:text-white hover:underline"
+                className="text-white/70 transition hover:text-white"
               >
                 {s.label}
               </a>
@@ -41,13 +41,11 @@ export function SiteFooter() {
           </div>
         </div>
         <div className="md:col-span-3">
-          <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#ff6b6b]">
-            Products
-          </p>
-          <ul className="mt-4 space-y-2 text-sm text-white/75">
+          <p className="eyebrow !text-white/45">Products</p>
+          <ul className="mt-5 space-y-2.5 text-[14px] text-white/70">
             {products.slice(0, 5).map((p) => (
               <li key={p.slug}>
-                <Link href={`/products#${p.slug}`} className="hover:text-white">
+                <Link href={`/products#${p.slug}`} className="transition hover:text-white">
                   {p.name}
                 </Link>
               </li>
@@ -55,38 +53,39 @@ export function SiteFooter() {
           </ul>
         </div>
         <div className="md:col-span-4">
-          <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#ff6b6b]">
-            Contact
-          </p>
-          <ul className="mt-4 space-y-2 text-sm text-white/75">
+          <p className="eyebrow !text-white/45">Headquarters</p>
+          <ul className="mt-5 space-y-2.5 text-[14px] text-white/70">
             <li>{contact.address}</li>
             <li>
-              <a href={contact.phoneHref} className="hover:text-white">
+              <a href={contact.phoneHref} className="transition hover:text-white">
                 {contact.phone}
               </a>
             </li>
             {contact.emails.map((e) => (
               <li key={e}>
-                <a href={`mailto:${e}`} className="hover:text-white">
+                <a href={`mailto:${e}`} className="transition hover:text-white">
                   {e}
                 </a>
               </li>
             ))}
-            <li className="pt-2">
+            <li className="pt-3">
               <a
                 href={contact.erpUrl}
                 target="_blank"
                 rel="noreferrer"
-                className="font-semibold text-white hover:underline"
+                className="font-medium text-white transition hover:opacity-90"
               >
-                erp.ifschemicals.com
+                Partner portal →
               </a>
             </li>
           </ul>
         </div>
       </div>
-      <div className="border-t border-white/10 py-5 text-center text-xs text-white/45">
-        © {new Date().getFullYear()} IFS Chemicals. All rights reserved.
+      <div className="border-t border-white/10">
+        <div className="container-site flex flex-col gap-2 py-5 text-[12px] text-white/40 sm:flex-row sm:items-center sm:justify-between">
+          <p>© {new Date().getFullYear()} IFS Chemicals. All rights reserved.</p>
+          <p>Innovative Future Solutions · Gujrat, Pakistan</p>
+        </div>
       </div>
     </footer>
   );

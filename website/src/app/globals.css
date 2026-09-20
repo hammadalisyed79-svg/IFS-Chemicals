@@ -3,21 +3,26 @@
 @tailwind utilities;
 
 :root {
-  --navy: #071833;
-  --blue: #0b5ea8;
-  --blue-deep: #084a86;
-  --red: #c41e26;
-  --red-deep: #9e161d;
-  --paper: #f4f6f9;
+  --navy: #0a1628;
+  --navy-mid: #132337;
+  --blue: #1a5f9e;
+  --blue-deep: #0f4a7c;
+  --red: #b91c22;
+  --red-deep: #8f151a;
+  --paper: #f7f8fa;
+  --paper-2: #eef1f5;
   --white: #ffffff;
-  --ink: #0d1526;
-  --muted: #5a6578;
-  --line: rgba(7, 24, 51, 0.12);
+  --ink: #121a26;
+  --ink-soft: #2a3544;
+  --muted: #5c6b7a;
+  --line: rgba(18, 26, 38, 0.1);
+  --line-strong: rgba(18, 26, 38, 0.16);
+  --shadow: 0 1px 2px rgba(10, 22, 40, 0.04), 0 12px 32px rgba(10, 22, 40, 0.06);
   --foam: var(--white);
-  --ink-soft: #1c2a44;
   --teal: var(--blue);
   --teal-bright: #3d8fd4;
   --amber: var(--red);
+  --container: 72rem;
 }
 
 html {
@@ -28,9 +33,14 @@ html {
 body {
   color: var(--ink);
   background: var(--paper);
-  font-family: var(--font-body), system-ui, sans-serif;
+  font-family: var(--font-body), "Segoe UI", system-ui, sans-serif;
+  font-feature-settings: "kern" 1, "liga" 1;
+  letter-spacing: 0.01em;
+  line-height: 1.6;
   padding-left: env(safe-area-inset-left);
   padding-right: env(safe-area-inset-right);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 a,
@@ -39,18 +49,122 @@ button {
 }
 
 ::selection {
-  background: var(--blue);
-  color: white;
+  background: rgba(26, 95, 158, 0.18);
+  color: var(--ink);
 }
 
 .font-display {
   font-family: var(--font-display), system-ui, sans-serif;
+  letter-spacing: -0.025em;
+  line-height: 1.12;
+}
+
+.container-site {
+  margin-inline: auto;
+  width: 100%;
+  max-width: var(--container);
+  padding-inline: 1.25rem;
+}
+
+@media (min-width: 768px) {
+  .container-site {
+    padding-inline: 2rem;
+  }
+}
+
+.eyebrow {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--red);
+}
+
+.lead {
+  font-size: 1.0625rem;
+  line-height: 1.7;
+  color: var(--muted);
+}
+
+@media (min-width: 768px) {
+  .lead {
+    font-size: 1.1875rem;
+  }
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2.875rem;
+  padding: 0.75rem 1.5rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease,
+    transform 0.2s ease;
+}
+
+.btn:active {
+  transform: translateY(1px);
+}
+
+.btn-primary {
+  background: var(--navy);
+  color: white;
+}
+
+.btn-primary:hover {
+  background: var(--blue);
+}
+
+.btn-accent {
+  background: var(--red);
+  color: white;
+}
+
+.btn-accent:hover {
+  background: var(--red-deep);
+}
+
+.btn-ghost {
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  color: white;
+  background: rgba(255, 255, 255, 0.06);
+  backdrop-filter: blur(8px);
+}
+
+.btn-ghost:hover {
+  border-color: white;
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.btn-outline {
+  border: 1px solid var(--line-strong);
+  background: white;
+  color: var(--ink);
+}
+
+.btn-outline:hover {
+  border-color: var(--navy);
+}
+
+.img-well {
+  background:
+    radial-gradient(ellipse at 50% 0%, rgba(26, 95, 158, 0.06), transparent 55%),
+    linear-gradient(180deg, #f4f6f9 0%, #e9eef4 100%);
+}
+
+.surface-card {
+  background: white;
+  border: 1px solid var(--line);
+  box-shadow: var(--shadow);
 }
 
 @keyframes rise {
   from {
     opacity: 0;
-    transform: translateY(22px);
+    transform: translateY(18px);
   }
   to {
     opacity: 1;
@@ -60,7 +174,7 @@ button {
 
 @keyframes kenburns {
   from {
-    transform: scale(1.08);
+    transform: scale(1.06);
   }
   to {
     transform: scale(1);
@@ -77,19 +191,19 @@ button {
 }
 
 .animate-rise {
-  animation: rise 0.85s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: rise 0.9s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 .animate-rise-delay {
-  animation: rise 0.85s cubic-bezier(0.22, 1, 0.36, 1) 0.12s both;
+  animation: rise 0.9s cubic-bezier(0.22, 1, 0.36, 1) 0.14s both;
 }
 
 .animate-rise-delay-2 {
-  animation: rise 0.85s cubic-bezier(0.22, 1, 0.36, 1) 0.24s both;
+  animation: rise 0.9s cubic-bezier(0.22, 1, 0.36, 1) 0.28s both;
 }
 
 .animate-kenburns {
-  animation: kenburns 14s ease-out both;
+  animation: kenburns 16s ease-out both;
 }
 
 .brand-rule {

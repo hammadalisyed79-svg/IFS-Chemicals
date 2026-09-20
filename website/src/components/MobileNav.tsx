@@ -29,46 +29,46 @@ export function MobileNav() {
         aria-expanded={open}
         aria-label={open ? "Close menu" : "Open menu"}
         onClick={() => setOpen((v) => !v)}
-        className="flex h-11 w-11 items-center justify-center rounded border border-white/25 text-white"
+        className="flex h-11 w-11 items-center justify-center border border-[var(--line-strong)] text-[var(--ink)]"
       >
         <span className="sr-only">Menu</span>
-        <span className="relative flex h-4 w-5 flex-col justify-between">
+        <span className="relative flex h-3.5 w-5 flex-col justify-between">
           <span
-            className={`block h-0.5 w-full bg-white transition ${open ? "translate-y-[7px] rotate-45" : ""}`}
+            className={`block h-px w-full bg-current transition ${open ? "translate-y-[7px] rotate-45" : ""}`}
           />
-          <span className={`block h-0.5 w-full bg-white transition ${open ? "opacity-0" : ""}`} />
+          <span className={`block h-px w-full bg-current transition ${open ? "opacity-0" : ""}`} />
           <span
-            className={`block h-0.5 w-full bg-white transition ${open ? "-translate-y-[7px] -rotate-45" : ""}`}
+            className={`block h-px w-full bg-current transition ${open ? "-translate-y-[7px] -rotate-45" : ""}`}
           />
         </span>
       </button>
 
       {open ? (
-        <div className="fixed inset-0 z-[60] flex flex-col bg-[#071833] px-5 pb-[max(2rem,env(safe-area-inset-bottom))] pt-[max(1rem,env(safe-area-inset-top))]">
-          <div className="flex items-center justify-between py-3">
+        <div className="fixed inset-0 z-[60] flex flex-col bg-white px-5 pb-[max(2rem,env(safe-area-inset-bottom))] pt-[max(1rem,env(safe-area-inset-top))]">
+          <div className="flex items-center justify-between border-b border-[var(--line)] py-4">
             <Image
               src="/images/logo.png"
               alt="IFS Chemicals"
               width={160}
               height={44}
-              className="h-10 w-auto"
+              className="h-9 w-auto"
             />
             <button
               type="button"
               aria-label="Close menu"
               onClick={() => setOpen(false)}
-              className="flex h-11 w-11 items-center justify-center border border-white/25 text-lg text-white"
+              className="flex h-11 w-11 items-center justify-center border border-[var(--line)] text-lg text-[var(--ink)]"
             >
               ✕
             </button>
           </div>
-          <nav className="mt-4 flex flex-col">
+          <nav className="mt-2 flex flex-col">
             {links.map((l) => (
               <Link
                 key={l.href}
                 href={l.href}
                 onClick={() => setOpen(false)}
-                className="border-b border-white/10 py-4 text-lg font-semibold uppercase tracking-[0.12em] text-white"
+                className="border-b border-[var(--line)] py-4 text-lg font-medium tracking-wide text-[var(--ink)]"
               >
                 {l.label}
               </Link>
@@ -78,23 +78,17 @@ export function MobileNav() {
             <Link
               href="/contact"
               onClick={() => setOpen(false)}
-              className="bg-[#c41e26] px-5 py-3.5 text-center text-sm font-bold uppercase tracking-[0.1em] text-white"
+              className="btn btn-accent w-full"
             >
-              Get a quote
+              Request a quote
             </Link>
             <a
               href={contact.whatsapp}
               target="_blank"
               rel="noreferrer"
-              className="border border-white/35 px-5 py-3.5 text-center text-sm font-semibold uppercase tracking-[0.1em] text-white"
+              className="btn btn-outline w-full"
             >
               WhatsApp
-            </a>
-            <a
-              href={contact.phoneHref}
-              className="py-2 text-center text-sm font-semibold text-white/80"
-            >
-              {contact.phone}
             </a>
           </div>
         </div>

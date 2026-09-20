@@ -2,7 +2,7 @@ import { contact } from "@/lib/content";
 
 export function WhatsAppFloat() {
   const href = `${contact.whatsapp}?text=${encodeURIComponent(
-    "Assalam o Alaikum — I would like product / distributor information from IFS Chemicals.",
+    "Hello — I would like product or distributor information from IFS Chemicals.",
   )}`;
 
   return (

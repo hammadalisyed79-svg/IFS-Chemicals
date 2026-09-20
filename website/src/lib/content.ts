@@ -2,7 +2,7 @@ export const brand = {
   name: "IFS Chemicals",
   tagline: "Innovative Future Solutions",
   short:
-    "A leading manufacturer of high-quality cleaning solutions and packaging materials.",
+    "Manufacturer of cleaning solutions and packaging systems for retail and professional markets.",
 };
 
 export type CatalogItem = {
@@ -205,9 +205,9 @@ export const products: ProductFamily[] = [
 ];
 
 export const highlights = [
-  "Fully automated plant-based manufacturing",
-  "Concentrated formulas for efficient cleaning",
-  "Suitable for domestic & commercial use",
+  "Fully automated manufacturing with process control",
+  "Formulated for efficient, consistent cleaning performance",
+  "Supply programmes for retail and professional buyers",
 ] as const;
 
 export const contact = {

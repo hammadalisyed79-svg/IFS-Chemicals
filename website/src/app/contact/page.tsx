@@ -13,42 +13,36 @@ export const metadata: Metadata = pageMeta({
 export default function ContactPage() {
   return (
     <div className="bg-[var(--paper)]">
-      <div className="bg-[#071833] px-5 pb-14 pt-14 text-white sm:pb-16 sm:pt-16 md:px-8">
-        <div className="mx-auto max-w-6xl">
-          <p className="text-xs font-bold uppercase tracking-[0.22em] text-[#ff6b6b]">
-            Contact us
-          </p>
-          <h1 className="font-display mt-3 max-w-3xl text-3xl font-bold tracking-tight sm:text-4xl md:text-6xl">
-            We are ready when you are.
+      <div className="bg-[var(--navy)] text-white">
+        <div className="container-site pb-16 pt-14 md:pb-20 md:pt-20">
+          <p className="eyebrow !text-white/50">Contact</p>
+          <h1 className="font-display mt-4 max-w-3xl text-3xl font-semibold sm:text-4xl md:text-6xl">
+            Speak with our commercial team.
           </h1>
-          <p className="mt-4 max-w-xl text-white/75">
-            Reach sales for quotes, distributor onboarding, or packaging
-            inquiries.
+          <p className="mt-5 max-w-xl text-[1.05rem] leading-relaxed text-white/70">
+            Request a quote, discuss distributor onboarding, or inquire about
+            packaging and private-label programmes.
           </p>
         </div>
       </div>
-      <div className="mx-auto grid max-w-6xl gap-12 px-5 py-16 md:grid-cols-2 md:px-8 md:py-24">
-        <div className="space-y-5">
+      <div className="container-site grid gap-12 py-16 md:grid-cols-2 md:gap-16 md:py-24">
+        <div className="space-y-8">
           <div>
-            <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#c41e26]">
-              Address
-            </p>
-            <p className="mt-2 text-lg text-[var(--ink)]">{contact.address}</p>
+            <p className="eyebrow">Address</p>
+            <p className="mt-3 text-lg font-medium text-[var(--ink)]">{contact.address}</p>
             <a
               href={mapsSearchUrl}
               target="_blank"
               rel="noreferrer"
-              className="mt-2 inline-block text-sm font-semibold text-[#0b5ea8] underline"
+              className="mt-2 inline-block text-sm font-semibold text-[var(--blue)] transition hover:underline"
             >
               Open in Google Maps
             </a>
           </div>
           <div>
-            <p className="text-xs font-bold uppercase tracking-[0.18em] text-[var(--red)]">
-              Phone / WhatsApp
-            </p>
-            <p className="mt-2">
-              <a className="text-2xl font-bold text-[var(--blue)]" href={contact.phoneHref}>
+            <p className="eyebrow">Phone / WhatsApp</p>
+            <p className="mt-3">
+              <a className="text-2xl font-semibold text-[var(--blue)]" href={contact.phoneHref}>
                 {contact.phone}
               </a>
             </p>
@@ -56,39 +50,45 @@ export default function ContactPage() {
               href={contact.whatsapp}
               target="_blank"
               rel="noreferrer"
-              className="mt-2 inline-block text-sm font-semibold text-[var(--ink)] underline"
+              className="mt-2 inline-block text-sm font-semibold text-[var(--ink)] transition hover:text-[var(--blue)]"
             >
-              Chat on WhatsApp
+              Continue on WhatsApp →
             </a>
           </div>
           <div>
-            <p className="text-xs font-bold uppercase tracking-[0.18em] text-[var(--red)]">
-              Email
-            </p>
-            <ul className="mt-2 space-y-1">
+            <p className="eyebrow">Email</p>
+            <ul className="mt-3 space-y-1.5">
               {contact.emails.map((e) => (
                 <li key={e}>
-                  <a className="text-[var(--ink)] hover:text-[var(--blue)]" href={`mailto:${e}`}>
+                  <a
+                    className="text-[var(--ink)] transition hover:text-[var(--blue)]"
+                    href={`mailto:${e}`}
+                  >
                     {e}
                   </a>
                 </li>
               ))}
             </ul>
           </div>
-          <p className="pt-2 text-sm text-[var(--muted)]">
-            Staff & distributors:{" "}
+          <p className="text-sm text-[var(--muted)]">
+            Staff &amp; distributors:{" "}
             <a
               href={contact.erpUrl}
               target="_blank"
               rel="noreferrer"
               className="font-semibold text-[var(--blue)]"
             >
-              ERP portal
+              Partner portal
             </a>
           </p>
         </div>
-        <div className="bg-white p-6 md:p-8">
-          <h2 className="font-display text-xl font-bold">Send an inquiry</h2>
+        <div className="surface-card p-6 md:p-8">
+          <h2 className="font-display text-xl font-semibold text-[var(--ink)]">
+            Inquiry form
+          </h2>
+          <p className="mt-2 text-sm text-[var(--muted)]">
+            General, distributor, and B2B requests welcome.
+          </p>
           <div className="mt-6">
             <ContactForm />
           </div>

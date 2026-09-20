@@ -119,15 +119,15 @@ export const mapsSearchUrl = `https://www.google.com/maps/search/?api=1&query=${
 
 export const trustPillars = [
   {
-    title: "Made in Gujrat",
-    body: "Formulated and packed at Bridge Canal Saroki — serving households and B2B buyers across Pakistan.",
+    title: "Made in Gujrat, Pakistan",
+    body: "Formulated and packed at Bridge Canal Saroki — supporting retail and professional buyers nationwide.",
   },
   {
-    title: "Automated detergent plant",
+    title: "Automated production",
     body: "Detergent powders manufactured on a fully automated imported plant with consistent quality control.",
   },
   {
-    title: "Formula to finished pack",
-    body: "Cleaning lines plus flexible packaging, corrugated, and PET blowing under one manufacturing group.",
+    title: "End-to-end capability",
+    body: "Cleaning lines plus flexible packaging, corrugated cartons, and PET blowing under one manufacturing group.",
   },
 ] as const;

@@ -7,101 +7,95 @@ import { TrustSection } from "@/components/TrustSection";
 export default function HomePage() {
   return (
     <>
-      <section className="relative min-h-[min(100svh,920px)] overflow-hidden bg-[#071833] text-white">
+      <section className="relative min-h-[min(92svh,860px)] overflow-hidden bg-[var(--navy)] text-white">
         <Image
           src="/images/hero/products-showcase.jpg"
-          alt="IFS Chemicals product range — Happy, Train, JagMag, Lashkara, Bahar, Ring"
+          alt="IFS Chemicals product portfolio"
           fill
           priority
-          className="animate-kenburns object-cover object-[72%_40%] sm:object-[68%_38%] md:object-[62%_36%]"
+          className="animate-kenburns object-cover object-[75%_42%] sm:object-[70%_40%] md:object-[64%_38%]"
           sizes="100vw"
         />
-        {/* Strong left scrim so brand + copy stay readable over products */}
-        <div className="absolute inset-0 bg-gradient-to-r from-[#071833] from-0% via-[#071833]/92 via-35% to-[#071833]/25 to-75% md:via-40% md:to-[#071833]/15" />
-        <div className="absolute inset-0 bg-gradient-to-t from-[#071833] via-transparent to-[#071833]/50" />
-        <div className="pointer-events-none absolute inset-y-0 left-0 w-full max-w-3xl bg-gradient-to-r from-[#071833]/55 to-transparent md:max-w-2xl" />
+        <div className="absolute inset-0 bg-gradient-to-r from-[var(--navy)] via-[var(--navy)]/90 to-[var(--navy)]/20 md:via-[var(--navy)]/88 md:to-transparent" />
+        <div className="absolute inset-0 bg-gradient-to-t from-[var(--navy)] via-transparent to-[var(--navy)]/35" />
 
-        <div className="relative mx-auto flex min-h-[min(100svh,920px)] max-w-6xl flex-col justify-end px-5 pb-14 pt-16 sm:pb-16 md:justify-center md:px-8 md:pb-24 md:pt-20">
-          <Image
-            src="/images/logo.png"
-            alt="IFS Chemicals"
-            width={320}
-            height={90}
-            className="animate-rise h-14 w-auto drop-shadow-lg sm:h-16 md:h-20"
-            priority
-          />
-          <div className="brand-rule mt-5 h-1 w-24 bg-[#c41e26]" />
-          <h1 className="animate-rise-delay font-display mt-6 max-w-xl text-[2.35rem] font-bold leading-[1.05] tracking-tight text-white drop-shadow-md sm:text-5xl md:max-w-2xl md:text-6xl lg:text-7xl">
-            Cleaning power, engineered in Gujrat.
-          </h1>
-          <p className="animate-rise-delay-2 mt-5 max-w-md text-base leading-relaxed text-white/90 sm:max-w-lg sm:text-lg">
-            Detergent powders, dishwash care, and packaging — manufactured for
-            homes, retailers, and B2B partners across Pakistan.
+        <div className="container-site relative flex min-h-[min(92svh,860px)] flex-col justify-end pb-14 pt-20 md:justify-center md:pb-24 md:pt-24">
+          <p className="animate-rise text-[11px] font-semibold uppercase tracking-[0.22em] text-white/55">
+            Manufacturer · Gujrat, Pakistan
           </p>
-          <div className="animate-rise-delay-2 mt-8 flex flex-col gap-3 sm:mt-9 sm:flex-row sm:flex-wrap">
-            <Link
-              href="/products"
-              className="bg-[#c41e26] px-6 py-3.5 text-center text-sm font-bold uppercase tracking-[0.1em] text-white transition hover:bg-[#9e161d]"
-            >
-              View products
+          <h1 className="animate-rise-delay font-display mt-5 max-w-2xl text-[2.5rem] font-semibold text-white sm:text-5xl md:text-6xl lg:text-[4.25rem]">
+            Cleaning solutions engineered for everyday performance.
+          </h1>
+          <p className="animate-rise-delay-2 mt-6 max-w-lg text-[1.05rem] leading-relaxed text-white/78 md:text-lg">
+            Detergent powders, hygiene care, and packaging systems for retail
+            brands and professional buyers — manufactured to international
+            standards from our facility in Pakistan.
+          </p>
+          <div className="animate-rise-delay-2 mt-10 flex flex-col gap-3 sm:flex-row">
+            <Link href="/products" className="btn btn-accent">
+              Explore products
             </Link>
-            <Link
-              href="/contact"
-              className="border border-white/50 bg-white/5 px-6 py-3.5 text-center text-sm font-semibold uppercase tracking-[0.1em] text-white backdrop-blur-sm transition hover:border-white hover:bg-white/15"
-            >
-              Request a quote
+            <Link href="/contact" className="btn btn-ghost">
+              Speak with sales
             </Link>
           </div>
-          <p className="animate-rise-delay-2 mt-8 text-xs font-semibold uppercase tracking-[0.28em] text-white/60">
-            Made in Pakistan
-          </p>
         </div>
       </section>
 
       <section className="border-b border-[var(--line)] bg-white">
-        <div className="mx-auto grid max-w-6xl divide-y divide-[var(--line)] md:grid-cols-3 md:divide-x md:divide-y-0">
-          {highlights.map((item) => (
-            <p
-              key={item}
-              className="px-5 py-7 text-sm font-semibold leading-snug text-[var(--ink)] md:px-8 md:py-9 md:text-[15px]"
-            >
-              <span className="mb-2 block h-1 w-8 bg-[#0b5ea8]" />
-              {item}
-            </p>
+        <div className="container-site grid divide-y divide-[var(--line)] md:grid-cols-3 md:divide-x md:divide-y-0">
+          {highlights.map((item, i) => (
+            <div key={item} className="px-1 py-8 md:px-8 md:py-10">
+              <p className="text-[11px] font-semibold tracking-[0.16em] text-[var(--muted)]">
+                0{i + 1}
+              </p>
+              <p className="mt-3 text-[15px] font-medium leading-snug text-[var(--ink)] md:text-base">
+                {item}
+              </p>
+            </div>
           ))}
         </div>
       </section>
 
-      <section className="mx-auto max-w-6xl px-5 py-16 sm:py-20 md:px-8 md:py-28">
-        <div className="max-w-2xl">
-          <p className="text-xs font-bold uppercase tracking-[0.22em] text-[#c41e26]">
-            Product families
-          </p>
-          <h2 className="font-display mt-3 text-3xl font-bold tracking-tight text-[var(--ink)] md:text-5xl">
-            From formula to finished pack.
-          </h2>
-          <p className="mt-4 text-base leading-relaxed text-[var(--muted)] md:text-lg">
-            Six manufacturing lines serving retail brands and industrial buyers —
-            detergents, dishwash, toilet care, and packaging.
-          </p>
+      <section className="container-site py-20 md:py-28">
+        <div className="flex flex-col gap-6 md:flex-row md:items-end md:justify-between">
+          <div className="max-w-2xl">
+            <p className="eyebrow">Capabilities</p>
+            <h2 className="font-display mt-3 text-3xl font-semibold text-[var(--ink)] md:text-5xl">
+              Six product platforms. One manufacturing standard.
+            </h2>
+            <p className="lead mt-4 max-w-xl">
+              From formulation to finished packaging, IFS supports brand owners
+              and distributors with reliable supply and consistent quality.
+            </p>
+          </div>
+          <Link href="/products" className="btn btn-outline shrink-0 self-start md:self-auto">
+            View full catalogue
+          </Link>
         </div>
 
-        <div className="mt-10 grid gap-x-5 gap-y-8 sm:mt-12 sm:grid-cols-2 sm:gap-y-10 lg:grid-cols-3">
+        <div className="mt-14 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
           {products.map((p) => (
-            <Link key={p.slug} href={`/products#${p.slug}`} className="group block">
-              <div className="relative aspect-[4/3] overflow-hidden bg-[#e8edf3]">
+            <Link
+              key={p.slug}
+              href={`/products#${p.slug}`}
+              className="group surface-card overflow-hidden transition hover:-translate-y-0.5"
+            >
+              <div className="img-well relative aspect-[5/4] overflow-hidden">
                 <Image
                   src={p.image}
                   alt={p.name}
                   fill
-                  className="object-contain p-4 transition duration-500 group-hover:scale-[1.04] sm:p-6"
+                  className="object-contain p-8 transition duration-500 group-hover:scale-[1.03]"
                   sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
                 />
               </div>
-              <h3 className="font-display mt-3 text-lg font-bold text-[var(--ink)] group-hover:text-[#0b5ea8] sm:mt-4 sm:text-xl">
-                {p.name}
-              </h3>
-              <p className="mt-2 text-sm leading-relaxed text-[var(--muted)]">{p.blurb}</p>
+              <div className="border-t border-[var(--line)] px-5 py-5">
+                <h3 className="font-display text-lg font-semibold text-[var(--ink)] transition group-hover:text-[var(--blue)]">
+                  {p.name}
+                </h3>
+                <p className="mt-2 text-sm leading-relaxed text-[var(--muted)]">{p.blurb}</p>
+              </div>
             </Link>
           ))}
         </div>
@@ -109,83 +103,91 @@ export default function HomePage() {
 
       <TrustSection />
 
-      <section className="relative overflow-hidden bg-[#071833] text-white">
-        <div className="absolute inset-y-0 right-0 hidden w-1/2 lg:block">
+      <section className="relative overflow-hidden bg-[var(--navy)] text-white">
+        <div className="absolute inset-y-0 right-0 hidden w-[48%] lg:block">
           <Image
             src="/images/factory.jpg"
             alt="IFS Chemicals manufacturing facility in Gujrat, Pakistan"
             fill
-            className="object-cover opacity-55"
-            sizes="50vw"
+            className="object-cover opacity-50"
+            sizes="48vw"
           />
-          <div className="absolute inset-0 bg-gradient-to-r from-[#071833] to-transparent" />
+          <div className="absolute inset-0 bg-gradient-to-r from-[var(--navy)] via-[var(--navy)]/70 to-transparent" />
         </div>
-        <div className="relative mx-auto max-w-6xl px-5 py-16 sm:py-20 md:px-8 md:py-28">
+        <div className="container-site relative py-20 md:py-28">
           <div className="max-w-xl">
-            <p className="text-xs font-bold uppercase tracking-[0.22em] text-[#ff6b6b]">
-              About IFS
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/45">
+              Company
             </p>
-            <h2 className="font-display mt-3 text-3xl font-bold tracking-tight md:text-5xl">
-              Trusted cleaning power, made in Pakistan.
+            <h2 className="font-display mt-3 text-3xl font-semibold md:text-5xl">
+              A manufacturing partner you can scale with.
             </h2>
-            <p className="mt-5 text-base leading-relaxed text-white/75 md:text-lg">
-              IFS Chemicals manufactures high-quality cleaning solutions and
-              packaging materials with a strong commitment to innovation, quality,
-              and customer satisfaction. Our detergent powders are produced using
-              the latest technology and high-quality ingredients — ensuring
-              cleanliness, hygiene, and convenience wash after wash.
+            <p className="mt-5 text-[1.05rem] leading-relaxed text-white/70">
+              IFS Chemicals develops and produces cleaning solutions and packaging
+              materials with a focus on process control, product consistency, and
+              long-term supply partnerships.
             </p>
-            <p className="mt-4 text-base leading-relaxed text-white/75">
-              B2B partnerships are encouraged. We serve companies and professional
-              clients with reliable supply from Bridge Canal Saroki, Gujrat.
+            <p className="mt-4 text-[1.05rem] leading-relaxed text-white/70">
+              Based at Bridge Canal Saroki, Gujrat, we support distributors and
+              professional clients across Pakistan.
             </p>
             <Link
               href="/about"
-              className="mt-8 inline-block border border-white/35 px-5 py-3 text-sm font-semibold uppercase tracking-[0.1em] transition hover:bg-white hover:text-[#071833]"
+              className="btn btn-ghost mt-9 border-white/30"
             >
-              More about us
+              About the company
             </Link>
           </div>
         </div>
       </section>
 
-      <section className="mx-auto max-w-6xl px-5 py-16 sm:py-20 md:px-8 md:py-28">
-        <div className="grid gap-10 lg:grid-cols-2 lg:gap-12">
+      <section className="container-site py-20 md:py-28">
+        <div className="grid gap-12 lg:grid-cols-2 lg:gap-16">
           <div>
-            <p className="text-xs font-bold uppercase tracking-[0.22em] text-[#c41e26]">
-              Contact
-            </p>
-            <h2 className="font-display mt-3 text-3xl font-bold tracking-tight md:text-4xl">
-              Request a quote or distributor intro.
+            <p className="eyebrow">Contact</p>
+            <h2 className="font-display mt-3 text-3xl font-semibold text-[var(--ink)] md:text-4xl">
+              Start a supply or distribution conversation.
             </h2>
-            <ul className="mt-8 space-y-3 text-[var(--muted)]">
-              <li className="text-[var(--ink)]">{contact.address}</li>
+            <p className="lead mt-4">
+              Share your requirements and our commercial team will respond with
+              product guidance, packaging options, and next steps.
+            </p>
+            <ul className="mt-9 space-y-3 text-[15px] text-[var(--muted)]">
+              <li className="font-medium text-[var(--ink)]">{contact.address}</li>
               <li>
-                <a className="text-xl font-bold text-[#0b5ea8]" href={contact.phoneHref}>
+                <a className="text-xl font-semibold text-[var(--blue)]" href={contact.phoneHref}>
                   {contact.phone}
                 </a>
               </li>
               <li>
                 <a
-                  className="font-semibold text-[#0b5ea8] hover:underline"
+                  className="font-medium text-[var(--blue)] transition hover:underline"
                   href={contact.whatsapp}
                   target="_blank"
                   rel="noreferrer"
                 >
-                  Chat on WhatsApp
+                  Continue on WhatsApp
                 </a>
               </li>
               {contact.emails.map((e) => (
                 <li key={e}>
-                  <a className="hover:text-[#0b5ea8]" href={`mailto:${e}`}>
+                  <a className="transition hover:text-[var(--blue)]" href={`mailto:${e}`}>
                     {e}
                   </a>
                 </li>
               ))}
             </ul>
           </div>
-          <div className="rounded-sm bg-white p-5 shadow-sm sm:p-6 md:p-8">
-            <ContactForm />
+          <div className="surface-card p-6 md:p-8">
+            <h3 className="font-display text-xl font-semibold text-[var(--ink)]">
+              Inquiry form
+            </h3>
+            <p className="mt-2 text-sm text-[var(--muted)]">
+              General, distributor, and B2B requests welcome.
+            </p>
+            <div className="mt-6">
+              <ContactForm />
+            </div>
           </div>
         </div>
       </section>
