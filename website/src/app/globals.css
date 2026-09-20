@@ -123,7 +123,6 @@ button {
 .btn-accent {
   background: var(--red);
   color: white;
-  box-shadow: 0 8px 20px rgba(185, 28, 34, 0.22);
 }
 
 .btn-accent:hover {
@@ -164,10 +163,10 @@ button {
   box-shadow: var(--shadow);
 }
 
-/* —— Mobile luxury dock —— */
+/* —— Professional mobile chrome —— */
 @media (max-width: 767px) {
   :root {
-    --dock-h: calc(4.25rem + env(safe-area-inset-bottom));
+    --dock-h: calc(3.65rem + env(safe-area-inset-bottom));
   }
 
   body {
@@ -175,12 +174,13 @@ button {
   }
 
   .btn {
-    min-height: 3rem;
-    font-size: 0.875rem;
+    min-height: 2.75rem;
+    font-size: 0.8125rem;
+    letter-spacing: 0.03em;
   }
 
-  .btn-accent {
-    box-shadow: 0 10px 28px rgba(185, 28, 34, 0.28);
+  .container-site {
+    padding-inline: 1rem;
   }
 }
 
@@ -189,22 +189,17 @@ button {
   inset-inline: 0;
   bottom: 0;
   z-index: 55;
-  padding: 0 0.75rem calc(0.55rem + env(safe-area-inset-bottom));
-  pointer-events: none;
+  border-top: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.97);
+  backdrop-filter: blur(12px);
+  padding-bottom: env(safe-area-inset-bottom);
 }
 
 .mobile-dock-inner {
-  pointer-events: auto;
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 0.15rem;
+  max-width: 32rem;
   margin-inline: auto;
-  max-width: 28rem;
-  padding: 0.4rem;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(10, 22, 40, 0.92);
-  backdrop-filter: blur(18px) saturate(1.2);
-  box-shadow: 0 12px 40px rgba(10, 22, 40, 0.35);
 }
 
 .mobile-dock-item {
@@ -213,68 +208,55 @@ button {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 0.2rem;
-  min-height: 3.35rem;
-  border-radius: 0;
-  color: rgba(255, 255, 255, 0.55);
+  gap: 0.15rem;
+  min-height: 3.55rem;
+  color: var(--muted);
   font-size: 0.625rem;
   font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  transition: color 0.2s ease, background-color 0.2s ease;
+  letter-spacing: 0.04em;
+  text-transform: none;
+  transition: color 0.15s ease;
 }
 
 .mobile-dock-item.is-active {
-  color: white;
-  background: rgba(255, 255, 255, 0.08);
+  color: var(--navy);
 }
 
 .mobile-dock-item.is-active::before {
   content: "";
   position: absolute;
-  top: 0.35rem;
-  width: 1rem;
+  top: 0;
+  width: 1.25rem;
   height: 2px;
   background: var(--red);
 }
 
 .mobile-dock-badge {
   position: absolute;
-  top: -0.35rem;
-  right: -0.55rem;
-  min-width: 1rem;
-  height: 1rem;
-  padding: 0 0.25rem;
-  border-radius: 999px;
+  top: -0.3rem;
+  right: -0.5rem;
+  min-width: 0.95rem;
+  height: 0.95rem;
+  padding: 0 0.2rem;
   background: var(--red);
   color: white;
   font-size: 0.5625rem;
   font-weight: 700;
-  line-height: 1rem;
+  line-height: 0.95rem;
   text-align: center;
 }
 
-/* —— Full-screen mobile menu —— */
+/* —— Mobile menu —— */
 .mobile-menu-sheet {
-  background:
-    radial-gradient(ellipse at 80% 0%, rgba(26, 95, 158, 0.35), transparent 45%),
-    linear-gradient(165deg, #0a1628 0%, #132337 48%, #0a1628 100%);
-  animation: menu-in 0.35s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: menu-in 0.28s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 .mobile-menu-glow {
-  position: absolute;
-  width: 18rem;
-  height: 18rem;
-  right: -4rem;
-  top: 20%;
-  border-radius: 999px;
-  background: rgba(185, 28, 34, 0.18);
-  filter: blur(60px);
+  display: none;
 }
 
 .mobile-menu-link {
-  animation: rise 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: none;
 }
 
 @keyframes menu-in {
@@ -355,28 +337,24 @@ button {
 
 @media (max-width: 767px) {
   .wa-float {
-    bottom: calc(var(--dock-h) + 0.75rem) !important;
-    right: max(1rem, env(safe-area-inset-right)) !important;
-    width: 3.15rem !important;
-    height: 3.15rem !important;
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28) !important;
+    bottom: calc(var(--dock-h) + 0.65rem) !important;
+    right: max(0.85rem, env(safe-area-inset-right)) !important;
+    width: 2.85rem !important;
+    height: 2.85rem !important;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.18) !important;
   }
 
   .wa-float svg {
-    width: 1.45rem;
-    height: 1.45rem;
+    width: 1.3rem;
+    height: 1.3rem;
   }
 
   .hero-mobile {
-    min-height: min(88svh, 720px);
+    min-height: min(78svh, 640px);
   }
 
   .hero-mobile-copy {
-    padding-bottom: 1.75rem;
-  }
-
-  .section-pad-mobile {
-    padding-block: 3.5rem;
+    padding-bottom: 1.25rem;
   }
 }
 

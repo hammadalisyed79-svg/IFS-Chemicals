@@ -257,7 +257,7 @@ export function QuoteForm() {
               <button
                 type="submit"
                 disabled={status === "sending" || lines.length === 0}
-                className="btn btn-accent sticky bottom-[calc(var(--dock-h)+0.65rem)] z-20 w-full shadow-[0_10px_30px_rgba(185,28,34,0.35)] disabled:opacity-60 md:static md:shadow-[0_8px_20px_rgba(185,28,34,0.22)]"
+                className="btn btn-accent sticky bottom-[calc(var(--dock-h)+0.5rem)] z-20 w-full disabled:opacity-60 md:static"
               >
                 {status === "sending"
                   ? "Sending…"

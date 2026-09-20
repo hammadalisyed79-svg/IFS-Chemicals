@@ -11,7 +11,7 @@ const social = [
 
 export function SiteFooter() {
   return (
-    <footer className="bg-[var(--navy)] text-white pb-[calc(0.5rem+env(safe-area-inset-bottom))] md:pb-0">
+    <footer className="bg-[var(--navy)] text-white">
       <div className="container-site grid gap-12 py-16 md:grid-cols-12 md:py-20">
         <div className="md:col-span-5">
           <Image

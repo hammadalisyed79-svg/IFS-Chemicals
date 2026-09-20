@@ -36,13 +36,13 @@ export default function ProductsPage() {
         </div>
       </div>
 
-      <div className="sticky top-[3.5rem] z-30 border-b border-[var(--line)] bg-white/95 backdrop-blur md:top-[6.75rem]">
-        <div className="container-site flex gap-1.5 overflow-x-auto py-2.5 [-ms-overflow-style:none] [scrollbar-width:none] snap-x snap-mandatory [&::-webkit-scrollbar]:hidden md:py-3">
+      <div className="sticky top-[3.25rem] z-30 border-b border-[var(--line)] bg-white/96 backdrop-blur md:top-[6.75rem]">
+        <div className="container-site flex gap-2 overflow-x-auto py-2 [-ms-overflow-style:none] [scrollbar-width:none] snap-x snap-mandatory [&::-webkit-scrollbar]:hidden md:py-3">
           {products.map((p) => (
             <a
               key={p.slug}
               href={`#${p.slug}`}
-              className="snap-start shrink-0 whitespace-nowrap border border-transparent px-3.5 py-2.5 text-[12px] font-medium tracking-[0.04em] text-[var(--muted)] transition hover:border-[var(--navy)] hover:bg-[var(--navy)] hover:text-white active:bg-[var(--navy)] active:text-white"
+              className="snap-start shrink-0 whitespace-nowrap border border-[var(--line)] bg-white px-3 py-2 text-[11px] font-medium tracking-[0.02em] text-[var(--ink-soft)] transition hover:border-[var(--navy)] hover:bg-[var(--navy)] hover:text-white md:text-[12px]"
             >
               {p.name}
             </a>
@@ -50,9 +50,9 @@ export default function ProductsPage() {
         </div>
       </div>
 
-      <div className="container-site space-y-16 py-12 md:space-y-28 md:py-24">
+      <div className="container-site space-y-14 py-10 md:space-y-28 md:py-24">
         {products.map((p) => (
-          <section key={p.slug} id={p.slug} className="scroll-mt-28 md:scroll-mt-40">
+          <section key={p.slug} id={p.slug} className="scroll-mt-24 md:scroll-mt-40">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
               <div className="max-w-2xl">
                 <h2 className="font-display text-2xl font-semibold sm:text-3xl md:text-4xl">
