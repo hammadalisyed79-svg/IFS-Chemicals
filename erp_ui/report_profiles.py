@@ -208,6 +208,8 @@ _WIDTH_HINTS = (
     (re.compile(r"^type$|status|unit|category|group", re.I), 0.85),
     (re.compile(r"^qty$|quantity|^rate$", re.I), 0.9),
     (re.compile(r"date|month|year|phone", re.I), 0.95),
+    # Keep Debit / Credit / Balance readable on detailed ledgers (10 columns)
+    (re.compile(r"^debit$|^credit$|^balance$", re.I), 1.45),
     (re.compile(r"amount|total|debit|credit|balance|weight|value|tax|cost|price|paid|outstanding|slips", re.I), 1.25),
 )
 

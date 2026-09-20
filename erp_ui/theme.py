@@ -732,6 +732,9 @@ div[class*="st-key-mod_chips_row"] .stButton > button:not([kind="primary"]) {{
 .txn-reg-wrap.txn-reg-wrap--ledger {{
   max-height: min(85vh, 920px);
 }}
+.txn-reg-wrap.txn-reg-wrap--ledger .txn-reg-table {{
+  min-width: 1100px;
+}}
 .txn-reg-table {{
   width: 100%;
   min-width: 520px;

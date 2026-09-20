@@ -5936,9 +5936,57 @@ def get_supplier_ledger_detailed(supplier_id, from_date=None, to_date=None, incl
         return party, out
 
 
+def _ledger_dispatch_bits(notes=None, vehicle_no=None, dispatch_remarks=None, driver_name=None):
+    """Extra particulars for detailed ledger headers (destination, vehicle, rent note)."""
+    bits = []
+    veh = (vehicle_no or "").strip()
+    if veh:
+        bits.append(f"Vehicle {veh}")
+    drv = (driver_name or "").strip()
+    if drv:
+        bits.append(f"Driver {drv}")
+    dest = ""
+    for raw in (dispatch_remarks, notes):
+        text = (raw or "").strip()
+        if not text:
+            continue
+        for line in text.replace("\r", "\n").split("\n"):
+            line = line.strip()
+            if not line:
+                continue
+            up = line.upper()
+            if up.startswith("MULTI-DISPATCH"):
+                continue
+            if up.startswith("DISPATCH TO:"):
+                dest = line.split(":", 1)[-1].strip() or dest
+                continue
+            m = re.search(r"RENT\s*#?\s*([0-9,]+(?:\.[0-9]+)?)", line, re.I)
+            if m:
+                bits.append(f"Rent {m.group(1).replace(',', '')}")
+                continue
+            if not dest and len(line) <= 80 and "INVOICE" not in up:
+                dest = line
+        if dest:
+            break
+    if dest:
+        bits.insert(0, dest)
+    return bits
+
+
+def _ledger_item_narration(product_code, product_name, unit=None):
+    name = (product_name or "").strip() or "Item"
+    code = (product_code or "").strip()
+    unit = (unit or "").strip()
+    narr = f"{code} {name}".strip() if code else name
+    if unit:
+        narr = f"{narr} ({unit})"
+    return narr
+
+
 def _append_customer_invoice_detail(conn, events, customer_id, from_date, to_date):
     seq = len(events)
-    q = """SELECT id, invoice_date, document_no, subtotal, discount, tax, total, paid_amount
+    q = """SELECT id, invoice_date, document_no, subtotal, discount, tax, total, paid_amount,
+                  notes, vehicle_no, driver_name, dispatch_remarks
            FROM sales_invoices WHERE customer_id=? AND status='approved'"""
     params = [customer_id]
     if from_date:
@@ -5954,15 +6002,22 @@ def _append_customer_invoice_detail(conn, events, customer_id, from_date, to_dat
         disc = float(inv.get("discount") or 0)
         tax = float(inv.get("tax") or 0)
         net = float(inv.get("total") or 0)
-        paid = float(inv.get("paid_amount") or 0)
-        # Short header only — Amount/Discount/Tax/Net are not merged into narration
+        # Invoice total only on Debit — receipts/payments belong on their own vouchers
+        extras = _ledger_dispatch_bits(
+            inv.get("notes"), inv.get("vehicle_no"),
+            inv.get("dispatch_remarks"), inv.get("driver_name"),
+        )
+        header = f"Credit Sale Vide Invoice No {doc}"
+        if extras:
+            header = f"{header} — {' | '.join(extras)}"
         events.append(_dledger_row(
-            inv["invoice_date"], "SAL", doc, f"Credit Sale Vide Invoice No {doc}",
-            debit=net, credit=paid, balance_line=True, sort_seq=seq, group=0,
+            inv["invoice_date"], "SAL", doc, header,
+            debit=net, credit=0, balance_line=True, sort_seq=seq, group=0,
         ))
         seq += 1
         for it in conn.execute(
-            """SELECT p.name AS product_name, COALESCE(u.symbol,'') AS unit,
+            """SELECT p.code AS product_code, p.name AS product_name,
+                      COALESCE(u.symbol,'') AS unit,
                       si.quantity, si.rate, si.amount
                FROM sales_invoice_items si
                JOIN products p ON si.product_id=p.id
@@ -5971,12 +6026,9 @@ def _append_customer_invoice_detail(conn, events, customer_id, from_date, to_dat
             (inv["id"],),
         ).fetchall():
             it = row_to_dict(it)
-            unit = (it.get("unit") or "").strip()
-            item_narr = it["product_name"]
-            if unit:
-                item_narr = f"{item_narr} ({unit})"
             events.append(_dledger_row(
-                inv["invoice_date"], "", doc, item_narr,
+                inv["invoice_date"], "", doc,
+                _ledger_item_narration(it.get("product_code"), it.get("product_name"), it.get("unit")),
                 qty=float(it["quantity"] or 0), rate=float(it["rate"] or 0),
                 amount=float(it["amount"] or 0), balance_line=False, sort_seq=seq, group=0,
             ))
@@ -6014,7 +6066,8 @@ def _append_customer_invoice_detail(conn, events, customer_id, from_date, to_dat
         ))
         seq += 1
         for it in conn.execute(
-            """SELECT p.name AS product_name, COALESCE(u.symbol,'') AS unit,
+            """SELECT p.code AS product_code, p.name AS product_name,
+                      COALESCE(u.symbol,'') AS unit,
                       ri.quantity, ri.rate, ri.amount
                FROM sales_return_items ri
                JOIN products p ON ri.product_id=p.id
@@ -6023,12 +6076,9 @@ def _append_customer_invoice_detail(conn, events, customer_id, from_date, to_dat
             (ret["id"],),
         ).fetchall():
             it = row_to_dict(it)
-            unit = (it.get("unit") or "").strip()
-            item_narr = it["product_name"]
-            if unit:
-                item_narr = f"{item_narr} ({unit})"
             events.append(_dledger_row(
-                ret["return_date"], "", doc, item_narr,
+                ret["return_date"], "", doc,
+                _ledger_item_narration(it.get("product_code"), it.get("product_name"), it.get("unit")),
                 qty=float(it["quantity"] or 0), rate=float(it["rate"] or 0),
                 amount=float(it["amount"] or 0), balance_line=False, sort_seq=seq, group=1,
             ))
@@ -6037,7 +6087,11 @@ def _append_customer_invoice_detail(conn, events, customer_id, from_date, to_dat
 
 def _append_supplier_invoice_detail(conn, events, supplier_id, from_date, to_date):
     seq = len(events)
-    q = """SELECT id, invoice_date, document_no, subtotal, discount, tax, total, paid_amount
+    # notes/vehicle columns may be absent on older DBs — select safely
+    pi_cols = {r[1] for r in conn.execute("PRAGMA table_info(purchase_invoices)").fetchall()}
+    extra_cols = [c for c in ("notes", "vehicle_no", "driver_name", "dispatch_remarks") if c in pi_cols]
+    extra_sql = (", " + ", ".join(extra_cols)) if extra_cols else ""
+    q = f"""SELECT id, invoice_date, document_no, subtotal, discount, tax, total, paid_amount{extra_sql}
            FROM purchase_invoices WHERE supplier_id=? AND status='approved'"""
     params = [supplier_id]
     if from_date:
@@ -6053,14 +6107,21 @@ def _append_supplier_invoice_detail(conn, events, supplier_id, from_date, to_dat
         disc = float(inv.get("discount") or 0)
         tax = float(inv.get("tax") or 0)
         net = float(inv.get("total") or 0)
-        paid = float(inv.get("paid_amount") or 0)
+        extras = _ledger_dispatch_bits(
+            inv.get("notes"), inv.get("vehicle_no"),
+            inv.get("dispatch_remarks"), inv.get("driver_name"),
+        )
+        header = f"Credit Purchase Vide Invoice No {doc}"
+        if extras:
+            header = f"{header} — {' | '.join(extras)}"
         events.append(_dledger_row(
-            inv["invoice_date"], "PUR", doc, f"Credit Purchase Vide Invoice No {doc}",
-            credit=net, debit=paid, balance_line=True, sort_seq=seq, group=0,
+            inv["invoice_date"], "PUR", doc, header,
+            credit=net, debit=0, balance_line=True, sort_seq=seq, group=0,
         ))
         seq += 1
         for it in conn.execute(
-            """SELECT p.name AS product_name, COALESCE(u.symbol,'') AS unit,
+            """SELECT p.code AS product_code, p.name AS product_name,
+                      COALESCE(u.symbol,'') AS unit,
                       pi.quantity, pi.rate, pi.amount
                FROM purchase_invoice_items pi
                JOIN products p ON pi.product_id=p.id
@@ -6069,12 +6130,9 @@ def _append_supplier_invoice_detail(conn, events, supplier_id, from_date, to_dat
             (inv["id"],),
         ).fetchall():
             it = row_to_dict(it)
-            unit = (it.get("unit") or "").strip()
-            item_narr = it["product_name"]
-            if unit:
-                item_narr = f"{item_narr} ({unit})"
             events.append(_dledger_row(
-                inv["invoice_date"], "", doc, item_narr,
+                inv["invoice_date"], "", doc,
+                _ledger_item_narration(it.get("product_code"), it.get("product_name"), it.get("unit")),
                 qty=float(it["quantity"] or 0), rate=float(it["rate"] or 0),
                 amount=float(it["amount"] or 0), balance_line=False, sort_seq=seq, group=0,
             ))
@@ -6087,7 +6145,7 @@ def _append_supplier_invoice_detail(conn, events, supplier_id, from_date, to_dat
             seq += 1
         if abs(tax) >= 0.005:
             events.append(_dledger_row(
-                inv["invoice_date"], "", doc, "Sales Tax",
+                inv["invoice_date"], "", doc, "Purchase Tax",
                 amount=abs(tax), balance_line=False, sort_seq=seq, group=0,
             ))
             seq += 1
@@ -6112,7 +6170,8 @@ def _append_supplier_invoice_detail(conn, events, supplier_id, from_date, to_dat
         ))
         seq += 1
         for it in conn.execute(
-            """SELECT p.name AS product_name, COALESCE(u.symbol,'') AS unit,
+            """SELECT p.code AS product_code, p.name AS product_name,
+                      COALESCE(u.symbol,'') AS unit,
                       ri.quantity, ri.rate, ri.amount
                FROM purchase_return_items ri
                JOIN products p ON ri.product_id=p.id
@@ -6121,12 +6180,9 @@ def _append_supplier_invoice_detail(conn, events, supplier_id, from_date, to_dat
             (ret["id"],),
         ).fetchall():
             it = row_to_dict(it)
-            unit = (it.get("unit") or "").strip()
-            item_narr = it["product_name"]
-            if unit:
-                item_narr = f"{item_narr} ({unit})"
             events.append(_dledger_row(
-                ret["return_date"], "", doc, item_narr,
+                ret["return_date"], "", doc,
+                _ledger_item_narration(it.get("product_code"), it.get("product_name"), it.get("unit")),
                 qty=float(it["quantity"] or 0), rate=float(it["rate"] or 0),
                 amount=float(it["amount"] or 0), balance_line=False, sort_seq=seq, group=1,
             ))
