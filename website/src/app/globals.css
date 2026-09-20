@@ -200,6 +200,12 @@ button {
   padding-bottom: env(safe-area-inset-bottom);
 }
 
+/* Hide dock while full-screen menu is open (portal lives on body) */
+body[data-menu-open="true"] .mobile-dock {
+  visibility: hidden;
+  pointer-events: none;
+}
+
 .mobile-dock-inner {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
