@@ -45,7 +45,7 @@ export function SiteFooter() {
           <ul className="mt-5 space-y-2.5 text-[14px] text-white/70">
             {products.slice(0, 5).map((p) => (
               <li key={p.slug}>
-                <Link href={`/products#${p.slug}`} className="transition hover:text-white">
+                <Link href={`/products/${p.slug}`} className="transition hover:text-white">
                   {p.name}
                 </Link>
               </li>

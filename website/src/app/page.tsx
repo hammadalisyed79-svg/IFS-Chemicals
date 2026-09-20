@@ -78,7 +78,7 @@ export default function HomePage() {
           {products.map((p) => (
             <Link
               key={p.slug}
-              href={`/products#${p.slug}`}
+              href={`/products/${p.slug}`}
               className="group surface-card overflow-hidden transition hover:-translate-y-0.5"
             >
               <div className="img-well relative aspect-[5/4] overflow-hidden">

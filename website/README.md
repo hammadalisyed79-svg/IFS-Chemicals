@@ -54,6 +54,12 @@ Optional: set `DATABASE_URL` in Vercel project env for contact form storage.
 - LocalBusiness JSON-LD is embedded site-wide
 - Claim / verify the business in [Google Business Profile](https://business.google.com/) using address Bridge Canal Saroki, Gujrat, and link the website URL
 
+## Catalog depth (Phase 4)
+
+- Per-platform and per-SKU pages under `/products/[slug]` (e.g. `/products/happy-detergent`)
+- Packaging / PET / corrugated platform pages include capability galleries
+- Distributor price lists stay behind the partner portal (`erp.ifschemicals.com`) — public site links to request access / open portal
+
 ## GoDaddy DNS cutover (apex is currently Parked)
 
 In GoDaddy → DNS for `ifschemicals.com` (nameservers `ns19`/`ns20.domaincontrol.com`):
