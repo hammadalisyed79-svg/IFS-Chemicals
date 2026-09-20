@@ -51,7 +51,7 @@ export function TrustSection() {
                 src={shot.src}
                 alt={shot.alt}
                 fill
-                className="object-contain p-3 transition duration-700 group-hover:scale-[1.02]"
+                className="object-cover transition duration-700 group-hover:scale-[1.04]"
                 sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
               />
               <div className="absolute inset-0 bg-gradient-to-t from-[var(--navy)]/80 via-transparent to-transparent" />

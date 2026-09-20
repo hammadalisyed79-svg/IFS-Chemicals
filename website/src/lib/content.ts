@@ -169,13 +169,13 @@ export const products: ProductFamily[] = [
     gallery: [
       {
         src: "/images/products/flexible-packaging.jpg",
-        alt: "Flexible packaging formats — film, pouches, and shrink sleeves",
-        label: "Film & pouch formats",
+        alt: "Packaging film rolls for flexible packaging",
+        label: "Film rolls",
       },
       {
-        src: "/images/products/flexible-pouches.jpg",
-        alt: "Stand-up pouches, zipper bags, and spout pouches",
-        label: "Pouches & bags",
+        src: "/images/products/flex-gallery-capability.jpg",
+        alt: "Film roll with finished stand-up pouches",
+        label: "Film to pouch",
       },
       {
         src: "/images/factory.jpg",
@@ -184,7 +184,7 @@ export const products: ProductFamily[] = [
       },
       {
         src: "/images/products/bahar-dishwash.jpg",
-        alt: "Finished liquid packs using flexible packaging",
+        alt: "Finished IFS liquid packs",
         label: "Finished packs",
       },
     ],
@@ -224,13 +224,13 @@ export const products: ProductFamily[] = [
     gallery: [
       {
         src: "/images/products/corrugated-box.jpg",
-        alt: "Corrugated box styles — RSC, HSC, telescope, trays, and folders",
-        label: "Box style range",
+        alt: "Corrugated carton styles for shipping and retail",
+        label: "Carton range",
       },
       {
-        src: "/images/products/corrugated-shippers.jpg",
-        alt: "Shipper and slotted container styles",
-        label: "Shippers & cartons",
+        src: "/images/products/corrugated-gallery-warehouse.jpg",
+        alt: "Stacked corrugated cartons in warehouse supply",
+        label: "Volume supply",
       },
       {
         src: "/images/factory.jpg",
@@ -238,9 +238,9 @@ export const products: ProductFamily[] = [
         label: "Plant",
       },
       {
-        src: "/images/hero/banner-1.jpg",
-        alt: "IFS product supply context",
-        label: "Supply ready",
+        src: "/images/products/corrugated-shippers.jpg",
+        alt: "Shipper cartons ready for transit",
+        label: "Shippers",
       },
     ],
     items: [
@@ -278,12 +278,12 @@ export const products: ProductFamily[] = [
     gallery: [
       {
         src: "/images/products/pet-bottle.jpg",
-        alt: "PET injection stretch blow molding process diagram",
-        label: "ISBM process",
+        alt: "PET bottle blow molding production",
+        label: "Blow molding",
       },
       {
         src: "/images/products/pet-standard-necks.jpg",
-        alt: "PET preform injection and blow stages",
+        alt: "PET preforms and standard neck bottles",
         label: "Preform to bottle",
       },
       {
@@ -293,8 +293,8 @@ export const products: ProductFamily[] = [
       },
       {
         src: "/images/products/bahar-dishwash.jpg",
-        alt: "Liquid product in PET-compatible packaging",
-        label: "Liquid packs",
+        alt: "Finished IFS liquid product packs",
+        label: "Finished packs",
       },
     ],
     items: [
