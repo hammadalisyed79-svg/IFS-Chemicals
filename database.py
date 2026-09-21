@@ -3594,29 +3594,26 @@ def update_cash_entry(entry_id, entry_date, description, reference_no, entry_typ
 
 
 def delete_cash_entry(entry_id, entry_type=None, _skip_close_check=False):
-    from db_cash_day import assert_cash_day_open
-    if not _skip_close_check:
-        old_date = _cash_entry_date(entry_id)
-        if old_date:
-            assert_cash_day_open(old_date, "delete")
-    with get_connection() as conn:
-        for tbl in ("cash_receipts", "cash_payments"):
-            row = conn.execute(
-                f"SELECT document_no, amount FROM {tbl} WHERE id=?", (entry_id,)
-            ).fetchone()
-            if row:
-                conn.execute(f"DELETE FROM {tbl} WHERE id=?", (entry_id,))
-                try:
-                    from db_audit import log_event
-                    log_event(
-                        tbl, entry_id, "delete", module="Finance",
-                        document_no=row["document_no"],
-                        summary=f"Deleted cash entry {row['document_no']}",
-                    )
-                except Exception:
-                    pass
-                return
+    """Delete a cash receipt/payment; cascade-reverse cash-advance settlements when linked."""
+    from db_v3 import void_cash_bank_book_entry
 
+    et = (entry_type or "").lower()
+    if et in ("credit", "receipt"):
+        side = "credit"
+    elif et in ("debit", "payment"):
+        side = "debit"
+    else:
+        side = None
+        with get_connection() as conn:
+            if conn.execute("SELECT 1 FROM cash_receipts WHERE id=?", (entry_id,)).fetchone():
+                side = "credit"
+            elif conn.execute("SELECT 1 FROM cash_payments WHERE id=?", (entry_id,)).fetchone():
+                side = "debit"
+        if side is None:
+            return
+    void_cash_bank_book_entry(
+        "cash", entry_id, side, _skip_close_check=_skip_close_check,
+    )
 
 def _bank_book_rows(conn, from_date=None, to_date=None):
     q = """SELECT id, receipt_date AS entry_date, description, reference_no, 'credit' AS entry_type,

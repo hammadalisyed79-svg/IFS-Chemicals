@@ -4295,7 +4295,13 @@ def _load_cash_bank_book_row(conn, book, entry_id, entry_type):
 
 
 def void_cash_bank_book_entry(book, entry_id, entry_type=None, *, _skip_close_check=False):
-    """Delete cash/bank voucher and reverse GL + customer/supplier balances."""
+    """Delete cash/bank voucher and reverse GL + customer/supplier balances.
+
+    If the voucher was created by a cash-advance settlement (settle bill), the
+    whole settlement is reversed (GL + settle bill + advance outstanding).
+    If it was a legacy cash-advance *issue* payment, the advance is cancelled
+    when it has no settlements; otherwise deletion is blocked with a clear error.
+    """
     import database as db
     from db_cash_day import assert_cash_day_open
     with db.get_connection() as conn:
@@ -4304,11 +4310,68 @@ def void_cash_bank_book_entry(book, entry_id, entry_type=None, *, _skip_close_ch
             raise ValueError("Voucher not found.")
         if book == "cash" and not _skip_close_check:
             assert_cash_day_open(row.get("entry_date"), "delete")
+
+        doc = (row.get("document_no") or "").strip()
+        settle_ids = _settlement_ids_for_cash_bank_voucher(
+            conn, entry_id=entry_id, document_no=doc,
+        )
+        if settle_ids:
+            results = []
+            for sid in settle_ids:
+                results.append(
+                    reverse_cash_advance_settlement(
+                        sid,
+                        user_id=None,
+                        delete_cash_vouchers=True,
+                        _skip_close_check=True,
+                        _conn=conn,
+                    )
+                )
+            # Settlement reverse already deleted linked cash/bank rows.
+            still = conn.execute(
+                f"SELECT 1 FROM {row['_table']} WHERE id=?", (entry_id,),
+            ).fetchone()
+            if still:
+                _void_cash_bank_book_effects(
+                    conn, book=book, entry_id=entry_id, entry_type=row["entry_type"], row=row,
+                )
+                conn.execute(f"DELETE FROM {row['_table']} WHERE id=?", (entry_id,))
+            return {"ok": True, "reversed_settlements": results}
+
+        issue_adv = _advance_for_issue_voucher(conn, entry_id=entry_id, document_no=doc)
+        if issue_adv:
+            n_settle = int(conn.execute(
+                "SELECT COUNT(*) FROM cash_advance_settlements WHERE advance_id=?",
+                (int(issue_adv["id"]),),
+            ).fetchone()[0])
+            if n_settle:
+                raise ValueError(
+                    f"Voucher {doc or entry_id} belongs to cash advance "
+                    f"{issue_adv.get('document_no')} which has settlement(s). "
+                    f"Reverse the settle bill first (or delete a settlement cash voucher)."
+                )
+            cancelled = cancel_cash_advance(
+                int(issue_adv["id"]),
+                user_id=None,
+                reason=f"Cash/bank voucher {doc or entry_id} deleted",
+                _skip_close_check=True,
+                _conn=conn,
+            )
+            still = conn.execute(
+                f"SELECT 1 FROM {row['_table']} WHERE id=?", (entry_id,),
+            ).fetchone()
+            if still:
+                _void_cash_bank_book_effects(
+                    conn, book=book, entry_id=entry_id, entry_type=row["entry_type"], row=row,
+                )
+                conn.execute(f"DELETE FROM {row['_table']} WHERE id=?", (entry_id,))
+            return {"ok": True, "cancelled_advance": cancelled}
+
         _void_cash_bank_book_effects(
             conn, book=book, entry_id=entry_id, entry_type=row["entry_type"], row=row,
         )
         conn.execute(f"DELETE FROM {row['_table']} WHERE id=?", (entry_id,))
-    return True
+    return {"ok": True}
 
 
 def update_cash_bank_book_entry(
@@ -5298,6 +5361,370 @@ def settle_cash_advance(
             "outstanding_amount": 0.0 if status == "settled" else new_out,
             "status": status,
         }
+
+
+def _settlement_ids_for_cash_bank_voucher(conn, *, entry_id=None, document_no=None):
+    """Find cash_advance_settlements linked to a cash/bank book voucher."""
+    doc = (document_no or "").strip()
+    eid = int(entry_id) if entry_id not in (None, "", 0, "0") else None
+    if eid is None and not doc:
+        return []
+    ids = set()
+    if eid is not None:
+        for row in conn.execute(
+            """SELECT DISTINCT s.id
+               FROM cash_advance_settlements s
+               LEFT JOIN cash_advance_settlement_lines l ON l.settlement_id=s.id
+               WHERE s.cash_entry_id=? OR l.cash_entry_id=?""",
+            (eid, eid),
+        ).fetchall():
+            ids.add(int(row[0]))
+    if doc:
+        for row in conn.execute(
+            """SELECT DISTINCT s.id
+               FROM cash_advance_settlements s
+               LEFT JOIN cash_advance_settlement_lines l ON l.settlement_id=s.id
+               WHERE s.cash_doc_no=? OR l.cash_doc_no=?""",
+            (doc, doc),
+        ).fetchall():
+            ids.add(int(row[0]))
+    return sorted(ids)
+
+
+def _advance_for_issue_voucher(conn, *, entry_id=None, document_no=None):
+    """Find cash_advances whose issue cash/bank voucher matches."""
+    doc = (document_no or "").strip()
+    eid = int(entry_id) if entry_id not in (None, "", 0, "0") else None
+    if eid is not None:
+        row = conn.execute(
+            """SELECT * FROM cash_advances
+               WHERE issue_entry_id=?
+                 AND COALESCE(issue_doc_no,'') != ''
+                 AND (
+                   SELECT document_no FROM cash_payments WHERE id=cash_advances.issue_entry_id
+                 ) = issue_doc_no""",
+            (eid,),
+        ).fetchone()
+        if row:
+            return dict(row)
+        row = conn.execute(
+            """SELECT * FROM cash_advances
+               WHERE issue_entry_id=?
+                 AND COALESCE(issue_doc_no,'') != ''
+                 AND (
+                   SELECT document_no FROM bank_payments WHERE id=cash_advances.issue_entry_id
+                 ) = issue_doc_no""",
+            (eid,),
+        ).fetchone()
+        if row:
+            return dict(row)
+    if doc:
+        row = conn.execute(
+            "SELECT * FROM cash_advances WHERE issue_doc_no=?", (doc,),
+        ).fetchone()
+        if row:
+            return dict(row)
+    return None
+
+
+def reverse_cash_advance_settlement(
+    settlement_id=None,
+    document_no=None,
+    *,
+    user_id=None,
+    delete_cash_vouchers=True,
+    _skip_close_check=False,
+    _conn=None,
+):
+    """Undo a settlement: remove GL, optional cash/bank vouchers, restore advance outstanding.
+
+    Safe when the Cash Book CP was already deleted (orphan settle-bill repair).
+    """
+    import database as db
+    from db_cash_day import assert_cash_day_open
+
+    if settlement_id is None and not document_no:
+        raise ValueError("Provide settlement_id or document_no.")
+
+    def _run(conn):
+        _ensure_cash_advances_schema(conn)
+        if document_no and settlement_id is None:
+            settle = conn.execute(
+                "SELECT * FROM cash_advance_settlements WHERE document_no=?",
+                (str(document_no).strip(),),
+            ).fetchone()
+        else:
+            settle = conn.execute(
+                "SELECT * FROM cash_advance_settlements WHERE id=?",
+                (int(settlement_id),),
+            ).fetchone()
+        if not settle:
+            raise ValueError("Settlement not found.")
+        settle = dict(settle)
+        settle_id = int(settle["id"])
+        settle_doc = settle.get("document_no")
+        adv = conn.execute(
+            "SELECT * FROM cash_advances WHERE id=?", (int(settle["advance_id"]),),
+        ).fetchone()
+        if not adv:
+            raise ValueError("Linked cash advance not found.")
+        adv = dict(adv)
+
+        lines = [
+            dict(r) for r in conn.execute(
+                "SELECT * FROM cash_advance_settlement_lines WHERE settlement_id=? ORDER BY line_no, id",
+                (settle_id,),
+            ).fetchall()
+        ]
+
+        voucher_keys = []
+        for ln in lines:
+            if ln.get("cash_entry_id") or ln.get("cash_doc_no"):
+                voucher_keys.append(
+                    (ln.get("cash_entry_id"), (ln.get("cash_doc_no") or "").strip())
+                )
+        if settle.get("cash_entry_id") or settle.get("cash_doc_no"):
+            voucher_keys.append(
+                (settle.get("cash_entry_id"), (settle.get("cash_doc_no") or "").strip())
+            )
+
+        pay_mode = (adv.get("payment_mode") or "cash").lower()
+        if delete_cash_vouchers and not _skip_close_check and pay_mode == "cash":
+            for eid, doc in voucher_keys:
+                row = None
+                if eid:
+                    row = conn.execute(
+                        "SELECT payment_date FROM cash_payments WHERE id=?", (int(eid),),
+                    ).fetchone()
+                if not row and doc:
+                    row = conn.execute(
+                        "SELECT payment_date FROM cash_payments WHERE document_no=?", (doc,),
+                    ).fetchone()
+                if row and row[0]:
+                    assert_cash_day_open(str(row[0]), "delete")
+
+        gl_deleted = _delete_gl_reference(
+            conn, "cash_advance_settlement", ref_id=settle_id,
+        )
+        if settle_doc:
+            gl_deleted += _delete_gl_reference(
+                conn, "cash_advance_settlement", ref_no=settle_doc,
+            )
+
+        deleted_vouchers = []
+        if delete_cash_vouchers:
+            seen = set()
+            for eid, doc in voucher_keys:
+                for table in ("cash_payments", "bank_payments"):
+                    row = None
+                    if eid is not None and (table, "id", int(eid)) not in seen:
+                        row = conn.execute(
+                            f"SELECT * FROM {table} WHERE id=?",
+                            (int(eid),),
+                        ).fetchone()
+                        if row:
+                            seen.add((table, "id", int(row["id"])))
+                    if not row and doc and (table, "doc", doc) not in seen:
+                        row = conn.execute(
+                            f"SELECT * FROM {table} WHERE document_no=?",
+                            (doc,),
+                        ).fetchone()
+                        if row:
+                            seen.add((table, "doc", doc))
+                            seen.add((table, "id", int(row["id"])))
+                    if not row:
+                        continue
+                    drow = dict(row)
+                    _void_cash_bank_book_effects(
+                        conn,
+                        book="cash" if table.startswith("cash") else "bank",
+                        entry_id=int(drow["id"]),
+                        entry_type="debit",
+                        row=drow,
+                    )
+                    conn.execute(f"DELETE FROM {table} WHERE id=?", (int(drow["id"]),))
+                    deleted_vouchers.append(
+                        {
+                            "table": table,
+                            "id": int(drow["id"]),
+                            "document_no": drow.get("document_no"),
+                        }
+                    )
+
+        conn.execute(
+            "DELETE FROM cash_advance_settlement_lines WHERE settlement_id=?",
+            (settle_id,),
+        )
+        conn.execute("DELETE FROM cash_advance_settlements WHERE id=?", (settle_id,))
+
+        bills = round(float(settle.get("bills_total") or 0), 2)
+        returned = round(float(settle.get("cash_returned") or 0), 2)
+        new_bills = round(float(adv.get("settled_bills") or 0) - bills, 2)
+        new_returned = round(float(adv.get("cash_returned") or 0) - returned, 2)
+        if new_bills < 0:
+            new_bills = 0.0
+        if new_returned < 0:
+            new_returned = 0.0
+        new_out = round(float(adv["amount"]) - new_bills - new_returned, 2)
+        if new_out < 0:
+            new_out = 0.0
+        if new_out <= 0.01 and (new_bills + new_returned) > 0.005:
+            status = "settled"
+            new_out = 0.0
+        elif (new_bills + new_returned) > 0.005:
+            status = "partial"
+        else:
+            status = "open"
+        ts = now()
+        conn.execute(
+            """UPDATE cash_advances
+               SET settled_bills=?, cash_returned=?, outstanding_amount=?,
+                   status=?, modified_by=?, modified_at=?
+               WHERE id=?""",
+            (new_bills, new_returned, new_out, status, user_id, ts, int(adv["id"])),
+        )
+        try:
+            from db_audit import log_event
+            log_event(
+                "cash_advance_settlements", settle_id, "delete", user_id=user_id,
+                module="Finance", document_no=settle_doc,
+                summary=(
+                    f"Reversed settlement {settle_doc} for {adv.get('document_no')} "
+                    f"(bills {bills:,.2f}, cash return {returned:,.2f})"
+                ),
+            )
+        except Exception:
+            pass
+        return {
+            "settlement_id": settle_id,
+            "document_no": settle_doc,
+            "advance_id": int(adv["id"]),
+            "advance_no": adv.get("document_no"),
+            "advance_status": status,
+            "outstanding_amount": new_out,
+            "gl_rows_deleted": gl_deleted,
+            "deleted_vouchers": deleted_vouchers,
+        }
+
+    if _conn is not None:
+        return _run(_conn)
+    with db.get_connection() as conn:
+        return _run(conn)
+
+
+def cancel_cash_advance(advance_id, *, user_id=None, reason="", _skip_close_check=False, _conn=None):
+    """Cancel an open cash advance with no settlements: reverse issue GL and unlink issue voucher."""
+    import database as db
+    from db_cash_day import assert_cash_day_open
+
+    if not advance_id:
+        raise ValueError("Advance id required.")
+
+    def _run(conn):
+        _ensure_cash_advances_schema(conn)
+        adv = conn.execute(
+            "SELECT * FROM cash_advances WHERE id=?", (int(advance_id),),
+        ).fetchone()
+        if not adv:
+            raise ValueError("Cash advance not found.")
+        adv = dict(adv)
+        status = (adv.get("status") or "").lower()
+        if status == "cancelled":
+            return {"id": int(adv["id"]), "document_no": adv.get("document_no"), "status": "cancelled"}
+        if status == "settled":
+            raise ValueError(
+                f"{adv['document_no']} is settled — reverse its settle bill(s) first."
+            )
+        n_settle = int(conn.execute(
+            "SELECT COUNT(*) FROM cash_advance_settlements WHERE advance_id=?",
+            (int(adv["id"]),),
+        ).fetchone()[0])
+        if n_settle:
+            raise ValueError(
+                f"{adv['document_no']} has settlement(s) — reverse those first "
+                f"(Cash Book delete now reverses settlement-linked vouchers)."
+            )
+        if float(adv.get("settled_bills") or 0) > 0.005 or float(adv.get("cash_returned") or 0) > 0.005:
+            raise ValueError(
+                f"{adv['document_no']} has settlement amounts on the advance — reverse settlements first."
+            )
+
+        gl_deleted = _delete_gl_reference(conn, "cash_advance", ref_id=int(adv["id"]))
+        if adv.get("document_no"):
+            gl_deleted += _delete_gl_reference(
+                conn, "cash_advance", ref_no=adv["document_no"],
+            )
+
+        deleted_issue = None
+        issue_id = adv.get("issue_entry_id")
+        issue_doc = (adv.get("issue_doc_no") or "").strip()
+        issue_src = (adv.get("issue_entry_source") or "").lower()
+        table = "bank_payments" if "bank" in issue_src else "cash_payments"
+        row = None
+        if issue_id:
+            row = conn.execute(
+                f"SELECT * FROM {table} WHERE id=?", (int(issue_id),),
+            ).fetchone()
+            if row and issue_doc and (row["document_no"] or "") != issue_doc:
+                row = None
+        if not row and issue_doc and issue_doc.startswith(("CP-", "BP-", "CPV-")):
+            for tbl in ("cash_payments", "bank_payments"):
+                row = conn.execute(
+                    f"SELECT * FROM {tbl} WHERE document_no=?", (issue_doc,),
+                ).fetchone()
+                if row:
+                    table = tbl
+                    break
+        if row:
+            if table == "cash_payments" and not _skip_close_check:
+                assert_cash_day_open(str(row["payment_date"]), "delete")
+            drow = dict(row)
+            _void_cash_bank_book_effects(
+                conn,
+                book="cash" if table.startswith("cash") else "bank",
+                entry_id=int(drow["id"]),
+                entry_type="debit",
+                row=drow,
+            )
+            conn.execute(f"DELETE FROM {table} WHERE id=?", (int(drow["id"]),))
+            deleted_issue = {
+                "table": table, "id": int(drow["id"]), "document_no": drow.get("document_no"),
+            }
+
+        ts = now()
+        note = (reason or "").strip()
+        purpose = adv.get("purpose") or ""
+        if note:
+            purpose = f"{purpose} [cancelled: {note}]".strip()
+        conn.execute(
+            """UPDATE cash_advances
+               SET status='cancelled', outstanding_amount=0, settled_bills=0, cash_returned=0,
+                   issue_entry_id=NULL, issue_entry_source=NULL,
+                   purpose=?, modified_by=?, modified_at=?
+               WHERE id=?""",
+            (purpose, user_id, ts, int(adv["id"])),
+        )
+        try:
+            from db_audit import log_event
+            log_event(
+                "cash_advances", int(adv["id"]), "cancel", user_id=user_id,
+                module="Finance", document_no=adv.get("document_no"),
+                summary=f"Cancelled cash advance {adv.get('document_no')} — {note or 'no reason'}",
+            )
+        except Exception:
+            pass
+        return {
+            "id": int(adv["id"]),
+            "document_no": adv.get("document_no"),
+            "status": "cancelled",
+            "gl_rows_deleted": gl_deleted,
+            "deleted_issue_voucher": deleted_issue,
+        }
+
+    if _conn is not None:
+        return _run(_conn)
+    with db.get_connection() as conn:
+        return _run(conn)
 
 
 def backfill_cash_advance_settlement_cash_book(

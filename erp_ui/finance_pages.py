@@ -865,8 +865,28 @@ def _edit_delete_tab(book, key_prefix="cb", sel_date=None):
                 st.error(str(ex))
         if delb:
             try:
-                db.void_cash_bank_book_entry(book, e["id"], e["entry_type"])
-                ff.action_done("Deleted.")
+                result = db.void_cash_bank_book_entry(book, e["id"], e["entry_type"])
+                msg = "Deleted."
+                if isinstance(result, dict):
+                    settles = result.get("reversed_settlements") or []
+                    if settles:
+                        docs = ", ".join(
+                            str(s.get("document_no") or s.get("settlement_id")) for s in settles
+                        )
+                        advs = ", ".join(
+                            str(s.get("advance_no") or s.get("advance_id")) for s in settles
+                        )
+                        msg = (
+                            f"Deleted cash voucher and reversed settle bill {docs} "
+                            f"(advance {advs} restored)."
+                        )
+                    elif result.get("cancelled_advance"):
+                        ca = result["cancelled_advance"]
+                        msg = (
+                            f"Deleted cash voucher and cancelled cash advance "
+                            f"{ca.get('document_no')}."
+                        )
+                ff.action_done(msg)
             except Exception as ex:
                 st.error(str(ex))
 
