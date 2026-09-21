@@ -44,7 +44,7 @@ export const products: ProductFamily[] = [
       {
         slug: "lighter-density-base-powder",
         name: "Lighter Density Base Powder",
-        image: "/images/products/lighter-density-base-powder.jpg",
+        image: "/images/products/lighter-density-base-powder.png",
         pack: "Industrial bulk sacks",
         use: "B2B / spray-dry grade base",
         summary:
