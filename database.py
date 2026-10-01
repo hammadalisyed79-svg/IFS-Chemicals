@@ -6737,6 +6737,12 @@ from db_production_stock import (  # noqa: F401,E402
     save_production_month_run,
     unlock_production_month_run,
 )
+from db_monthly_physical import (  # noqa: F401,E402
+    apply_monthly_physical,
+    get_physical_map,
+    merge_physical_defaults,
+    upsert_physical_map,
+)
 from db_audit import log_event, search_audit_log  # noqa: F401,F403,E402
 from product_rates_legacy import (  # noqa: F401,E402
     clear_rate_cache,

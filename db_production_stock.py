@@ -244,6 +244,18 @@ def calculate_production_month(
         except (TypeError, ValueError):
             continue
 
+    # Shared month-end physical (contractor Physical ↔ Sale & Production Phy)
+    try:
+        from db_monthly_physical import merge_physical_defaults
+
+        ym = str(from_date or "")[:7]
+        if ym and ids:
+            phy_map = merge_physical_defaults(
+                ym, ids, phy_map, warehouse_id=int(warehouse_id),
+            )
+    except Exception:
+        pass
+
     placeholders = ",".join("?" * len(ids))
     with get_connection() as conn:
         products = rows_to_list(
@@ -505,6 +517,26 @@ def save_production_month_run(
                     ln["sort_order"],
                 ),
             )
+    # Sync Phy into shared store + contractor worksheets
+    try:
+        from db_monthly_physical import upsert_physical_map
+
+        phy_map = {
+            int(ln["product_id"]): float(ln["physical_qty"] or 0)
+            for ln in clean
+            if ln.get("product_id")
+        }
+        if phy_map:
+            upsert_physical_map(
+                ym,
+                phy_map,
+                warehouse_id=int(warehouse_id),
+                source="production",
+                user_id=user_id,
+                sync_worksheets=True,
+            )
+    except Exception:
+        pass
     return run_id
 
 

@@ -972,6 +972,16 @@ def calculate_contractor_month(
                 manual[int(k)] = float(v or 0)
             except (TypeError, ValueError):
                 continue
+        # Shared month-end physical (Sale & Production Phy ↔ contractor Physical)
+        try:
+            from db_monthly_physical import merge_physical_defaults
+
+            ym = str(from_date or "")[:7]
+            closing_pids = [pid for pid, b in bases.items() if b == BILLING_CLOSING]
+            if ym and closing_pids:
+                manual = merge_physical_defaults(ym, closing_pids, manual)
+        except Exception:
+            pass
 
     default_rate = float(c.get("default_rate") or 0)
     lines = []
@@ -1555,6 +1565,38 @@ def save_contractor_month_run(
                     ln["closing_stock"], ln["rate"], ln["amount"], ln["sort_order"],
                 ),
             )
+        pay_row = conn.execute(
+            "SELECT payment_type FROM contract_labourers WHERE id=?",
+            (int(contractor_id),),
+        ).fetchone()
+        pay_type = (pay_row["payment_type"] if pay_row else "") or ""
+
+    # Outside the write transaction — sync shared physical (avoids nested connections)
+    if pay_type == "sku_carton":
+        phy_map = {
+            int(ln["product_id"]): float(ln["manual_qty"] or 0)
+            for ln in clean
+            if ln.get("product_id")
+        }
+        if phy_map:
+            try:
+                from db_monthly_physical import get_physical_map, upsert_physical_map
+
+                # Do not blank shared phy for products left at 0 on this worksheet
+                # unless they already have a shared value (explicit clear).
+                existing = get_physical_map(ym, product_ids=list(phy_map.keys()))
+                to_write = {
+                    pid: qty
+                    for pid, qty in phy_map.items()
+                    if abs(qty) > 0.00005 or pid in existing
+                }
+                if to_write:
+                    upsert_physical_map(
+                        ym, to_write, source="contractor", user_id=user_id,
+                        sync_worksheets=True,
+                    )
+            except Exception:
+                pass
     try:
         from db_audit import log_event
         log_event(

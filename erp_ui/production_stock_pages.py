@@ -105,6 +105,7 @@ def _tab_worksheet():
     st.caption(
         "**Production** = Phy − OS − Return + Sale − Adj · "
         "**Closing** = Phy (physical count). "
+        "Phy is **shared** with Contract Labour physical — enter on either screen. "
         "Tick products, choose **Include / Exclude / Replace**, then **Load**. "
         "Enter **Phy** only; production posts as stock-in (excluded from Adj on reload)."
     )
@@ -428,14 +429,28 @@ def _tab_worksheet():
 
     phy_key = f"prod_phy_map_{wh_id}_{ym}"
     if phy_key not in st.session_state:
+        seed_phy = {}
         if saved and saved.get("lines"):
-            st.session_state[phy_key] = {
+            seed_phy = {
                 int(ln["product_id"]): float(ln.get("physical_qty") or 0)
                 for ln in saved["lines"]
                 if ln.get("product_id")
             }
-        else:
-            st.session_state[phy_key] = {}
+        try:
+            from db_monthly_physical import merge_physical_defaults
+
+            pids = list(seed_phy.keys()) or [
+                int(ln["product_id"])
+                for ln in (saved.get("lines") or [])
+                if ln.get("product_id")
+            ]
+            if pids:
+                seed_phy = merge_physical_defaults(
+                    ym, pids, seed_phy, warehouse_id=wh_id,
+                )
+        except Exception:
+            pass
+        st.session_state[phy_key] = seed_phy
 
     result_key = f"prod_phy_result_{wh_id}_{ym}"
     meta_key = f"prod_phy_meta_{wh_id}_{ym}"
@@ -479,12 +494,26 @@ def _tab_worksheet():
                 if not new_ids:
                     st.warning("Exclude would remove every worksheet line. Clear selection or use Replace.")
                 else:
+                    phy_keep = {
+                        int(pid): float(qty)
+                        for pid, qty in (st.session_state.get(phy_key) or {}).items()
+                        if int(pid) in set(new_ids)
+                    }
+                    try:
+                        from db_monthly_physical import merge_physical_defaults
+
+                        phy_keep = merge_physical_defaults(
+                            ym, new_ids, phy_keep, warehouse_id=wh_id,
+                        )
+                    except Exception:
+                        pass
+                    st.session_state[phy_key] = phy_keep
                     calc = db.calculate_production_month(
                         wh_id,
                         fd,
                         td,
                         new_ids,
-                        physical_map=st.session_state.get(phy_key) or {},
+                        physical_map=phy_keep,
                     )
                     st.session_state[result_key] = calc
                     st.session_state[meta_key] = {
@@ -522,6 +551,15 @@ def _tab_worksheet():
                     for pid, qty in (st.session_state.get(phy_key) or {}).items()
                     if int(pid) in set(new_ids)
                 }
+                # Seed missing Phy from shared month-end physical (contractor / prior saves)
+                try:
+                    from db_monthly_physical import merge_physical_defaults
+
+                    phy_keep = merge_physical_defaults(
+                        ym, new_ids, phy_keep, warehouse_id=wh_id,
+                    )
+                except Exception:
+                    pass
                 st.session_state[phy_key] = phy_keep
                 calc = db.calculate_production_month(
                     wh_id,

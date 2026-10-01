@@ -682,20 +682,39 @@ def _tab_month_preview():
     else:
         st.caption(
             "**SKU / carton contractor** — monthly worksheet. "
-            "**Closing (billable)** = Sold − Opening − Sale return + Physical Manual · "
+            "**Closing (billable)** = Sold − Opening − Sale return + Physical (month-end) · "
             "**Amount** = Closing × Rate "
             "(SF* can use Sold × Rate; salt stone can use Purchased × Rate if set on Products). "
+            "Physical is **shared** with Sale & Production — enter it here or there; both update. "
             "Save stores one record per contractor per month."
         )
 
     saved = get_contractor_month_run(cid, ym)
     mk = f"cl_manual_{cid}_{ym}"
     if mk not in st.session_state and saved and not is_prod and not is_lu and not is_purchase:
-        st.session_state[mk] = {
+        seed_man = {
             int(ln["product_id"]): float(ln.get("manual_qty") or 0)
             for ln in (saved.get("lines") or [])
             if ln.get("product_id")
         }
+        try:
+            from db_monthly_physical import merge_physical_defaults
+
+            seed_man = merge_physical_defaults(ym, list(seed_man.keys()), seed_man)
+        except Exception:
+            pass
+        st.session_state[mk] = seed_man
+    elif mk not in st.session_state and not is_prod and not is_lu and not is_purchase:
+        # No saved run yet — still seed from shared physical if available
+        try:
+            from db_monthly_physical import get_physical_map
+            from db_contractors import get_contractor_product_ids
+
+            pids = list(get_contractor_product_ids(cid) or [])
+            if pids:
+                st.session_state[mk] = get_physical_map(ym, product_ids=pids)
+        except Exception:
+            pass
 
     rate_key = f"cl_lu_rates_{cid}_{ym}"
     excl_key = f"cl_lu_excl_{cid}_{ym}"
@@ -1578,8 +1597,9 @@ def _tab_month_preview():
         summary = {k: v for k, v in summary.items() if v is not None}
     else:
         st.markdown(
-            "**Worksheet** — edit **Physical Manual Added Stock** only; "
+            "**Worksheet** — edit **Physical (month-end)** only; "
             "Closing and Amount update below. "
+            "Same physical feeds **Sale & Production → Phy**. "
             "Enter values and click **Save month record** (avoid clicking elsewhere mid-edit)."
         )
         editor_key = f"cl_ws_editor_{cid}_{ym}"
@@ -1633,7 +1653,8 @@ def _tab_month_preview():
                 "Stock in hand": st.column_config.NumberColumn("Stock in hand", format="%.2f"),
                 "Sale return": st.column_config.NumberColumn("Sale return", format="%.2f"),
                 "Physical Manual": st.column_config.NumberColumn(
-                    "Physical Manual Added Stock",
+                    "Physical (month-end)",
+                    help="Month-end physical count — shared with Sale & Production.",
                     min_value=0.0, step=1.0, format="%.2f",
                 ),
                 "Rate": st.column_config.NumberColumn("Rate", format="%.4f"),
