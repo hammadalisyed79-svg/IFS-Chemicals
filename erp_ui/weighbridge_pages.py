@@ -271,15 +271,41 @@ def _second_weight_form_body(slip_id: int, *, key_prefix: str = "ws2"):
             if str(r.get("code") or "").upper() != UNKNOWN_PARTY_CODE
         ]
         if str(party_type_2).startswith("SALE"):
-            _, cid2, _ = smart_select(
-                "Customer account *", _real_cust, f"{key_prefix}_c", "id",
-                _party_fmt,
+            from_supplier = st.checkbox(
+                "Party is a Supplier (sell to supplier)",
+                value=False,
+                key=f"{key_prefix}_from_sup",
+                help="Search Suppliers (e.g. MUZAFAR). A matching Customer with the same code "
+                     "is linked or created so the sale / weighbridge slip posts correctly.",
             )
+            if from_supplier:
+                from erp_ui import helpers as hlp
+                cid2 = hlp.resolve_sale_party_id(
+                    from_supplier=True, key=f"{key_prefix}_sale_sup",
+                )
+            else:
+                _, cid2, _ = smart_select(
+                    "Customer account *", _real_cust, f"{key_prefix}_c", "id",
+                    _party_fmt,
+                )
         else:
-            _, sid2, _ = smart_select(
-                "Supplier account *", _real_sup, f"{key_prefix}_s", "id",
-                _party_fmt,
+            from_customer = st.checkbox(
+                "Party is a Customer (buy from customer)",
+                value=False,
+                key=f"{key_prefix}_from_cust",
+                help="Search Customers. A matching Supplier with the same code "
+                     "is linked or created for the purchase slip.",
             )
+            if from_customer:
+                from erp_ui import helpers as hlp
+                sid2 = hlp.resolve_purchase_party_id(
+                    from_customer=True, key=f"{key_prefix}_pur_cust",
+                )
+            else:
+                _, sid2, _ = smart_select(
+                    "Supplier account *", _real_sup, f"{key_prefix}_s", "id",
+                    _party_fmt,
+                )
     else:
         ptype_lbl = "SALE (Customer)" if is_sale else "PURCHASE (Supplier)"
         st.success(
@@ -407,15 +433,35 @@ def page_weight_entry():
                 sid = unknown_party_id("supplier", uid())
             st.info("Party set to **UNKNOWN**. Select the real party when completing 2nd weight.")
         elif str(party_type).startswith("SALE"):
-            _, cid, _ = smart_select(
-                "Customer account *", db.get_customers(active_only=True), "ws1_c", "id",
-                _party_fmt,
+            from_supplier = st.checkbox(
+                "Party is a Supplier (sell to supplier)",
+                value=False,
+                key=wk("from_sup"),
+                help="Search Suppliers (e.g. MUZAFAR). Links/creates a Customer with the same code.",
             )
+            if from_supplier:
+                from erp_ui import helpers as hlp
+                cid = hlp.resolve_sale_party_id(from_supplier=True, key="ws1_sale_sup")
+            else:
+                _, cid, _ = smart_select(
+                    "Customer account *", db.get_customers(active_only=True), "ws1_c", "id",
+                    _party_fmt,
+                )
         else:
-            _, sid, _ = smart_select(
-                "Supplier account *", db.get_suppliers(active_only=True), "ws1_s", "id",
-                _party_fmt,
+            from_customer = st.checkbox(
+                "Party is a Customer (buy from customer)",
+                value=False,
+                key=wk("from_cust"),
+                help="Search Customers. Links/creates a Supplier with the same code.",
             )
+            if from_customer:
+                from erp_ui import helpers as hlp
+                sid = hlp.resolve_purchase_party_id(from_customer=True, key="ws1_pur_cust")
+            else:
+                _, sid, _ = smart_select(
+                    "Supplier account *", db.get_suppliers(active_only=True), "ws1_s", "id",
+                    _party_fmt,
+                )
         c3, c4 = st.columns(2)
         vehicle_no = c3.text_input("Vehicle No *", key=wk("v"))
         driver = c4.text_input("Driver Name", key=wk("d"))
