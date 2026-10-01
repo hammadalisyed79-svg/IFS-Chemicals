@@ -690,7 +690,8 @@ def page_sales_orders():
                                 "notes": new_notes,
                                 "dispatch_town": (new_town or "").strip() or None,
                                 "status": new_status,
-                                "discount_pct": float(order.get("discount") or order.get("discount_pct") or 0),
+                                # discount = Rs amount on SO header; never use it as Disc %
+                                "discount_pct": float(order.get("discount_pct") or 0),
                                 "tax_rate_id": order.get("tax_rate_id"),
                                 "warehouse_id": order.get("warehouse_id"),
                                 "quotation_id": order.get("quotation_id"),
@@ -1022,7 +1023,8 @@ def page_purchase_orders():
                                 "order_date": str(new_date),
                                 "notes": new_notes,
                                 "status": new_status,
-                                "discount_pct": float(order.get("discount") or order.get("discount_pct") or 0),
+                                # discount = Rs amount on PO header; never use it as Disc %
+                                "discount_pct": float(order.get("discount_pct") or 0),
                                 "tax_rate_id": order.get("tax_rate_id"),
                                 "warehouse_id": order.get("warehouse_id"),
                                 "requisition_id": order.get("requisition_id"),
