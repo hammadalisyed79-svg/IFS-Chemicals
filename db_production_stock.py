@@ -412,6 +412,7 @@ def save_production_month_run(
     *,
     notes: str | None = None,
     user_id=None,
+    overwrite: bool = False,
 ) -> int:
     """Upsert draft worksheet (one per warehouse per month). Posted runs stay locked."""
     from database import get_connection
@@ -465,7 +466,7 @@ def save_production_month_run(
                WHERE warehouse_id=? AND year_month=?""",
             (int(warehouse_id), ym),
         ).fetchone()
-        if existing and (existing["status"] or "") == "posted":
+        if existing and (existing["status"] or "") == "posted" and not overwrite:
             raise ValueError(
                 f"Month {ym} is already posted for this warehouse. Unlock or use a new month."
             )
@@ -919,3 +920,128 @@ def reverse_production_month_run(run_id: int, *, user_id=None) -> dict:
         "reversed_qty": round(reversed_qty, 4),
         "status": "draft",
     }
+
+
+def collect_contractor_physical_map(year_month: str) -> dict:
+    """Physical (month-end) from all contractors + shared store for ``year_month``.
+
+    Loading/unloading lines are skipped. SKU contractors contribute every
+    worksheet SKU (Phy 0 = empty). Other contractor types contribute only
+    non-zero Physical.
+    """
+    from db_contractors import (
+        PAYMENT_LOADING_UNLOADING,
+        PAYMENT_SKU_CARTON,
+        calculate_contractor_month,
+        get_contractor_month_run,
+        list_contractors,
+        month_bounds,
+    )
+    from db_monthly_physical import get_physical_map
+
+    ym = str(year_month)[:7]
+    y, m = int(ym[:4]), int(ym[5:7])
+    fd, td = month_bounds(y, m)
+    phy: dict[int, float] = {}
+    try:
+        shared = get_physical_map(ym) or {}
+        for pid, qty in shared.items():
+            phy[int(pid)] = round(float(qty or 0), 4)
+    except Exception:
+        pass
+
+    contractors = []
+    try:
+        contractors = list_contractors(active_only=True) or []
+    except Exception:
+        contractors = []
+
+    used = []
+    for c in contractors:
+        pay = (c.get("payment_type") or "").strip()
+        if pay == PAYMENT_LOADING_UNLOADING:
+            continue
+        cid = int(c["id"])
+        saved = get_contractor_month_run(cid, ym)
+        lines = (saved or {}).get("lines") or []
+        if not lines:
+            try:
+                calc = calculate_contractor_month(cid, fd, td)
+                lines = calc.get("lines") or []
+            except Exception:
+                continue
+        n = 0
+        for ln in lines:
+            try:
+                pid = int(ln.get("product_id") or 0)
+            except (TypeError, ValueError):
+                pid = 0
+            if not pid:
+                continue
+            man = round(float(ln.get("manual_qty") or 0), 4)
+            if pay != PAYMENT_SKU_CARTON and abs(man) < 0.00005:
+                continue
+            phy[pid] = man
+            n += 1
+        if n:
+            used.append({
+                "contractor_id": cid,
+                "name": c.get("supplier_name") or c.get("supplier_code") or str(cid),
+                "skus": n,
+            })
+    return {"year_month": ym, "from_date": fd, "to_date": td, "physical": phy, "contractors": used}
+
+
+def post_contractors_physical_month(
+    year_month: str,
+    *,
+    warehouse_id: int | None = None,
+    user_id=None,
+    allow_negative: bool = True,
+) -> dict:
+    """One-shot: warehouse at month-end = contractor Physical; next day = opening.
+
+    Builds/replaces the Sale & Production worksheet for the month and posts a
+    true-up so stock as of the day after ``to_date`` equals Phy.
+    """
+    from database import _default_warehouse_id, get_connection
+
+    gathered = collect_contractor_physical_map(year_month)
+    phy = gathered.get("physical") or {}
+    if not phy:
+        raise ValueError(
+            f"No contractor Physical found for {gathered.get('year_month')}. "
+            "Save month worksheets first."
+        )
+    ym = gathered["year_month"]
+    fd, td = gathered["from_date"], gathered["to_date"]
+    with get_connection() as conn:
+        wh = int(warehouse_id or _default_warehouse_id(conn))
+
+    calc = calculate_production_month(
+        wh, fd, td, list(phy.keys()), physical_map=phy,
+    )
+    lines = calc.get("lines") or []
+    if not lines:
+        raise ValueError("No products to post.")
+
+    run_id = save_production_month_run(
+        wh,
+        ym,
+        lines,
+        notes=f"Posted from all contractors {ym}",
+        user_id=user_id,
+        overwrite=True,
+    )
+    posted = post_production_month_run(
+        run_id, user_id=user_id, allow_negative=allow_negative,
+    )
+    posted["contractors"] = gathered.get("contractors") or []
+    posted["to_date"] = td
+    posted["next_open_date"] = _next_iso_date(td)
+    posted["sku_count"] = len(lines)
+    posted["total_physical"] = round(
+        sum(float(ln.get("physical_qty") or 0) for ln in lines), 4,
+    )
+    return posted
+

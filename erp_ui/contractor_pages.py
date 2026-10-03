@@ -654,6 +654,41 @@ def _tab_month_preview():
     cid = pick[sel]
     fd, td = month_bounds(int(year), int(month))
     ym = f"{int(year):04d}-{int(month):02d}"
+
+    st.markdown(
+        f"**All contractors → warehouse** · Physical on **{td}** becomes opening on "
+        f"**next day**. One click posts every SKU contractor (and any other contractor "
+        f"Phy) so 1st of next month opening = this month-end Physical."
+    )
+    post_all = st.button(
+        f"Post all contractors: {td} closing → next-day opening",
+        key="cl_post_all_phy",
+        type="primary",
+        help=(
+            "Sets warehouse stock at month-end = Physical from all contractor "
+            "worksheets. Next month's opening equals that closing. "
+            "Safe to click again — only remaining gaps are posted."
+        ),
+    )
+    if post_all:
+        try:
+            result = db.post_contractors_physical_month(
+                ym, user_id=hlp.uid(), allow_negative=True,
+            )
+            names = ", ".join(
+                f"{c.get('name')} ({c.get('skus')})"
+                for c in (result.get("contractors") or [])
+            )
+            ff.action_done(
+                f"Posted **{int(result.get('sku_count') or 0)}** SKU(s) · "
+                f"Phy {float(result.get('total_physical') or 0):,.2f} · "
+                f"{int(result.get('posted_lines') or 0)} stock movement(s) · "
+                f"closing **{result.get('to_date')}** = opening **{result.get('next_open_date')}**"
+                + (f" · {names}" if names else "")
+            )
+        except Exception as e:
+            st.error(str(e))
+
     cur_c = get_contractor(cid) or {}
     is_prod = (cur_c.get("payment_type") or "") == PAYMENT_PRODUCTION_QTY
     is_lu = (cur_c.get("payment_type") or "") == PAYMENT_LOADING_UNLOADING

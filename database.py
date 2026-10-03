@@ -6770,6 +6770,8 @@ from db_production_stock import (  # noqa: F401,E402
     unlock_production_month_run,
     reverse_production_month_run,
     align_production_month_closing,
+    post_contractors_physical_month,
+    collect_contractor_physical_map,
 )
 from db_monthly_physical import (  # noqa: F401,E402
     apply_monthly_physical,
