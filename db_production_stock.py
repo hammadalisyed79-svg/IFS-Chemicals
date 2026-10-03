@@ -110,6 +110,13 @@ def production_qty_formula(
     return production, phy
 
 
+def _next_iso_date(iso_date: str) -> str:
+    from datetime import date, timedelta
+
+    d = date.fromisoformat(str(iso_date)[:10])
+    return (d + timedelta(days=1)).isoformat()
+
+
 def stock_on_hand_for_products_wh(
     product_ids: list[int],
     warehouse_id: int,
@@ -120,46 +127,58 @@ def stock_on_hand_for_products_wh(
     from database import get_connection
 
     ids = [int(p) for p in (product_ids or []) if p]
+    if not ids:
+        return {}
+    with get_connection() as conn:
+        return _stock_as_of_conn(conn, warehouse_id, ids, as_of_date)
+
+
+def _stock_as_of_conn(
+    conn,
+    warehouse_id: int,
+    product_ids: list[int],
+    as_of_date: str | None = None,
+) -> dict[int, float]:
+    ids = [int(p) for p in (product_ids or []) if p]
     wh = int(warehouse_id)
     if not ids:
         return {}
     placeholders = ",".join("?" * len(ids))
-    with get_connection() as conn:
-        rows = conn.execute(
-            f"""
-            SELECT product_id, COALESCE(SUM(quantity), 0) AS stock_qty
-            FROM warehouse_stock
-            WHERE warehouse_id=? AND product_id IN ({placeholders})
-            GROUP BY product_id
-            """,
-            [wh, *ids],
-        ).fetchall()
-        current = {int(r["product_id"]): float(r["stock_qty"] or 0) for r in rows}
-        if not as_of_date:
-            return {pid: round(current.get(pid, 0.0), 4) for pid in ids}
-        mv_rows = conn.execute(
-            f"""
-            SELECT product_id,
-                   COALESCE(SUM(
-                       CASE
-                         WHEN LOWER(COALESCE(movement_type, '')) = 'in'
-                           THEN quantity
-                         WHEN LOWER(COALESCE(movement_type, '')) = 'out'
-                           THEN -quantity
-                         ELSE 0
-                       END
-                   ), 0) AS net_since
-            FROM inventory_movements
-            WHERE warehouse_id=?
-              AND product_id IN ({placeholders})
-              AND movement_date >= ?
-            GROUP BY product_id
-            """,
-            [wh, *ids, as_of_date],
-        ).fetchall()
-        net_since = {
-            int(r["product_id"]): float(r["net_since"] or 0) for r in mv_rows
-        }
+    rows = conn.execute(
+        f"""
+        SELECT product_id, COALESCE(SUM(quantity), 0) AS stock_qty
+        FROM warehouse_stock
+        WHERE warehouse_id=? AND product_id IN ({placeholders})
+        GROUP BY product_id
+        """,
+        [wh, *ids],
+    ).fetchall()
+    current = {int(r["product_id"]): float(r["stock_qty"] or 0) for r in rows}
+    if not as_of_date:
+        return {pid: round(current.get(pid, 0.0), 4) for pid in ids}
+    mv_rows = conn.execute(
+        f"""
+        SELECT product_id,
+               COALESCE(SUM(
+                   CASE
+                     WHEN LOWER(COALESCE(movement_type, '')) = 'in'
+                       THEN quantity
+                     WHEN LOWER(COALESCE(movement_type, '')) = 'out'
+                       THEN -quantity
+                     ELSE 0
+                   END
+               ), 0) AS net_since
+        FROM inventory_movements
+        WHERE warehouse_id=?
+          AND product_id IN ({placeholders})
+          AND movement_date >= ?
+        GROUP BY product_id
+        """,
+        [wh, *ids, as_of_date],
+    ).fetchall()
+    net_since = {
+        int(r["product_id"]): float(r["net_since"] or 0) for r in mv_rows
+    }
     return {
         pid: round(current.get(pid, 0.0) - net_since.get(pid, 0.0), 4)
         for pid in ids
@@ -540,24 +559,74 @@ def save_production_month_run(
     return run_id
 
 
-def post_production_month_run(
+def _post_production_qty_line(
+    conn,
+    *,
+    warehouse_id: int,
+    product_id: int,
+    qty_signed: float,
+    post_date: str,
+    run_id: int,
+    batch_ref: str,
+    user_id,
+) -> None:
+    from database import _adjust_warehouse_stock
+
+    prod = round(float(qty_signed or 0), 4)
+    if abs(prod) < 0.0001:
+        return
+    pid = int(product_id)
+    wh = int(warehouse_id)
+    if prod > 0:
+        pp = conn.execute(
+            "SELECT COALESCE(purchase_price,0) FROM products WHERE id=?",
+            (pid,),
+        ).fetchone()
+        unit_cost = float(pp[0] if pp else 0)
+        try:
+            from erp_core.inventory_valuation import apply_inbound_cost
+
+            apply_inbound_cost(conn, wh, pid, prod, unit_cost)
+        except Exception:
+            pass
+        _adjust_warehouse_stock(conn, pid, wh, prod, user_id=user_id)
+        mtype = "in"
+        qty = prod
+    else:
+        _adjust_warehouse_stock(conn, pid, wh, prod, user_id=user_id)
+        mtype = "out"
+        qty = abs(prod)
+    conn.execute(
+        """INSERT INTO inventory_movements
+           (movement_date, product_id, warehouse_id, movement_type,
+            quantity, reference_type, reference_id, reason, created_by)
+           VALUES (?,?,?,?,?,?,?,?,?)""",
+        (
+            post_date,
+            pid,
+            wh,
+            mtype,
+            qty,
+            REF_TYPE_PRODUCTION,
+            int(run_id),
+            batch_ref,
+            user_id,
+        ),
+    )
+
+
+def align_production_month_closing(
     run_id: int,
     *,
     user_id=None,
     allow_negative: bool = False,
 ) -> dict:
-    """Post production_qty as warehouse stock movements.
+    """Force month-end warehouse stock = Phy so next month opening = this closing.
 
-    Movements use reference_type=production_physical so they are excluded from Adj.
-    Re-post is blocked if this run already has production_physical movements.
+    Posts only the gap (Phy − stock at start of the day after to_date).
+    Safe to run on an already-posted month (true-up only, no double of the original qty).
     """
-    from database import (
-        get_connection,
-        invalidate_stock,
-        _adjust_warehouse_stock,
-        row_to_dict,
-        rows_to_list,
-    )
+    from database import get_connection, invalidate_stock, row_to_dict, rows_to_list
 
     ts = now()
     with get_connection() as conn:
@@ -568,51 +637,6 @@ def post_production_month_run(
         if not h:
             raise ValueError("Production month run not found.")
         header = row_to_dict(h)
-        if (header.get("status") or "") == "posted":
-            raise ValueError("This month is already posted.")
-
-        # Guard: unlock leaves stock movements in place — never post twice
-        prior = conn.execute(
-            """
-            SELECT COUNT(*) AS n,
-                   COALESCE(SUM(
-                       CASE WHEN LOWER(COALESCE(movement_type,''))='in' THEN quantity
-                            WHEN LOWER(COALESCE(movement_type,''))='out' THEN -quantity
-                            ELSE 0 END
-                   ), 0) AS net_qty
-            FROM inventory_movements
-            WHERE reference_type=? AND reference_id=?
-            """,
-            (REF_TYPE_PRODUCTION, int(run_id)),
-        ).fetchone()
-        prior_n = int(prior["n"] or 0) if prior else 0
-        if prior_n > 0:
-            batch_ref = (
-                (header.get("batch_ref") or "").strip()
-                or f"PROD {header.get('year_month')} physical count"
-            )
-            conn.execute(
-                """UPDATE production_month_runs
-                   SET status='posted',
-                       batch_ref=?,
-                       posted_at=COALESCE(posted_at, ?),
-                       posted_by=COALESCE(posted_by, ?),
-                       modified_at=?, modified_by=?
-                   WHERE id=?""",
-                (batch_ref, ts, user_id, ts, user_id, int(run_id)),
-            )
-            return {
-                "run_id": int(run_id),
-                "posted_lines": 0,
-                "posted_production_qty": 0.0,
-                "batch_ref": batch_ref,
-                "verify": [],
-                "mismatches": [],
-                "already_posted": True,
-                "prior_movements": prior_n,
-                "prior_net_qty": round(float(prior["net_qty"] or 0), 4),
-            }
-
         lines = rows_to_list(
             conn.execute(
                 """SELECT * FROM production_month_lines
@@ -623,99 +647,110 @@ def post_production_month_run(
         if not lines:
             raise ValueError("No lines to post.")
 
-        negatives = [
-            ln for ln in lines if float(ln.get("production_qty") or 0) < -0.0001
-        ]
-        if negatives and not allow_negative:
-            codes = ", ".join(
-                (ln.get("product_code") or str(ln.get("product_id")))
-                for ln in negatives[:8]
-            )
-            raise ValueError(
-                f"Negative production on {len(negatives)} item(s) "
-                f"({codes}). Fix Phy or enable allow negative."
-            )
-
         wh = int(header["warehouse_id"])
         ym = header["year_month"]
         post_date = header.get("to_date") or ts[:10]
-        batch_ref = f"PROD {ym} physical count"
-        posted_n = 0
-        posted_qty = 0.0
-        verify = []
+        eom_as_of = _next_iso_date(post_date)
+        batch_ref = (
+            (header.get("batch_ref") or "").strip()
+            or f"PROD {ym} physical count"
+        )
+        pids = [int(ln["product_id"]) for ln in lines if ln.get("product_id")]
+        book = _stock_as_of_conn(conn, wh, pids, eom_as_of)
+        had_prior = conn.execute(
+            """SELECT COUNT(*) FROM inventory_movements
+               WHERE reference_type=? AND reference_id=?""",
+            (REF_TYPE_PRODUCTION, int(run_id)),
+        ).fetchone()[0]
 
+        deltas = []
         for ln in lines:
-            prod = round(float(ln.get("production_qty") or 0), 4)
-            if abs(prod) < 0.0001:
-                continue
-            if prod < 0 and not allow_negative:
-                continue
             pid = int(ln["product_id"])
             phy = round(float(ln.get("physical_qty") or 0), 4)
-            if prod > 0:
-                pp = conn.execute(
-                    "SELECT COALESCE(purchase_price,0) FROM products WHERE id=?",
-                    (pid,),
-                ).fetchone()
-                unit_cost = float(pp[0] if pp else 0)
-                try:
-                    from erp_core.inventory_valuation import apply_inbound_cost
+            delta = round(phy - float(book.get(pid, 0) or 0), 4)
+            if abs(delta) >= 0.0001:
+                deltas.append((ln, pid, phy, delta))
 
-                    apply_inbound_cost(conn, wh, pid, prod, unit_cost)
-                except Exception:
-                    pass
-                _adjust_warehouse_stock(conn, pid, wh, prod, user_id=user_id)
-                mtype = "in"
-                qty = prod
-            else:
-                _adjust_warehouse_stock(conn, pid, wh, prod, user_id=user_id)
-                mtype = "out"
-                qty = abs(prod)
+        if deltas and not allow_negative:
+            neg = [d for d in deltas if d[3] < -0.0001]
+            if neg:
+                codes = ", ".join(
+                    (d[0].get("product_code") or str(d[1])) for d in neg[:8]
+                )
+                raise ValueError(
+                    f"Month-end stock is above Phy on {len(neg)} item(s) "
+                    f"({codes}). Enable allow negative to stock-out the gap, "
+                    "or correct Phy."
+                )
 
+        posted_n = 0
+        posted_qty = 0.0
+        for ln, pid, phy, delta in deltas:
+            _post_production_qty_line(
+                conn,
+                warehouse_id=wh,
+                product_id=pid,
+                qty_signed=delta,
+                post_date=post_date,
+                run_id=int(run_id),
+                batch_ref=batch_ref,
+                user_id=user_id,
+            )
+            old = round(float(ln.get("production_qty") or 0), 4)
+            new_prod = delta if int(had_prior or 0) == 0 else round(old + delta, 4)
             conn.execute(
-                """INSERT INTO inventory_movements
-                   (movement_date, product_id, warehouse_id, movement_type,
-                    quantity, reference_type, reference_id, reason, created_by)
-                   VALUES (?,?,?,?,?,?,?,?,?)""",
-                (
-                    post_date,
-                    pid,
-                    wh,
-                    mtype,
-                    qty,
-                    REF_TYPE_PRODUCTION,
-                    int(run_id),
-                    batch_ref,
-                    user_id,
-                ),
+                """UPDATE production_month_lines
+                   SET production_qty=?, closing_qty=?
+                   WHERE id=?""",
+                (new_prod, phy, int(ln["id"])),
             )
             posted_n += 1
-            posted_qty += prod
+            posted_qty += delta
 
-            row = conn.execute(
-                """SELECT COALESCE(quantity,0) AS qty FROM warehouse_stock
-                   WHERE warehouse_id=? AND product_id=?""",
-                (wh, pid),
-            ).fetchone()
-            live = float(row["qty"] if row else 0)
-            verify.append({
+        tot = conn.execute(
+            """SELECT COALESCE(SUM(production_qty),0), COALESCE(SUM(physical_qty),0)
+               FROM production_month_lines WHERE run_id=?""",
+            (int(run_id),),
+        ).fetchone()
+        conn.execute(
+            """UPDATE production_month_runs
+               SET status='posted', batch_ref=?,
+                   total_production=?, total_physical=?,
+                   posted_at=COALESCE(posted_at, ?),
+                   posted_by=COALESCE(posted_by, ?),
+                   modified_at=?, modified_by=?
+               WHERE id=?""",
+            (
+                batch_ref,
+                round(float(tot[0] or 0), 4),
+                round(float(tot[1] or 0), 4),
+                ts,
+                user_id,
+                ts,
+                user_id,
+                int(run_id),
+            ),
+        )
+
+        verify_book = _stock_as_of_conn(conn, wh, pids, eom_as_of)
+        verify = []
+        mismatches = []
+        for ln in lines:
+            pid = int(ln["product_id"])
+            phy = round(float(ln.get("physical_qty") or 0), 4)
+            eom = round(float(verify_book.get(pid, 0) or 0), 4)
+            row = {
                 "product_id": pid,
                 "product_code": ln.get("product_code"),
                 "physical_qty": phy,
-                "live_qty": round(live, 4),
-                "match": abs(live - phy) < 0.051,
-            })
-
-        conn.execute(
-            """UPDATE production_month_runs
-               SET status='posted', batch_ref=?, posted_at=?, posted_by=?,
-                   modified_at=?, modified_by=?
-               WHERE id=?""",
-            (batch_ref, ts, user_id, ts, user_id, int(run_id)),
-        )
+                "eom_qty": eom,
+                "match": abs(eom - phy) < 0.051,
+            }
+            verify.append(row)
+            if not row["match"]:
+                mismatches.append(row)
 
     invalidate_stock()
-    mismatches = [v for v in verify if not v["match"]]
     return {
         "run_id": int(run_id),
         "posted_lines": posted_n,
@@ -723,7 +758,25 @@ def post_production_month_run(
         "batch_ref": batch_ref,
         "verify": verify,
         "mismatches": mismatches,
+        "true_up": True,
+        "eom_as_of": eom_as_of,
     }
+
+
+def post_production_month_run(
+    run_id: int,
+    *,
+    user_id=None,
+    allow_negative: bool = False,
+) -> dict:
+    """Post so month-end stock = Phy (next month opening = this closing).
+
+    Uses a true-up to physical, not live warehouse qty. Re-running only posts
+    the remaining gap — it does not duplicate a completed post.
+    """
+    return align_production_month_closing(
+        run_id, user_id=user_id, allow_negative=allow_negative,
+    )
 
 
 def unlock_production_month_run(run_id: int, *, user_id=None) -> None:

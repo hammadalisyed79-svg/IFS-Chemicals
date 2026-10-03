@@ -107,7 +107,8 @@ def _tab_worksheet():
         "**Closing** = Phy (physical count). "
         "Phy is **shared** with Contract Labour physical — enter on either screen. "
         "Tick products, choose **Include / Exclude / Replace**, then **Load**. "
-        "Enter **Phy** only; production posts as stock-in (excluded from Adj on reload)."
+        "Enter **Phy** only. **Post** sets warehouse stock at month-end = Phy, "
+        "so the next month's opening equals this closing."
     )
 
     saved = db.get_production_month_run(wh_id, ym)
@@ -147,9 +148,8 @@ def _tab_worksheet():
         st.warning(
             "Stock movements for this month are **already in the warehouse** "
             f"({saved.get('batch_ref') or 'production_physical'}). "
-            "The worksheet was unlocked to draft, which is why **Post** still looks available. "
-            "Click **Post production** once to restore **posted** status — it will **not** "
-            "create duplicate stock. Or use History to confirm."
+            "**Post** will only true-up remaining gaps so month-end stock = Phy "
+            "(next month opening = this closing)."
         )
 
     items = sorted(
@@ -802,9 +802,10 @@ def _tab_worksheet():
         except Exception as e:
             st.error(str(e))
 
-    if a2.button("Post production", disabled=is_posted, key="prod_phy_post"):
+    post_lbl = "Post production" if not is_posted else "Align closing → next month OS"
+    if a2.button(post_lbl, key="prod_phy_post"):
         try:
-            if already_stock_posted and saved and saved.get("id"):
+            if (is_posted or already_stock_posted) and saved and saved.get("id"):
                 rid = int(saved["id"])
             else:
                 rid = db.save_production_month_run(
@@ -819,24 +820,22 @@ def _tab_worksheet():
                 user_id=_user_id(),
                 allow_negative=allow_neg,
             )
-            if result.get("already_posted"):
-                ff.action_done(
-                    f"Stock was **already posted** for this month "
-                    f"({result.get('prior_movements')} movement(s), "
-                    f"net qty {float(result.get('prior_net_qty') or 0):,.2f}). "
-                    f"Status set back to **posted** — {result.get('batch_ref')}. "
-                    "Do not post again."
+            mm = result.get("mismatches") or []
+            n_up = int(result.get("posted_lines") or 0)
+            if n_up == 0 and not mm:
+                msg = (
+                    f"Month-end stock already equals Phy — "
+                    f"next month opening = this closing · {result.get('batch_ref')}"
                 )
             else:
-                mm = result.get("mismatches") or []
                 msg = (
-                    f"Posted {result.get('posted_lines', 0)} line(s) · "
-                    f"qty {result.get('posted_production_qty', 0):,.2f} · "
+                    f"Aligned {n_up} item(s) so closing = Phy "
+                    f"(qty {float(result.get('posted_production_qty') or 0):,.2f}) · "
                     f"{result.get('batch_ref')}"
                 )
-                if mm:
-                    msg += f" · {len(mm)} stock vs Phy mismatch(es) — check warehouse stock."
-                ff.action_done(msg)
+            if mm:
+                msg += f" · {len(mm)} still mismatch — check warehouse stock."
+            ff.action_done(msg)
         except Exception as e:
             st.error(str(e))
 
