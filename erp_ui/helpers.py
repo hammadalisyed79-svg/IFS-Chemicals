@@ -5,6 +5,13 @@ import streamlit as st
 from erp_ui import form_flow as ff
 import pandas as pd
 from application import data_gateway as db
+from erp_ui.line_row_state import (
+    MIN_LINE_ROWS,
+    blank_line_item as _blank_line_item,
+    drop_lines_by_uid,
+    ensure_line_row_uid as _ensure_line_row_uid,
+    pad_line_rows as _pad_line_rows,
+)
 
 
 def uid():
@@ -1477,9 +1484,10 @@ def apply_last_invoice_discounts_button(
 
     applied = 0
     new_lines = []
-    for i, ln in enumerate(lines):
+    for ln in lines:
         row = dict(ln)
         pid = int(row.get("item_id") or row.get("product_id") or 0)
+        uid = str(row.get("_row_uid") or "")
         if pid:
             disc = float(by_prod.get(pid, header_pct) or 0)
             row["discount_pct"] = disc
@@ -1487,13 +1495,16 @@ def apply_last_invoice_discounts_button(
             if disc > 0.0001:
                 applied += 1
         # Force Disc % widgets to pick up new values on next render
-        for k in (
-            f"{key_prefix}_{disc_key_suffix}_{i}",
-            f"{key_prefix}_psig_{i}",
-        ):
+        keys = []
+        if uid:
+            keys.extend((
+                f"{key_prefix}_{disc_key_suffix}_{uid}",
+                f"{key_prefix}_psig_{uid}",
+            ))
+        for k in keys:
             st.session_state.pop(k, None)
-        if pid:
-            st.session_state[f"{key_prefix}_{disc_key_suffix}_{i}"] = float(
+        if pid and uid:
+            st.session_state[f"{key_prefix}_{disc_key_suffix}_{uid}"] = float(
                 row.get("discount_pct") or 0
             )
         new_lines.append(row)
@@ -2276,7 +2287,6 @@ def export_buttons(df, filename="report", title="Export"):
     report_toolbar(df, title or filename.replace("_", " ").title(), filename, key_prefix=f"exp_{filename}")
 
 
-MIN_LINE_ROWS = 5
 def parse_packing_units(packing_size, product_name: str | None = None) -> float:
     """Units (pcs) per carton from product packing_size or name like 500/24."""
     from erp_core.packing_units import parse_packing_units as _parse
@@ -2292,12 +2302,41 @@ def packing_units_for_product(product) -> float:
 LINE_PRODUCT_PLACEHOLDER = "— Select any product —"
 
 
-def _blank_line_item():
-    return {
-        "item_id": None, "product_id": None,
-        "quantity": 0.0, "rate": 0.0, "amount": 0.0, "net_weight": 0.0,
-        "discount_pct": 0.0,
-    }
+def _line_editor_widget_keys(key_prefix, uid, rate_key_suffix="ir", disc_key_suffix="d"):
+    uid = str(uid or "")
+    prefixes = (
+        f"{key_prefix}_p_{uid}",
+        f"{key_prefix}_q_{uid}",
+        f"{key_prefix}_r_{uid}",
+        f"{key_prefix}_d_{uid}",
+        f"{key_prefix}_x_{uid}",
+        f"{key_prefix}_ip_{uid}",
+        f"{key_prefix}_iq_{uid}",
+        f"{key_prefix}_ir_{uid}",
+        f"{key_prefix}_id_{uid}",
+        f"{key_prefix}_iw_{uid}",
+        f"{key_prefix}_psig_{uid}",
+        f"{key_prefix}_wtsig_{uid}",
+        f"{key_prefix}_{rate_key_suffix}_{uid}",
+        f"{key_prefix}_{disc_key_suffix}_{uid}",
+    )
+    keys = list(prefixes)
+    for base in list(prefixes):
+        keys.append(f"{base}__num")
+        keys.append(f"{base}__seed")
+    return keys
+
+
+def _clear_line_editor_widgets(key_prefix, uid, rate_key_suffix="ir", disc_key_suffix="d"):
+    for k in _line_editor_widget_keys(key_prefix, uid, rate_key_suffix, disc_key_suffix):
+        st.session_state.pop(k, None)
+
+
+def apply_line_deletes(lines, drop_uids, key_prefix, rate_key_suffix="ir", disc_key_suffix="d"):
+    """Drop only the clicked rows and forget their widget state."""
+    for uid in drop_uids or []:
+        _clear_line_editor_widgets(key_prefix, uid, rate_key_suffix, disc_key_suffix)
+    return _pad_line_rows(drop_lines_by_uid(lines, drop_uids))
 
 
 def _line_discount_pct(line, tax_inclusive=False, sales_tax_pct=0) -> float:
@@ -2330,21 +2369,14 @@ def _line_amount_after_discount(qty, rate, discount_pct, tax_inclusive=False, sa
     return round(gross * (1 - disc / 100), 2)
 
 
-def _pad_line_rows(lines, min_rows=MIN_LINE_ROWS):
-    """Ensure at least min_rows for tabular entry (empty rows for new lines)."""
-    rows = [dict(ln) for ln in (lines or []) if ln is not None]
-    if not rows:
-        rows = [_blank_line_item()]
-    while len(rows) < min_rows:
-        rows.append(dict(_blank_line_item()))
-    return rows
-
-
 def _init_line_items_session(sk, default_lines=None):
     if sk not in st.session_state:
         st.session_state[sk] = _pad_line_rows(default_lines)
-    elif len(st.session_state[sk]) < MIN_LINE_ROWS:
-        st.session_state[sk] = _pad_line_rows(st.session_state[sk])
+        return
+    rows = st.session_state[sk]
+    needs_uid = any(not str((ln or {}).get("_row_uid") or "") for ln in (rows or []))
+    if not rows or len(rows) < MIN_LINE_ROWS or needs_uid:
+        st.session_state[sk] = _pad_line_rows(rows)
 
 
 def _line_item_col_widths(show_weight, show_pcs=False):
@@ -2731,7 +2763,9 @@ def line_items_editor(
     widths = _line_item_col_widths(show_weight)
     with st.container(key=f"{key_prefix}_lines_blk"):
         _line_items_table_header(show_weight)
-        for i, line in enumerate(st.session_state[sk]):
+        for line in st.session_state[sk]:
+            line = _ensure_line_row_uid(line)
+            rid = line["_row_uid"]
             cols = st.columns(widths, gap="small")
             pid = line.get("product_id") or line.get("item_id")
             default_key = (
@@ -2743,18 +2777,18 @@ def line_items_editor(
             ) if default_key else None
             idx = labels.index(default_label) if default_label in labels else 0
             sel = cols[0].selectbox(
-                "p", labels, index=idx, key=f"{key_prefix}_p_{i}", label_visibility="collapsed",
+                "p", labels, index=idx, key=f"{key_prefix}_p_{rid}", label_visibility="collapsed",
             ) if len(labels) > 1 else None
             qty = cols[1].number_input(
                 "q", min_value=0.0, value=float(line.get("quantity") or 0),
-                key=f"{key_prefix}_q_{i}", label_visibility="collapsed", format="%.2f",
+                key=f"{key_prefix}_q_{rid}", label_visibility="collapsed", format="%.2f",
             )
             ci = 2
             net_wt = 0.0
             raw_key = display_to_key.get(sel) if sel else None
             prod = items_dict.get(raw_key) if raw_key and raw_key != LINE_PRODUCT_PLACEHOLDER else None
             if show_weight:
-                net_wt = _net_weight_input(cols, ci, prod, qty, line, key_prefix, i)
+                net_wt = _net_weight_input(cols, ci, prod, qty, line, key_prefix, rid)
                 ci += 1
                 _unit_weight_display(cols, ci, qty, net_wt, prod)
                 ci += 1
@@ -2763,7 +2797,7 @@ def line_items_editor(
             disc_ci = ci
             ci += 1
             rate, disc_pct = _rate_disc_number_inputs(
-                cols, rate_ci, disc_ci, line, prod, key_prefix, i,
+                cols, rate_ci, disc_ci, line, prod, key_prefix, rid,
                 party_id=party_id, default_discount_pct=default_discount_pct,
                 rate_key_suffix="r", disc_key_suffix="d",
             )
@@ -2775,13 +2809,13 @@ def line_items_editor(
             )
             ci += 1
             _prev_rate_column(cols, ci, prod, key_prefix, party_id)
-            if cols[-1].button("✕", key=f"{key_prefix}_x_{i}"):
-                to_remove.append(i)
-            elif sel and raw_key and raw_key != LINE_PRODUCT_PLACEHOLDER and prod:
+            clicked_del = cols[-1].button("✕", key=f"{key_prefix}_x_{rid}")
+            if sel and raw_key and raw_key != LINE_PRODUCT_PLACEHOLDER and prod:
                 row = {
                     "product_id": prod["id"], "item_id": prod["id"],
                     "quantity": qty, "rate": rate, "amount": amount, "net_weight": net_wt,
                     "discount_pct": disc_pct, "tax_rate_id": prod.get("tax_rate_id"),
+                    "_row_uid": rid,
                 }
                 if show_tax and prod.get("tax_rate_id"):
                     tr = db.get_tax_rate(prod["tax_rate_id"])
@@ -2793,9 +2827,15 @@ def line_items_editor(
                         row["line_discount"] = cl["line_discount"]
                 updated.append(row)
             else:
-                updated.append(dict(line))
+                keep = dict(line)
+                keep["_row_uid"] = rid
+                updated.append(keep)
+            if clicked_del:
+                to_remove.append(rid)
     if to_remove:
-        st.session_state[sk] = _pad_line_rows([l for j, l in enumerate(updated) if j not in to_remove])
+        st.session_state[sk] = apply_line_deletes(
+            updated, to_remove, key_prefix, rate_key_suffix="r", disc_key_suffix="d",
+        )
         st.rerun()
     st.session_state[sk] = _pad_line_rows(updated)
     if st.button("+ Add Line", key=f"{key_prefix}_add"):
@@ -2923,7 +2963,9 @@ def smart_line_item_editor(
     widths = _line_item_col_widths(show_weight, show_pcs=show_pcs)
     with st.container(key=f"{key_prefix}_lines_blk"):
         _line_items_table_header(show_weight, show_pcs=show_pcs, rate_as_mrp=rate_as_mrp)
-        for i, line in enumerate(st.session_state[sk]):
+        for line in st.session_state[sk]:
+            line = _ensure_line_row_uid(line)
+            rid = line["_row_uid"]
             cols = st.columns(widths, gap="small")
             pid = line.get("item_id") or line.get("product_id")
             default_key = (
@@ -2951,11 +2993,11 @@ def smart_line_item_editor(
             ) if default_key else None
             idx = labels.index(default_label) if default_label in labels else 0
             sel = cols[0].selectbox(
-                "Item", labels, index=idx, key=f"{key_prefix}_ip_{i}", label_visibility="collapsed",
+                "Item", labels, index=idx, key=f"{key_prefix}_ip_{rid}", label_visibility="collapsed",
             ) if len(labels) > 1 else None
             qty = cols[1].number_input(
                 "Qty", min_value=0.0, value=float(line.get("quantity") or 0),
-                key=f"{key_prefix}_iq_{i}", label_visibility="collapsed", format="%.2f",
+                key=f"{key_prefix}_iq_{rid}", label_visibility="collapsed", format="%.2f",
             )
             ci = 2
             net_wt = 0.0
@@ -2966,7 +3008,7 @@ def smart_line_item_editor(
                 cols[ci].markdown(_pcs_display_markdown(qty, pack_u), unsafe_allow_html=True)
                 ci += 1
             if show_weight:
-                net_wt = _net_weight_input(cols, ci, prod, qty, line, key_prefix, i)
+                net_wt = _net_weight_input(cols, ci, prod, qty, line, key_prefix, rid)
                 ci += 1
                 _unit_weight_display(cols, ci, qty, net_wt, prod)
                 ci += 1
@@ -2979,7 +3021,7 @@ def smart_line_item_editor(
             disc_ci = ci
             ci += 1
             rate, disc_pct = _rate_disc_number_inputs(
-                cols, rate_ci, disc_ci, line, prod, key_prefix, i,
+                cols, rate_ci, disc_ci, line, prod, key_prefix, rid,
                 party_id=party_id, default_discount_pct=default_discount_pct,
                 rate_key_suffix="ir", disc_key_suffix="d",
             )
@@ -2999,9 +3041,8 @@ def smart_line_item_editor(
             )
             ci += 1
             _prev_rate_column(cols, ci, prod, key_prefix, party_id)
-            if cols[-1].button("✕", key=f"{key_prefix}_id_{i}"):
-                to_remove.append(i)
-            elif sel and raw_key and raw_key != LINE_PRODUCT_PLACEHOLDER and prod:
+            clicked_del = cols[-1].button("✕", key=f"{key_prefix}_id_{rid}")
+            if sel and raw_key and raw_key != LINE_PRODUCT_PLACEHOLDER and prod:
                 pcs_qty = round(float(qty or 0) * float(pack_u or 0), 4) if pack_u else 0.0
                 rate_pc = (float(rate or 0) / float(pack_u)) if pack_u else 0.0
                 row = {
@@ -3011,14 +3052,19 @@ def smart_line_item_editor(
                     "packing_units": pack_u,
                     "pcs_qty": pcs_qty,
                     "rate_pc": rate_pc,
+                    "_row_uid": rid,
                 }
                 if show_weight:
                     row["net_weight"] = net_wt
                 updated.append(row)
             else:
-                updated.append(dict(line))
+                keep = dict(line)
+                keep["_row_uid"] = rid
+                updated.append(keep)
+            if clicked_del:
+                to_remove.append(rid)
     if to_remove:
-        st.session_state[sk] = _pad_line_rows([l for j, l in enumerate(updated) if j not in to_remove])
+        st.session_state[sk] = apply_line_deletes(updated, to_remove, key_prefix)
         st.rerun()
     st.session_state[sk] = _pad_line_rows(updated)
     if st.button("+ Add Line", key=f"{key_prefix}_addln"):
@@ -3079,9 +3125,14 @@ def smart_line_item_editor(
                 key=f"{key_prefix}_edisc_{ei}", format="%.2f",
             )
             if ec4.button("Update line", key=f"{key_prefix}_eupd_{ei}"):
+                target_uid = el.get("_row_uid")
                 for j, row in enumerate(st.session_state[sk]):
-                    rid = row.get("item_id") or row.get("product_id")
-                    if rid == el.get("item_id"):
+                    same_uid = target_uid and row.get("_row_uid") == target_uid
+                    same_item = (
+                        not target_uid
+                        and (row.get("item_id") or row.get("product_id")) == el.get("item_id")
+                    )
+                    if same_uid or same_item:
                         st.session_state[sk][j]["quantity"] = nqty
                         st.session_state[sk][j]["rate"] = nrate
                         st.session_state[sk][j]["discount_pct"] = ndisc
@@ -3093,11 +3144,17 @@ def smart_line_item_editor(
                         break
                 st.rerun()
             if ec4.button("Remove line", key=f"{key_prefix}_erm_{ei}"):
-                target = el.get("item_id")
-                st.session_state[sk] = _pad_line_rows([
-                    row for row in st.session_state[sk]
-                    if (row.get("item_id") or row.get("product_id")) != target
-                ])
+                target_uid = el.get("_row_uid")
+                if target_uid:
+                    st.session_state[sk] = apply_line_deletes(
+                        st.session_state[sk], [target_uid], key_prefix,
+                    )
+                else:
+                    target = el.get("item_id")
+                    st.session_state[sk] = _pad_line_rows([
+                        row for row in st.session_state[sk]
+                        if (row.get("item_id") or row.get("product_id")) != target
+                    ])
                 st.rerun()
     if show_weight and valid:
         st.caption("Unit Wt = Net Wt ÷ Qty (grey **std** = product standard weight for comparison).")
