@@ -112,6 +112,21 @@ def _tab_worksheet():
 
     saved = db.get_production_month_run(wh_id, ym)
     is_posted = bool(saved and (saved.get("status") or "") == "posted")
+    # Detect unlock-after-post: draft but stock movements already exist
+    already_stock_posted = False
+    if saved and not is_posted and saved.get("id"):
+        try:
+            with db.get_connection() as _conn:
+                n = _conn.execute(
+                    """
+                    SELECT COUNT(*) FROM inventory_movements
+                    WHERE reference_type='production_physical' AND reference_id=?
+                    """,
+                    (int(saved["id"]),),
+                ).fetchone()[0]
+                already_stock_posted = int(n or 0) > 0
+        except Exception:
+            already_stock_posted = bool(saved.get("batch_ref"))
     if saved:
         st.info(
             f"Saved **{ym}** — status **{(saved.get('status') or 'draft').upper()}** · "
@@ -122,6 +137,19 @@ def _tab_worksheet():
                 if saved.get("posted_at")
                 else ""
             )
+            + (
+                f" · batch **{saved.get('batch_ref')}**"
+                if saved.get("batch_ref")
+                else ""
+            )
+        )
+    if already_stock_posted:
+        st.warning(
+            "Stock movements for this month are **already in the warehouse** "
+            f"({saved.get('batch_ref') or 'production_physical'}). "
+            "The worksheet was unlocked to draft, which is why **Post** still looks available. "
+            "Click **Post production** once to restore **posted** status — it will **not** "
+            "create duplicate stock. Or use History to confirm."
         )
 
     items = sorted(
@@ -776,27 +804,39 @@ def _tab_worksheet():
 
     if a2.button("Post production", disabled=is_posted, key="prod_phy_post"):
         try:
-            rid = db.save_production_month_run(
-                wh_id,
-                ym,
-                out_lines,
-                notes=notes or None,
-                user_id=_user_id(),
-            )
+            if already_stock_posted and saved and saved.get("id"):
+                rid = int(saved["id"])
+            else:
+                rid = db.save_production_month_run(
+                    wh_id,
+                    ym,
+                    out_lines,
+                    notes=notes or None,
+                    user_id=_user_id(),
+                )
             result = db.post_production_month_run(
                 rid,
                 user_id=_user_id(),
                 allow_negative=allow_neg,
             )
-            mm = result.get("mismatches") or []
-            msg = (
-                f"Posted {result.get('posted_lines', 0)} line(s) · "
-                f"qty {result.get('posted_production_qty', 0):,.2f} · "
-                f"{result.get('batch_ref')}"
-            )
-            if mm:
-                msg += f" · {len(mm)} stock vs Phy mismatch(es) — check warehouse stock."
-            ff.action_done(msg)
+            if result.get("already_posted"):
+                ff.action_done(
+                    f"Stock was **already posted** for this month "
+                    f"({result.get('prior_movements')} movement(s), "
+                    f"net qty {float(result.get('prior_net_qty') or 0):,.2f}). "
+                    f"Status set back to **posted** — {result.get('batch_ref')}. "
+                    "Do not post again."
+                )
+            else:
+                mm = result.get("mismatches") or []
+                msg = (
+                    f"Posted {result.get('posted_lines', 0)} line(s) · "
+                    f"qty {result.get('posted_production_qty', 0):,.2f} · "
+                    f"{result.get('batch_ref')}"
+                )
+                if mm:
+                    msg += f" · {len(mm)} stock vs Phy mismatch(es) — check warehouse stock."
+                ff.action_done(msg)
         except Exception as e:
             st.error(str(e))
 

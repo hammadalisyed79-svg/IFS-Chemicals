@@ -546,9 +546,10 @@ def post_production_month_run(
     user_id=None,
     allow_negative: bool = False,
 ) -> dict:
-    """Post production_qty > 0 as warehouse stock-in movements.
+    """Post production_qty as warehouse stock movements.
 
     Movements use reference_type=production_physical so they are excluded from Adj.
+    Re-post is blocked if this run already has production_physical movements.
     """
     from database import (
         get_connection,
@@ -569,6 +570,48 @@ def post_production_month_run(
         header = row_to_dict(h)
         if (header.get("status") or "") == "posted":
             raise ValueError("This month is already posted.")
+
+        # Guard: unlock leaves stock movements in place — never post twice
+        prior = conn.execute(
+            """
+            SELECT COUNT(*) AS n,
+                   COALESCE(SUM(
+                       CASE WHEN LOWER(COALESCE(movement_type,''))='in' THEN quantity
+                            WHEN LOWER(COALESCE(movement_type,''))='out' THEN -quantity
+                            ELSE 0 END
+                   ), 0) AS net_qty
+            FROM inventory_movements
+            WHERE reference_type=? AND reference_id=?
+            """,
+            (REF_TYPE_PRODUCTION, int(run_id)),
+        ).fetchone()
+        prior_n = int(prior["n"] or 0) if prior else 0
+        if prior_n > 0:
+            batch_ref = (
+                (header.get("batch_ref") or "").strip()
+                or f"PROD {header.get('year_month')} physical count"
+            )
+            conn.execute(
+                """UPDATE production_month_runs
+                   SET status='posted',
+                       batch_ref=?,
+                       posted_at=COALESCE(posted_at, ?),
+                       posted_by=COALESCE(posted_by, ?),
+                       modified_at=?, modified_by=?
+                   WHERE id=?""",
+                (batch_ref, ts, user_id, ts, user_id, int(run_id)),
+            )
+            return {
+                "run_id": int(run_id),
+                "posted_lines": 0,
+                "posted_production_qty": 0.0,
+                "batch_ref": batch_ref,
+                "verify": [],
+                "mismatches": [],
+                "already_posted": True,
+                "prior_movements": prior_n,
+                "prior_net_qty": round(float(prior["net_qty"] or 0), 4),
+            }
 
         lines = rows_to_list(
             conn.execute(
