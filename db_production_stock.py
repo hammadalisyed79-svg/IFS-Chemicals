@@ -799,3 +799,123 @@ def unlock_production_month_run(run_id: int, *, user_id=None) -> None:
                WHERE id=?""",
             (ts, user_id, int(run_id)),
         )
+
+
+def reverse_production_month_run(run_id: int, *, user_id=None) -> dict:
+    """Undo production_physical stock posts (including later true-ups).
+
+    Restores warehouse qty, deletes the movements, recalculates worksheet
+    production from Phy − OS − Return + Sale − Adj, and marks the run draft.
+    Physical counts are left as entered.
+    """
+    from database import get_connection, invalidate_stock, row_to_dict, rows_to_list, _now
+
+    ts = now()
+    with get_connection() as conn:
+        apply_production_stock(conn)
+        h = conn.execute(
+            "SELECT * FROM production_month_runs WHERE id=?", (int(run_id),)
+        ).fetchone()
+        if not h:
+            raise ValueError("Production month run not found.")
+        header = row_to_dict(h)
+        mvs = rows_to_list(
+            conn.execute(
+                """SELECT * FROM inventory_movements
+                   WHERE reference_type=? AND reference_id=?
+                   ORDER BY id DESC""",
+                (REF_TYPE_PRODUCTION, int(run_id)),
+            ).fetchall()
+        )
+        reversed_n = 0
+        reversed_qty = 0.0
+        for mv in mvs:
+            qty = float(mv["quantity"] or 0)
+            mtype = (mv["movement_type"] or "").strip().lower()
+            signed = qty if mtype == "in" else (-qty if mtype == "out" else 0.0)
+            undo = -signed
+            pid = int(mv["product_id"])
+            wh = int(mv["warehouse_id"])
+            if mtype == "in" and qty > 0:
+                try:
+                    from erp_core.inventory_valuation import reverse_inbound_cost
+
+                    pp = conn.execute(
+                        "SELECT COALESCE(purchase_price,0) FROM products WHERE id=?",
+                        (pid,),
+                    ).fetchone()
+                    reverse_inbound_cost(
+                        conn, wh, pid, qty, float(pp[0] if pp else 0)
+                    )
+                except Exception:
+                    pass
+            row = conn.execute(
+                "SELECT quantity FROM warehouse_stock WHERE warehouse_id=? AND product_id=?",
+                (wh, pid),
+            ).fetchone()
+            if row:
+                conn.execute(
+                    """UPDATE warehouse_stock
+                       SET quantity=quantity+?, modified_at=?
+                       WHERE warehouse_id=? AND product_id=?""",
+                    (undo, _now(), wh, pid),
+                )
+            else:
+                conn.execute(
+                    """INSERT INTO warehouse_stock
+                       (warehouse_id, product_id, quantity, modified_at)
+                       VALUES (?, ?, ?, ?)""",
+                    (wh, pid, undo, _now()),
+                )
+            conn.execute("DELETE FROM inventory_movements WHERE id=?", (int(mv["id"]),))
+            reversed_n += 1
+            reversed_qty += signed
+
+        lines = rows_to_list(
+            conn.execute(
+                "SELECT * FROM production_month_lines WHERE run_id=?",
+                (int(run_id),),
+            ).fetchall()
+        )
+        for ln in lines:
+            prod, closing = production_qty_formula(
+                ln.get("opening_qty"),
+                ln.get("sold_qty"),
+                ln.get("return_qty"),
+                ln.get("adj_qty"),
+                ln.get("physical_qty"),
+            )
+            conn.execute(
+                """UPDATE production_month_lines
+                   SET production_qty=?, closing_qty=?
+                   WHERE id=?""",
+                (prod, closing, int(ln["id"])),
+            )
+        tot = conn.execute(
+            """SELECT COALESCE(SUM(production_qty),0), COALESCE(SUM(physical_qty),0)
+               FROM production_month_lines WHERE run_id=?""",
+            (int(run_id),),
+        ).fetchone()
+        conn.execute(
+            """UPDATE production_month_runs
+               SET status='draft', posted_at=NULL, posted_by=NULL,
+                   total_production=?, total_physical=?,
+                   modified_at=?, modified_by=?
+               WHERE id=?""",
+            (
+                round(float(tot[0] or 0), 4),
+                round(float(tot[1] or 0), 4),
+                ts,
+                user_id,
+                int(run_id),
+            ),
+        )
+
+    invalidate_stock()
+    return {
+        "run_id": int(run_id),
+        "year_month": header.get("year_month"),
+        "reversed_movements": reversed_n,
+        "reversed_qty": round(reversed_qty, 4),
+        "status": "draft",
+    }

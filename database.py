@@ -6736,6 +6736,7 @@ from db_production_stock import (  # noqa: F401,E402
     production_qty_formula,
     save_production_month_run,
     unlock_production_month_run,
+    reverse_production_month_run,
     align_production_month_closing,
 )
 from db_monthly_physical import (  # noqa: F401,E402

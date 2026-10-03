@@ -49,6 +49,46 @@ def apply_inbound_cost(
     return new_avg
 
 
+def reverse_inbound_cost(
+    conn,
+    warehouse_id: int,
+    product_id: int,
+    qty: float,
+    unit_cost: float,
+) -> float:
+    """Best-effort WAC undo after reversing an inbound movement (stock still includes qty)."""
+    _ensure_table(conn)
+    qty = float(qty)
+    unit_cost = float(unit_cost)
+    if qty <= 0:
+        return get_weighted_average_cost(conn, warehouse_id, product_id, unit_cost)
+
+    stock_row = conn.execute(
+        "SELECT COALESCE(quantity,0) FROM warehouse_stock WHERE warehouse_id=? AND product_id=?",
+        (warehouse_id, product_id),
+    ).fetchone()
+    old_qty = float(stock_row[0] if stock_row else 0)
+    row = conn.execute(
+        "SELECT avg_cost FROM warehouse_product_avg_cost WHERE warehouse_id=? AND product_id=?",
+        (warehouse_id, product_id),
+    ).fetchone()
+    old_avg = float(row[0]) if row else unit_cost
+    new_qty = old_qty - qty
+    if new_qty <= 0.0001:
+        new_avg = unit_cost
+    else:
+        new_avg = ((old_qty * old_avg) - (qty * unit_cost)) / new_qty
+        if new_avg < 0:
+            new_avg = old_avg
+    conn.execute(
+        """INSERT INTO warehouse_product_avg_cost(warehouse_id, product_id, avg_cost)
+           VALUES(?,?,?)
+           ON CONFLICT(warehouse_id, product_id) DO UPDATE SET avg_cost=excluded.avg_cost""",
+        (warehouse_id, product_id, new_avg),
+    )
+    return new_avg
+
+
 def get_weighted_average_cost(
     conn,
     warehouse_id: int,

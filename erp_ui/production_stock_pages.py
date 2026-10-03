@@ -760,7 +760,7 @@ def _tab_worksheet():
     ])
     st.caption(
         "Computed — Production = Phy − OS − Return + Sale − Adj; Closing = Phy. "
-        "Negative Production means Phy is below book movement (post blocked unless allowed)."
+        "Post aligns warehouse stock at month-end to Phy, so next month opening = this closing."
     )
     st.dataframe(result_df, use_container_width=True, hide_index=True)
 
@@ -840,14 +840,18 @@ def _tab_worksheet():
             st.error(str(e))
 
     if is_posted and saved and a3.button(
-        "Admin unlock (draft again)",
-        key="prod_phy_unlock",
+        "Reverse production (undo stock)",
+        key="prod_phy_reverse",
+        help="Deletes production stock movements and restores warehouse qty from before Post.",
     ):
         try:
-            db.unlock_production_month_run(int(saved["id"]), user_id=_user_id())
+            result = db.reverse_production_month_run(
+                int(saved["id"]), user_id=_user_id()
+            )
             ff.action_done(
-                "Unlocked to draft. Stock movements were NOT reversed — "
-                "do not re-post without reversing manually."
+                f"Reversed {int(result.get('reversed_movements') or 0)} movement(s) "
+                f"(net {float(result.get('reversed_qty') or 0):,.2f}). "
+                "Run is draft again; Phy is unchanged."
             )
         except Exception as e:
             st.error(str(e))
