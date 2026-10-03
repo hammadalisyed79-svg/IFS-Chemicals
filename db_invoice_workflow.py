@@ -992,6 +992,14 @@ def _revert_purchase_approval_marker(conn, invoice_id, user_id):
     )
 
 
+def _delete_ref_movements(conn, reference_type: str, reference_id: int) -> int:
+    cur = conn.execute(
+        "DELETE FROM inventory_movements WHERE reference_type=? AND reference_id=?",
+        (reference_type, int(reference_id)),
+    )
+    return cur.rowcount or 0
+
+
 def _post_sale_effects(invoice_id, user_id):
     import database as db
     with db.get_connection() as conn:
@@ -1002,10 +1010,23 @@ def _post_sale_effects(invoice_id, user_id):
         items = conn.execute("SELECT * FROM sales_invoice_items WHERE invoice_id=?", (invoice_id,)).fetchall()
         update_stock = not inv.get("dn_id")
         if update_stock:
+            already = conn.execute(
+                """SELECT COUNT(*) FROM inventory_movements
+                   WHERE reference_type='sales_invoice' AND reference_id=?""",
+                (invoice_id,),
+            ).fetchone()[0]
+            if already:
+                _delete_ref_movements(conn, "sales_invoice", invoice_id)
+            else:
+                for r in items:
+                    db._adjust_warehouse_stock(conn, r["product_id"], wh, -r["quantity"])
+            doc_date = str(inv.get("invoice_date") or "")[:10] or None
             for r in items:
-                db._adjust_warehouse_stock(conn, r["product_id"], wh, -r["quantity"])
-                db._record_movement(conn, r["product_id"], wh, "out", r["quantity"],
-                                    "sales_invoice", invoice_id, inv["document_no"], user_id)
+                db._record_movement(
+                    conn, r["product_id"], wh, "out", r["quantity"],
+                    "sales_invoice", invoice_id, inv["document_no"], user_id,
+                    movement_date=doc_date,
+                )
         total = float(inv["total"])
         paid = float(inv.get("paid_amount") or 0)
         mode = (inv.get("payment_mode") or "credit").lower()
@@ -1126,8 +1147,25 @@ def _reverse_sale_effects(conn, invoice_id, user_id):
     if not inv:
         return
     wh = db._default_warehouse_id(conn)
-    items = conn.execute("SELECT * FROM sales_invoice_items WHERE invoice_id=?", (invoice_id,)).fetchall()
-    if not inv.get("dn_id"):
+    mvs = conn.execute(
+        """SELECT product_id, warehouse_id, movement_type, quantity
+           FROM inventory_movements
+           WHERE reference_type='sales_invoice' AND reference_id=?""",
+        (invoice_id,),
+    ).fetchall()
+    if mvs:
+        for mv in mvs:
+            qty = float(mv["quantity"] or 0)
+            mtype = (mv["movement_type"] or "").strip().lower()
+            undo = qty if mtype == "out" else (-qty if mtype == "in" else 0.0)
+            db._adjust_warehouse_stock(
+                conn, mv["product_id"], int(mv["warehouse_id"] or wh), undo, user_id=user_id,
+            )
+        _delete_ref_movements(conn, "sales_invoice", invoice_id)
+    elif not inv.get("dn_id"):
+        items = conn.execute(
+            "SELECT * FROM sales_invoice_items WHERE invoice_id=?", (invoice_id,)
+        ).fetchall()
         for r in items:
             db._adjust_warehouse_stock(conn, r["product_id"], wh, r["quantity"])
     total = float(inv["total"])
@@ -1149,14 +1187,25 @@ def _post_purchase_effects(invoice_id, user_id):
         items = conn.execute("SELECT * FROM purchase_invoice_items WHERE invoice_id=?", (invoice_id,)).fetchall()
         if update_stock:
             from db_stock_costing import apply_purchase_inbound_cost
+            already = conn.execute(
+                """SELECT COUNT(*) FROM inventory_movements
+                   WHERE reference_type='purchase_invoice' AND reference_id=?""",
+                (invoice_id,),
+            ).fetchone()[0]
+            if already:
+                _delete_ref_movements(conn, "purchase_invoice", invoice_id)
+            doc_date = str(inv.get("invoice_date") or "")[:10] or None
             for r in items:
                 rate = float(r["rate"] or 0)
                 qty = float(r["quantity"] or 0)
-                # Weighted average for on-hand; last purchase rate on product master
-                apply_purchase_inbound_cost(conn, wh, r["product_id"], qty, rate)
-                db._adjust_warehouse_stock(conn, r["product_id"], wh, qty)
-                db._record_movement(conn, r["product_id"], wh, "in", qty,
-                                    "purchase_invoice", invoice_id, inv["document_no"], user_id)
+                if not already:
+                    apply_purchase_inbound_cost(conn, wh, r["product_id"], qty, rate)
+                    db._adjust_warehouse_stock(conn, r["product_id"], wh, qty)
+                db._record_movement(
+                    conn, r["product_id"], wh, "in", qty,
+                    "purchase_invoice", invoice_id, inv["document_no"], user_id,
+                    movement_date=doc_date,
+                )
         else:
             # GRN already increased stock + WAC — refresh last purchase rate only
             from db_stock_costing import apply_purchase_inbound_cost
@@ -1187,8 +1236,25 @@ def _reverse_purchase_effects(conn, invoice_id, user_id):
     if not inv:
         return
     wh = db._default_warehouse_id(conn)
-    items = conn.execute("SELECT * FROM purchase_invoice_items WHERE invoice_id=?", (invoice_id,)).fetchall()
-    if not inv.get("grn_id"):
+    mvs = conn.execute(
+        """SELECT product_id, warehouse_id, movement_type, quantity
+           FROM inventory_movements
+           WHERE reference_type='purchase_invoice' AND reference_id=?""",
+        (invoice_id,),
+    ).fetchall()
+    if mvs:
+        for mv in mvs:
+            qty = float(mv["quantity"] or 0)
+            mtype = (mv["movement_type"] or "").strip().lower()
+            undo = -qty if mtype == "in" else (qty if mtype == "out" else 0.0)
+            db._adjust_warehouse_stock(
+                conn, mv["product_id"], int(mv["warehouse_id"] or wh), undo, user_id=user_id,
+            )
+        _delete_ref_movements(conn, "purchase_invoice", invoice_id)
+    elif not inv.get("grn_id"):
+        items = conn.execute(
+            "SELECT * FROM purchase_invoice_items WHERE invoice_id=?", (invoice_id,)
+        ).fetchall()
         for r in items:
             db._adjust_warehouse_stock(conn, r["product_id"], wh, -r["quantity"])
     total = float(inv["total"])

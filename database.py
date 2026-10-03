@@ -231,6 +231,11 @@ def init_db(force=False):
         _ensure_user_sessions(conn)
         _migrate_created_at_to_localtime(conn)
         _ensure_pc_clock_triggers(conn)
+        try:
+            from erp_core.inventory_movement_dedupe import apply_invoice_movement_dedupe
+            apply_invoice_movement_dedupe(conn)
+        except Exception:
+            pass
     _DB_INITIALIZED = True
     try:
         from erp_core.maintenance import run_startup_maintenance
@@ -1911,12 +1916,17 @@ def delete_item(item_id, modified_by=None):
     invalidate("items")
 
 
-def _record_movement(conn, product_id, warehouse_id, movement_type, quantity, ref_type, ref_id, reason, user_id):
+def _record_movement(
+    conn, product_id, warehouse_id, movement_type, quantity, ref_type, ref_id, reason, user_id,
+    movement_date=None,
+):
+    """Record a stock movement. Date defaults to local today, not SQLite UTC date('now')."""
+    mv_date = (str(movement_date)[:10] if movement_date else _now()[:10])
     conn.execute(
         """INSERT INTO inventory_movements (movement_date, product_id, warehouse_id, movement_type,
            quantity, reference_type, reference_id, reason, created_by)
-           VALUES (date('now'), ?, ?, ?, ?, ?, ?, ?, ?)""",
-        (product_id, warehouse_id, movement_type, quantity, ref_type, ref_id, reason, user_id),
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+        (mv_date, product_id, warehouse_id, movement_type, quantity, ref_type, ref_id, reason, user_id),
     )
 
 
@@ -3010,6 +3020,10 @@ def save_purchase_return(data, line_items, return_id=None, user_id=None):
         if return_id:
             for o in conn.execute("SELECT * FROM purchase_return_items WHERE return_id=?", (return_id,)).fetchall():
                 _adjust_warehouse_stock(conn, o["product_id"], wh, o["quantity"])
+            conn.execute(
+                "DELETE FROM inventory_movements WHERE reference_type='purchase_return' AND reference_id=?",
+                (return_id,),
+            )
             old_r = conn.execute("SELECT * FROM purchase_returns WHERE id=?", (return_id,)).fetchone()
             conn.execute("UPDATE suppliers SET current_balance=current_balance-? WHERE id=?", (old_r["total"], old_r["supplier_id"]))
             conn.execute("DELETE FROM purchase_return_items WHERE return_id=?", (return_id,))
@@ -3039,7 +3053,10 @@ def save_purchase_return(data, line_items, return_id=None, user_id=None):
                 (return_id, pid, li["quantity"], li["rate"], li["line_amount"]),
             )
             _adjust_warehouse_stock(conn, pid, wh, -li["quantity"])
-            _record_movement(conn, pid, wh, "out", li["quantity"], "purchase_return", return_id, data["return_no"], user_id)
+            _record_movement(
+                conn, pid, wh, "out", li["quantity"], "purchase_return", return_id,
+                data["return_no"], user_id, movement_date=data.get("return_date"),
+            )
 
         conn.execute("UPDATE suppliers SET current_balance=current_balance+? WHERE id=?", (total, data["supplier_id"]))
         return return_id
@@ -3053,6 +3070,10 @@ def delete_purchase_return(return_id):
             return
         for o in conn.execute("SELECT * FROM purchase_return_items WHERE return_id=?", (return_id,)).fetchall():
             _adjust_warehouse_stock(conn, o["product_id"], wh, o["quantity"])
+        conn.execute(
+            "DELETE FROM inventory_movements WHERE reference_type='purchase_return' AND reference_id=?",
+            (return_id,),
+        )
         conn.execute("UPDATE suppliers SET current_balance=current_balance+? WHERE id=?", (r["total"], r["supplier_id"]))
         conn.execute("DELETE FROM purchase_return_items WHERE return_id=?", (return_id,))
         conn.execute("DELETE FROM purchase_returns WHERE id=?", (return_id,))
@@ -3159,6 +3180,10 @@ def save_sale_return(data, line_items, return_id=None, user_id=None):
         if return_id:
             for o in conn.execute("SELECT * FROM sales_return_items WHERE return_id=?", (return_id,)).fetchall():
                 _adjust_warehouse_stock(conn, o["product_id"], wh, -o["quantity"])
+            conn.execute(
+                "DELETE FROM inventory_movements WHERE reference_type='sales_return' AND reference_id=?",
+                (return_id,),
+            )
             old_r = conn.execute("SELECT * FROM sales_returns WHERE id=?", (return_id,)).fetchone()
             conn.execute("UPDATE customers SET current_balance=current_balance-? WHERE id=?", (old_r["total"], old_r["customer_id"]))
             conn.execute("DELETE FROM sales_return_items WHERE return_id=?", (return_id,))
@@ -3184,7 +3209,10 @@ def save_sale_return(data, line_items, return_id=None, user_id=None):
                 (return_id, pid, li["quantity"], li["rate"], li.get("line_amount", li.get("amount", 0))),
             )
             _adjust_warehouse_stock(conn, pid, wh, li["quantity"])
-            _record_movement(conn, pid, wh, "in", li["quantity"], "sales_return", return_id, data["return_no"], user_id)
+            _record_movement(
+                conn, pid, wh, "in", li["quantity"], "sales_return", return_id,
+                data["return_no"], user_id, movement_date=data.get("return_date"),
+            )
 
         conn.execute("UPDATE customers SET current_balance=current_balance-? WHERE id=?", (total, data["customer_id"]))
         return return_id
@@ -3198,6 +3226,10 @@ def delete_sale_return(return_id):
             return
         for o in conn.execute("SELECT * FROM sales_return_items WHERE return_id=?", (return_id,)).fetchall():
             _adjust_warehouse_stock(conn, o["product_id"], wh, -o["quantity"])
+        conn.execute(
+            "DELETE FROM inventory_movements WHERE reference_type='sales_return' AND reference_id=?",
+            (return_id,),
+        )
         conn.execute("UPDATE customers SET current_balance=current_balance+? WHERE id=?", (r["total"], r["customer_id"]))
         conn.execute("DELETE FROM sales_return_items WHERE return_id=?", (return_id,))
         conn.execute("DELETE FROM sales_returns WHERE id=?", (return_id,))
