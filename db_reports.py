@@ -308,9 +308,75 @@ def get_negative_stock_report():
         ).fetchall())
 
 
+def _signed_stock_qty(movement_type, quantity) -> float:
+    mt = str(movement_type or "").strip().lower()
+    qty = float(quantity or 0)
+    if mt == "in":
+        return qty
+    if mt == "out":
+        return -qty
+    return 0.0
+
+
+def apply_stock_ledger_balances(rows, openings: dict | None = None):
+    """Running qty after each line. `openings` is product_id -> qty before first row."""
+    openings = openings or {}
+    bals = {}
+    out = []
+    period_in = period_out = 0.0
+    for raw in rows or []:
+        r = dict(raw)
+        pid = r.get("product_id")
+        try:
+            pid_key = int(pid) if pid is not None else 0
+        except (TypeError, ValueError):
+            pid_key = 0
+        if pid_key not in bals:
+            bals[pid_key] = float(openings.get(pid_key, 0) or 0)
+        signed = _signed_stock_qty(r.get("movement_type"), r.get("quantity"))
+        if signed > 0:
+            period_in += signed
+        elif signed < 0:
+            period_out += -signed
+        bals[pid_key] = round(bals[pid_key] + signed, 4)
+        r["balance"] = bals[pid_key]
+        out.append(r)
+    opening_total = round(sum(float(v or 0) for v in openings.values()), 4)
+    closing_total = round(sum(bals.values()), 4) if bals else opening_total
+    summary = {
+        "opening": opening_total,
+        "period_in": round(period_in, 4),
+        "period_out": round(period_out, 4),
+        "closing": closing_total,
+    }
+    return out, summary
+
+
+def _stock_qty_before(conn, product_id, from_date=None) -> float:
+    """Warehouse stock as of the morning of from_date (current minus later movements)."""
+    current = conn.execute(
+        "SELECT COALESCE(SUM(quantity), 0) FROM warehouse_stock WHERE product_id=?",
+        (product_id,),
+    ).fetchone()[0]
+    q = """SELECT COALESCE(SUM(
+                 CASE
+                   WHEN LOWER(COALESCE(movement_type, '')) = 'in' THEN quantity
+                   WHEN LOWER(COALESCE(movement_type, '')) = 'out' THEN -quantity
+                   ELSE 0
+                 END
+               ), 0)
+           FROM inventory_movements WHERE product_id=?"""
+    params = [product_id]
+    if from_date:
+        q += " AND movement_date>=?"
+        params.append(from_date)
+    net_from = conn.execute(q, params).fetchone()[0]
+    return round(float(current or 0) - float(net_from or 0), 4)
+
+
 def get_stock_ledger(product_id=None, from_date=None, to_date=None):
-    q = """SELECT im.movement_date AS date, im.reference_no AS ref, im.movement_type,
-                  im.quantity, im.reference_type, im.reason, p.code, p.name
+    q = """SELECT im.id, im.product_id, im.movement_date AS date, im.reference_no AS ref,
+                  im.movement_type, im.quantity, im.reference_type, im.reason, p.code, p.name
            FROM inventory_movements im
            JOIN products p ON im.product_id=p.id WHERE 1=1"""
     params = []
@@ -323,9 +389,53 @@ def get_stock_ledger(product_id=None, from_date=None, to_date=None):
     if to_date:
         q += " AND im.movement_date<=?"
         params.append(to_date)
-    q += " ORDER BY im.movement_date, im.id"
+    q += " ORDER BY p.code, im.movement_date, im.id"
     with get_connection() as conn:
-        return rows_to_list(conn.execute(q, params).fetchall())
+        rows = rows_to_list(conn.execute(q, params).fetchall())
+        pids = []
+        if product_id:
+            pids = [int(product_id)]
+        else:
+            seen = set()
+            for r in rows:
+                try:
+                    pid = int(r["product_id"])
+                except (TypeError, ValueError, KeyError):
+                    continue
+                if pid not in seen:
+                    seen.add(pid)
+                    pids.append(pid)
+        openings = {pid: _stock_qty_before(conn, pid, from_date) for pid in pids}
+        code = name = ""
+        if product_id:
+            prow = conn.execute(
+                "SELECT code, name FROM products WHERE id=?", (int(product_id),)
+            ).fetchone()
+            if prow:
+                code, name = prow[0], prow[1]
+
+    opening_row = None
+    ob = 0.0
+    if product_id is not None:
+        ob = float(openings.get(int(product_id), 0) or 0)
+        if from_date or abs(ob) > 0.00005:
+            opening_row = {
+                "id": None,
+                "product_id": int(product_id),
+                "date": from_date or "",
+                "ref": "Opening",
+                "movement_type": "",
+                "quantity": 0.0,
+                "reference_type": "opening",
+                "reason": "Opening Balance",
+                "code": code,
+                "name": name,
+                "balance": round(ob, 4),
+            }
+    balanced, summary = apply_stock_ledger_balances(rows, openings)
+    if opening_row:
+        return [opening_row] + balanced, summary
+    return balanced, summary
 
 
 def get_bom_cost_sheet():

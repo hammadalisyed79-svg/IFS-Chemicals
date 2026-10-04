@@ -91,7 +91,7 @@ REPORT_COLUMNS: dict[str, list[str]] = {
         "purchase_price", "stock_value", "reorder_level", "status",
     ],
     "Stock Valuation": ["code", "name", "category", "unit", "stock_qty", "purchase_price", "stock_value"],
-    "Stock Ledger": ["date", "ref", "movement_type", "quantity", "reason", "code", "name"],
+    "Stock Ledger": ["date", "ref", "movement_type", "quantity", "reason", "code", "name", "balance"],
     "Warehouse Stock": ["warehouse", "code", "name", "quantity", "unit", "value"],
     "Batch Stock": ["batch_no", "product_code", "product_name", "warehouse_name", "quantity", "expiry_date"],
     "Reorder Report": ["code", "name", "stock_qty", "reorder_level", "purchase_price"],
@@ -194,6 +194,7 @@ REPORT_LAYOUT = {
     "Cash Book": "portrait_full",
     "Bank Book": "portrait_full",
     "Item Wise Sale (Detail)": "portrait_full",
+    "Stock Ledger": "portrait_full",
     "Item Wise Purchase (Detail)": "portrait_full",
     "Daily Activity Report": "portrait_full",
 }
@@ -271,15 +272,19 @@ def prepare_report_dataframe(df: pd.DataFrame, report_title: str | None = None) 
     # Format numeric columns for display
     for c in out.columns:
         blank0 = _blank_zero_money_col(c) if profile_key and "Ledger" in str(profile_key) else False
+        stock_qty = profile_key == "Stock Ledger" and bool(
+            re.search(r"quantity|balance", str(c), re.I)
+        )
+        fmt_kw = {"blank_zero": blank0, "decimals": 3} if stock_qty else {"blank_zero": blank0}
         if out[c].dtype in ("float64", "float32", "int64", "int32"):
-            if _should_format_money(c):
-                out[c] = out[c].apply(lambda x, bz=blank0: _fmt_num(x, blank_zero=bz))
+            if stock_qty or _should_format_money(c):
+                out[c] = out[c].apply(lambda x, kw=fmt_kw: _fmt_num(x, **kw))
         elif out[c].dtype == object:
             try:
                 s = pd.to_numeric(out[c], errors="coerce")
-                if s.notna().sum() > len(out) * 0.5 and _should_format_money(c):
+                if s.notna().sum() > len(out) * 0.5 and (stock_qty or _should_format_money(c)):
                     out[c] = s.apply(
-                        lambda x, bz=blank0: _fmt_num(x, blank_zero=bz) if pd.notna(x) else ""
+                        lambda x, kw=fmt_kw: _fmt_num(x, **kw) if pd.notna(x) else ""
                     )
             except Exception:
                 pass
@@ -301,14 +306,15 @@ def _should_format_money(col: str) -> bool:
     ))
 
 
-def _fmt_num(v, blank_zero: bool = False):
+def _fmt_num(v, blank_zero: bool = False, decimals: int = 2):
     if v is None or (isinstance(v, float) and pd.isna(v)):
         return ""
     try:
         f = float(v)
         if blank_zero and abs(f) < 0.005:
             return ""
-        return f"{f:,.2f}"
+        d = 2 if decimals is None else int(decimals)
+        return f"{f:,.{d}f}"
     except (TypeError, ValueError):
         return str(v)
 
@@ -419,6 +425,40 @@ def summary_keys_for_report(report_title: str | None, df: pd.DataFrame) -> dict:
         "Customer Ledger (Detailed)", "Supplier Ledger (Detailed)",
         "Account Ledger",
     )
+    if report_title == "Stock Ledger":
+        ls = {}
+        try:
+            ls = dict(getattr(df, "attrs", {}) or {}).get("ledger_summary") or {}
+        except Exception:
+            ls = {}
+        if ls:
+            return {
+                "Opening": f"{float(ls.get('opening') or 0):,.3f}",
+                "In": f"{float(ls.get('period_in') or 0):,.3f}",
+                "Out": f"{float(ls.get('period_out') or 0):,.3f}",
+                "Closing": f"{float(ls.get('closing') or 0):,.3f}",
+            }
+        opening = 0.0
+        closing = 0.0
+        if "balance" in df.columns:
+            bals = pd.to_numeric(df["balance"], errors="coerce")
+            if len(bals):
+                closing = float(bals.iloc[-1] or 0)
+                first_reason = str(df["reason"].iloc[0]) if "reason" in df.columns else ""
+                if first_reason.lower().startswith("opening"):
+                    opening = float(bals.iloc[0] or 0)
+        qty_in = qty_out = 0.0
+        if "quantity" in df.columns and "movement_type" in df.columns:
+            qn = pd.to_numeric(df["quantity"], errors="coerce").fillna(0)
+            mt = df["movement_type"].astype(str).str.lower()
+            qty_in = float(qn[mt == "in"].sum())
+            qty_out = float(qn[mt == "out"].sum())
+        return {
+            "Opening": f"{opening:,.3f}",
+            "In": f"{qty_in:,.3f}",
+            "Out": f"{qty_out:,.3f}",
+            "Closing": f"{closing:,.3f}",
+        }
     if report_title in ledger_titles:
         ls = {}
         try:

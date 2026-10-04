@@ -118,7 +118,7 @@ REPORT_CATALOG = {
     "Inventory": [
         _r("Stock Position", "Current qty and value for all items.", date=False,
            product_group=True, party_group_view=True),
-        _r("Stock Ledger", "In/out movements for one product.", product=True, party_required="product",
+        _r("Stock Ledger", "In/out movements with running qty balance for one product.", product=True, party_required="product",
            product_group=True),
         _r("Stock Valuation", "Stock value by item.", date=False,
            product_group=True, party_group_view=True),
@@ -652,6 +652,25 @@ def _result_summary(df: pd.DataFrame, report: str):
         "Customer Ledger (Detailed)", "Supplier Ledger (Detailed)",
         "Account Ledger",
     )
+    if report == "Stock Ledger":
+        totals = summary_keys_for_report(report, df)
+        cols = st.columns(5, gap="small")
+        cols[0].markdown(
+            f"<div class='txn-kpi-card'><p class='txn-kpi'>Rows</p>"
+            f"<p class='txn-kpi-val'>{n:,}</p></div>",
+            unsafe_allow_html=True,
+        )
+        for i, (label, key) in enumerate(
+            (("Opening", "Opening"), ("In", "In"), ("Out", "Out"), ("Closing", "Closing")),
+            start=1,
+        ):
+            cols[i].markdown(
+                f"<div class='txn-kpi-card'><p class='txn-kpi'>{label}</p>"
+                f"<p class='txn-kpi-val'>{escape(str(totals.get(key, '0.000')))}</p></div>",
+                unsafe_allow_html=True,
+            )
+        st.divider()
+        return
     if report in ledger_titles:
         totals = summary_keys_for_report(report, df)
         note = (df.attrs.get("ledger_summary") or {}).get("note")
@@ -1338,7 +1357,11 @@ def _run_report(report, fd, td, cid, sid, pid, wid, eid, payroll_id=None, gf=Non
             product_group_id=gf.get("product_group_id"), view_mode=pvm,
         ))
     if report == "Stock Ledger":
-        return pd.DataFrame(rpt_db.get_stock_ledger(pid, fd, td))
+        rows, summary = rpt_db.get_stock_ledger(pid, fd, td)
+        df = pd.DataFrame(rows)
+        if summary:
+            df.attrs["ledger_summary"] = summary
+        return df
     if report == "Warehouse Stock":
         return pd.DataFrame(rpt_db.get_warehouse_stock(wid))
     if report == "Batch Stock":
