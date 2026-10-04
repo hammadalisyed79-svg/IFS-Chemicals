@@ -236,6 +236,18 @@ def _payroll_clear_edit_live_state(pid: int) -> None:
     ff.clear_keys(f"pr_edit_src_sig_{pid}")
 
 
+def _sep_stay_on_line(pid: int, line_id: int) -> dict:
+    """Session keys so Save remounts the same payroll + employee (not the first row)."""
+    pid = int(pid)
+    lid = int(line_id)
+    return {
+        f"pr_sep_keep_line_v3_{pid}": lid,
+        f"pr_sep_line_pending_v3_{pid}": lid,
+        "pr_sep_stay_pid": pid,
+        "hr_pay_tab": "Single employee pay",
+    }
+
+
 
 def _render_single_employee_edit_pay(
     *,
@@ -338,6 +350,7 @@ def _render_single_employee_edit_pay(
 
     pick_key = f"pr_sep_line_id_v3_{pid}"
     keep_key = f"pr_sep_keep_line_v3_{pid}"
+    pending_key = f"pr_sep_line_pending_v3_{pid}"
     search_key = f"pr_sep_emp_q_{pid}"
 
     def _coerce_line_id(raw):
@@ -368,10 +381,12 @@ def _render_single_employee_edit_pay(
         return needle in blob
 
     filtered = [lid for lid in id_order if _match(lid)]
+    pending_val = _coerce_line_id(st.session_state.pop(pending_key, None))
     widget_val = _coerce_line_id(st.session_state.get(pick_key))
     kept_val = _coerce_line_id(st.session_state.get(keep_key))
-    # Trust the live dropdown first; keep_key is only a fallback after save remount
-    if widget_val in line_by_id:
+    if pending_val in line_by_id:
+        current = pending_val
+    elif widget_val in line_by_id:
         current = widget_val
     elif kept_val in line_by_id:
         current = kept_val
@@ -384,9 +399,11 @@ def _render_single_employee_edit_pay(
     if not filtered:
         filtered = list(id_order)
 
-    # Seed widget only when missing/invalid — never overwrite a valid user choice
-    if _coerce_line_id(st.session_state.get(pick_key)) not in filtered:
-        st.session_state[pick_key] = current if current in filtered else filtered[0]
+    if current in filtered:
+        if _coerce_line_id(st.session_state.get(pick_key)) != current:
+            st.session_state[pick_key] = current
+    elif _coerce_line_id(st.session_state.get(pick_key)) not in filtered:
+        st.session_state[pick_key] = filtered[0]
 
     sel_id = st.selectbox(
         "Employee list",
@@ -568,11 +585,7 @@ def _render_single_employee_edit_pay(
             }, uid())
             db.refresh_payroll_attendance_days(pid, user_id=uid())
             _payroll_clear_edit_live_state(pid)
-            # Never write pick_key after the selectbox exists — Streamlit forbids it.
-            keep_sel = {
-                keep_key: int(sel_id),
-                "hr_pay_tab": "Single employee pay",
-            }
+            keep_sel = _sep_stay_on_line(pid, sel_id)
             if do_mark_left:
                 ff.action_done(
                     f"Final settlement complete through **{leaving_pick}** — ledger NIL, marked left.",
@@ -839,7 +852,7 @@ def _render_single_employee_edit_pay(
                     uid(),
                     sync_ot=("from_amount" if derive_hrs else None),
                 )
-                # Remount form fields from DB. Keep employee picker via retain.
+                # Remount form fields from DB. Keep employee picker via pending retain.
                 # Prefixes clear all line-specific keys (pr_sep_dp_{pid}_{sel_id}, …).
                 form_prefixes = (
                     f"pr_sep_basic_{pid}",
@@ -854,12 +867,7 @@ def _render_single_employee_edit_pay(
                     f"pr_sep_oth_{pid}",
                     f"pr_sep_derive_{pid}",
                 )
-                # Never write pick_key after the selectbox exists — Streamlit forbids it.
-                # keep_key alone restores selection on the next run (before the widget).
-                keep_sel = {
-                    keep_key: int(line["id"]),
-                    "hr_pay_tab": "Single employee pay",
-                }
+                keep_sel = _sep_stay_on_line(pid, line["id"])
                 if do_pay:
                     if pmode_edit == "bank" and not bank_id_edit:
                         raise ValueError("Select bank account.")
@@ -1418,8 +1426,26 @@ def page_hr_employees():
     elif tab == "Edit / View":
         if not rows:
             return
-        sel = st.selectbox("Select Employee", [f"{r['code']} - {r['full_name']}" for r in rows])
-        eid = next(r["id"] for r in rows if sel.startswith(r["code"]))
+        pick_key = "hr_emp_edit_sel_id"
+        pending_key = "hr_emp_edit_pending_id"
+        emp_ids = [int(r["id"]) for r in rows]
+        emp_lbl = {int(r["id"]): f"{r['code']} - {r['full_name']}" for r in rows}
+        pending_eid = st.session_state.pop(pending_key, None)
+        try:
+            pending_eid = int(pending_eid) if pending_eid is not None else None
+        except (TypeError, ValueError):
+            pending_eid = None
+        if pending_eid in emp_lbl:
+            st.session_state[pick_key] = pending_eid
+        elif st.session_state.get(pick_key) not in emp_ids:
+            st.session_state[pick_key] = emp_ids[0]
+        eid = st.selectbox(
+            "Select Employee",
+            emp_ids,
+            format_func=lambda i: emp_lbl.get(int(i), str(i)),
+            key=pick_key,
+        )
+        eid = int(eid)
         emp = db.get_employee_hr(eid)
         join_raw_hdr = str(emp.get("joining_date") or "").strip()[:10]
         leave_raw_hdr = str(emp.get("leaving_date") or "").strip()[:10]
@@ -1552,7 +1578,11 @@ def page_hr_employees():
                     }, uid())
                     ff.action_done(
                         "Updated."
-                        + (" Employee is now **inactive**." if not active else " Employee is **active**.")
+                        + (" Employee is now **inactive**." if not active else " Employee is **active**."),
+                        retain={
+                            "hr_emp_edit_pending_id": int(eid),
+                            "hr_emp_tab": "Edit / View",
+                        },
                     )
         st.markdown("**Leave Balances**")
         st.caption(
@@ -1590,7 +1620,13 @@ def page_hr_employees():
                     if c3.button("Save", key=f"emp_lv_save_{eid}_{lt['id']}"):
                         try:
                             db.allocate_leave(eid, lt["id"], days, int(yr), uid(), mode="set")
-                            ff.action_done(f"{lt['name']} allocation updated.")
+                            ff.action_done(
+                                f"{lt['name']} allocation updated.",
+                                retain={
+                                    "hr_emp_edit_pending_id": int(eid),
+                                    "hr_emp_tab": "Edit / View",
+                                },
+                            )
                         except Exception as ex:
                             st.error(str(ex))
                 if st.button("Apply standard policy (CL/SL/AL)", key=f"emp_lv_std_{eid}"):
@@ -3593,6 +3629,15 @@ def page_payroll():
                     f"{r['document_no']} — {_payroll_period_label(r['payroll_month'], r['payroll_year'])}"
                 )
 
+            stay_pid = st.session_state.pop("pr_sep_stay_pid", None)
+            if stay_pid:
+                try:
+                    stay_pid = int(stay_pid)
+                except (TypeError, ValueError):
+                    stay_pid = None
+                match = next((r for r in runs if int(r["id"]) == stay_pid), None)
+                if match:
+                    st.session_state["pr_sep_run"] = _sep_lbl(match)
             _sync_payroll_run_select_key("pr_sep_run", runs, _sep_lbl)
             sel = st.selectbox(
                 "Draft Payroll",
