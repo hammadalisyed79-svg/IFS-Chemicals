@@ -2,10 +2,11 @@
 
 Formula (Phy = month-end physical count):
   Closing    = Phy
-  Production = Phy - OS - Return + Sale - Adj
+  Production = Phy − OS − Return + Sale
 
-Adj = net inventory adjustments already posted in the month
-(reference_type='adjustment'), excluding production_physical posts.
+Sale already posts stock OUT. Production is the reverse of that
+process and posts stock IN (manufactured qty). Adj is shown on the
+worksheet but is already in the warehouse — it is not production.
 """
 
 from __future__ import annotations
@@ -100,13 +101,18 @@ def production_qty_formula(
     adj: float,
     physical: float,
 ) -> tuple[float, float]:
-    """Return (production, closing). Closing = physical."""
+    """Return (production, closing). Closing = physical.
+
+    Reverse of sales: OS + Production IN − Sale OUT + Return = Phy.
+    ``adj`` is accepted for call-site compatibility and is not subtracted
+    (adjustments are already warehouse movements, not manufactured qty).
+    """
     os_ = round(float(opening or 0), 4)
     sale = round(float(sold or 0), 4)
     ret = round(float(return_qty or 0), 4)
-    adj_n = round(float(adj or 0), 4)
     phy = round(float(physical or 0), 4)
-    production = round(phy - os_ - ret + sale - adj_n, 4)
+    _ = adj  # not production
+    production = round(phy - os_ - ret + sale, 4)
     return production, phy
 
 
@@ -607,6 +613,7 @@ def _post_production_qty_line(
     run_id: int,
     batch_ref: str,
     user_id,
+    reason: str | None = None,
 ) -> None:
     from database import _adjust_warehouse_stock
 
@@ -615,6 +622,7 @@ def _post_production_qty_line(
         return
     pid = int(product_id)
     wh = int(warehouse_id)
+    note = (reason or batch_ref or "").strip() or batch_ref
     if prod > 0:
         pp = conn.execute(
             "SELECT COALESCE(purchase_price,0) FROM products WHERE id=?",
@@ -647,7 +655,7 @@ def _post_production_qty_line(
             qty,
             REF_TYPE_PRODUCTION,
             int(run_id),
-            batch_ref,
+            note,
             user_id,
         ),
     )
@@ -659,10 +667,11 @@ def align_production_month_closing(
     user_id=None,
     allow_negative: bool = False,
 ) -> dict:
-    """Force month-end warehouse stock = Phy so next month opening = this closing.
+    """Post reverse-calculated production as stock IN, then true-up closing = Phy.
 
-    Posts only the gap (Phy − stock at start of the day after to_date).
-    Safe to run on an already-posted month (true-up only, no double of the original qty).
+    Sale invoices already stock OUT. Production = Phy − OS − Return + Sale posts IN.
+    Any leftover gap (e.g. prior adjustments) is a separate closing true-up so
+    next month opening = this Phy. Does not overwrite production_qty with the gap.
     """
     from database import get_connection, invalidate_stock, row_to_dict, rows_to_list
 
@@ -693,6 +702,8 @@ def align_production_month_closing(
             (header.get("batch_ref") or "").strip()
             or f"PROD {ym} physical count"
         )
+        prod_reason = f"PROD {ym} production"
+        phy_reason = f"PROD {ym} closing Phy"
         pids = [int(ln["product_id"]) for ln in lines if ln.get("product_id")]
         book = _stock_as_of_conn(conn, wh, pids, eom_as_of)
         had_prior = conn.execute(
@@ -700,6 +711,45 @@ def align_production_month_closing(
                WHERE reference_type=? AND reference_id=?""",
             (REF_TYPE_PRODUCTION, int(run_id)),
         ).fetchone()[0]
+
+        posted_n = 0
+        posted_qty = 0.0
+
+        # First post: reverse-of-sales production as IN (never as production OUT)
+        if int(had_prior or 0) == 0:
+            for ln in lines:
+                pid = int(ln["product_id"])
+                phy = round(float(ln.get("physical_qty") or 0), 4)
+                prod, closing = production_qty_formula(
+                    ln.get("opening_qty"),
+                    ln.get("sold_qty"),
+                    ln.get("return_qty"),
+                    ln.get("adj_qty"),
+                    phy,
+                )
+                conn.execute(
+                    """UPDATE production_month_lines
+                       SET production_qty=?, closing_qty=?
+                       WHERE id=?""",
+                    (prod, closing, int(ln["id"])),
+                )
+                ln["production_qty"] = prod
+                ln["closing_qty"] = closing
+                if prod > 0.0001:
+                    _post_production_qty_line(
+                        conn,
+                        warehouse_id=wh,
+                        product_id=pid,
+                        qty_signed=prod,
+                        post_date=post_date,
+                        run_id=int(run_id),
+                        batch_ref=batch_ref,
+                        user_id=user_id,
+                        reason=prod_reason,
+                    )
+                    posted_n += 1
+                    posted_qty += prod
+            book = _stock_as_of_conn(conn, wh, pids, eom_as_of)
 
         deltas = []
         for ln in lines:
@@ -721,8 +771,6 @@ def align_production_month_closing(
                     "or correct Phy."
                 )
 
-        posted_n = 0
-        posted_qty = 0.0
         for ln, pid, phy, delta in deltas:
             _post_production_qty_line(
                 conn,
@@ -733,17 +781,13 @@ def align_production_month_closing(
                 run_id=int(run_id),
                 batch_ref=batch_ref,
                 user_id=user_id,
+                reason=phy_reason,
             )
-            old = round(float(ln.get("production_qty") or 0), 4)
-            new_prod = delta if int(had_prior or 0) == 0 else round(old + delta, 4)
             conn.execute(
-                """UPDATE production_month_lines
-                   SET production_qty=?, closing_qty=?
-                   WHERE id=?""",
-                (new_prod, phy, int(ln["id"])),
+                "UPDATE production_month_lines SET closing_qty=? WHERE id=?",
+                (phy, int(ln["id"])),
             )
             posted_n += 1
-            posted_qty += delta
 
         tot = conn.execute(
             """SELECT COALESCE(SUM(production_qty),0), COALESCE(SUM(physical_qty),0)
@@ -807,10 +851,9 @@ def post_production_month_run(
     user_id=None,
     allow_negative: bool = False,
 ) -> dict:
-    """Post so month-end stock = Phy (next month opening = this closing).
+    """Post reverse-calculated production as stock IN, then true-up month-end = Phy.
 
-    Uses a true-up to physical, not live warehouse qty. Re-running only posts
-    the remaining gap — it does not duplicate a completed post.
+    Re-running only posts remaining Phy gaps — it does not duplicate production IN.
     """
     return align_production_month_closing(
         run_id, user_id=user_id, allow_negative=allow_negative,

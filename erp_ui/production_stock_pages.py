@@ -103,12 +103,13 @@ def _tab_worksheet():
     ym = f"{year:04d}-{int(month):02d}"
 
     st.caption(
-        "**Production** = Phy − OS − Return + Sale − Adj · "
-        "**Closing** = Phy (physical count). "
+        "**Production** = Phy − OS − Return + Sale (reverse of sales → **stock IN**). "
+        "**Closing** = Phy. "
         "Phy is **shared** with Contract Labour physical — enter on either screen. "
         "Tick products, choose **Include / Exclude / Replace**, then **Load**. "
-        "Enter **Phy** only. **Post** sets warehouse stock at month-end = Phy, "
-        "so the next month's opening equals this closing."
+        "Enter **Phy** only. **Post** stocks **IN** the reverse-calculated production, "
+        "then true-ups warehouse at month-end to Phy "
+        "(next month opening = this closing)."
     )
 
     saved = db.get_production_month_run(wh_id, ym)
@@ -149,7 +150,7 @@ def _tab_worksheet():
             "Stock movements for this month are **already in the warehouse** "
             f"({saved.get('batch_ref') or 'production_physical'}). "
             "**Post** will only true-up remaining gaps so month-end stock = Phy "
-            "(next month opening = this closing)."
+            "(next month opening = this closing). Production IN is not posted twice."
         )
 
     items = sorted(
@@ -759,8 +760,9 @@ def _tab_worksheet():
         for ln in out_lines
     ])
     st.caption(
-        "Computed — Production = Phy − OS − Return + Sale − Adj; Closing = Phy. "
-        "Post aligns warehouse stock at month-end to Phy, so next month opening = this closing."
+        "Computed — Production = Phy − OS − Return + Sale (stock IN). Closing = Phy. "
+        "Adj is already in warehouse and is not production. "
+        "Post then true-ups warehouse at month-end to Phy, so next month opening = this closing."
     )
     st.dataframe(result_df, use_container_width=True, hide_index=True)
 
@@ -782,7 +784,7 @@ def _tab_worksheet():
 
     notes = st.text_input("Notes", key=f"prod_phy_notes_{wh_id}_{ym}")
     allow_neg = st.checkbox(
-        "Allow negative production on post (stock out)",
+        "Allow Phy true-up stock-out if book is above Phy",
         value=False,
         key=f"prod_phy_allow_neg_{wh_id}_{ym}",
         disabled=is_posted,
