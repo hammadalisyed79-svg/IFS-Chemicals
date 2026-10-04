@@ -6763,6 +6763,7 @@ from db_production_stock import (  # noqa: F401,E402
     apply_production_stock,
     calculate_production_month,
     get_production_month_run,
+    is_production_month_posted,
     list_production_month_runs,
     post_production_month_run,
     production_qty_formula,

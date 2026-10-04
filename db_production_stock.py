@@ -351,6 +351,43 @@ def calculate_production_month(
     }
 
 
+def is_production_month_posted(
+    year_month: str, warehouse_id: int | None = None,
+) -> dict | None:
+    """Return the posted production run for this month (or None).
+
+    When warehouse_id is None, any warehouse with status=posted locks the month.
+    Used to freeze Contract Labour Physical after Sale & Production is posted.
+    """
+    from database import get_connection, row_to_dict
+
+    ym = str(year_month)[:7]
+    with get_connection() as conn:
+        apply_production_stock(conn)
+        if warehouse_id is not None:
+            row = conn.execute(
+                """SELECT id, warehouse_id, year_month, status, posted_at, batch_ref,
+                          total_physical, total_production
+                   FROM production_month_runs
+                   WHERE warehouse_id=? AND year_month=?
+                     AND LOWER(COALESCE(status,''))='posted'
+                   LIMIT 1""",
+                (int(warehouse_id), ym),
+            ).fetchone()
+        else:
+            row = conn.execute(
+                """SELECT id, warehouse_id, year_month, status, posted_at, batch_ref,
+                          total_physical, total_production
+                   FROM production_month_runs
+                   WHERE year_month=?
+                     AND LOWER(COALESCE(status,''))='posted'
+                   ORDER BY id DESC
+                   LIMIT 1""",
+                (ym,),
+            ).fetchone()
+        return row_to_dict(row) if row else None
+
+
 def get_production_month_run(warehouse_id: int, year_month: str):
     """Load saved draft/posted run + lines, or None."""
     from database import get_connection, row_to_dict, rows_to_list

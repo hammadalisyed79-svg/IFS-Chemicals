@@ -1514,13 +1514,37 @@ def save_contractor_month_run(
     excl_list = _parse_excluded_slip_ids(excluded_slip_ids)
     excl_json = json.dumps(excl_list) if excl_list else None
 
+    # Resolve payment type + lock SKU worksheets once production is posted
+    with get_connection() as conn:
+        apply_contract_labour(conn)
+        crow = conn.execute(
+            "SELECT id, payment_type FROM contract_labourers WHERE id=?",
+            (int(contractor_id),),
+        ).fetchone()
+        if not crow:
+            raise ValueError("Contractor not found.")
+        pay_type = (crow["payment_type"] if crow else "") or ""
+    if pay_type == "sku_carton":
+        try:
+            from db_production_stock import is_production_month_posted
+
+            posted = is_production_month_posted(ym)
+        except Exception:
+            posted = None
+        if posted:
+            raise ValueError(
+                f"Month {ym} production is already posted"
+                + (
+                    f" ({posted.get('batch_ref')})"
+                    if posted.get("batch_ref")
+                    else ""
+                )
+                + ". Reverse production on Sale & Production before editing Physical."
+            )
+
     ts = _now()
     with get_connection() as conn:
         apply_contract_labour(conn)
-        if not conn.execute(
-            "SELECT id FROM contract_labourers WHERE id=?", (int(contractor_id),),
-        ).fetchone():
-            raise ValueError("Contractor not found.")
         existing = conn.execute(
             """SELECT id FROM contract_labour_month_runs
                WHERE contractor_id=? AND year_month=?""",
@@ -1565,11 +1589,6 @@ def save_contractor_month_run(
                     ln["closing_stock"], ln["rate"], ln["amount"], ln["sort_order"],
                 ),
             )
-        pay_row = conn.execute(
-            "SELECT payment_type FROM contract_labourers WHERE id=?",
-            (int(contractor_id),),
-        ).fetchone()
-        pay_type = (pay_row["payment_type"] if pay_row else "") or ""
 
     # Outside the write transaction — sync shared physical (avoids nested connections)
     if pay_type == "sku_carton":
@@ -1595,6 +1614,8 @@ def save_contractor_month_run(
                         ym, to_write, source="contractor", user_id=user_id,
                         sync_worksheets=True,
                     )
+            except ValueError:
+                raise
             except Exception:
                 pass
     try:

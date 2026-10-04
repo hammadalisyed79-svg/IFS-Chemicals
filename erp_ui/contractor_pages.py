@@ -655,22 +655,50 @@ def _tab_month_preview():
     fd, td = month_bounds(int(year), int(month))
     ym = f"{int(year):04d}-{int(month):02d}"
 
+    prod_posted = None
+    try:
+        prod_posted = db.is_production_month_posted(ym)
+    except Exception:
+        prod_posted = None
+    month_locked = bool(prod_posted)
+
     st.markdown(
         f"**All contractors → warehouse** · Physical on **{td}** becomes opening on "
         f"**next day**. One click posts every SKU contractor (and any other contractor "
         f"Phy) so 1st of next month opening = this month-end Physical."
     )
+    if month_locked:
+        st.warning(
+            f"**{ym} is locked** — Sale & Production is already **posted**"
+            + (
+                f" ({prod_posted.get('batch_ref')})"
+                if prod_posted.get("batch_ref")
+                else ""
+            )
+            + (
+                f" on {prod_posted.get('posted_at')}"
+                if prod_posted.get("posted_at")
+                else ""
+            )
+            + ". Physical (month-end) and Save are disabled. "
+            "To change Phy, reverse production on **Sale & Production** first."
+        )
     post_all = st.button(
         f"Post all contractors: {td} closing → next-day opening",
         key="cl_post_all_phy",
         type="primary",
+        disabled=month_locked,
         help=(
-            "Sets warehouse stock at month-end = Physical from all contractor "
-            "worksheets. Next month's opening equals that closing. "
-            "Safe to click again — only remaining gaps are posted."
+            "Month locked — reverse production first."
+            if month_locked
+            else (
+                "Sets warehouse stock at month-end = Physical from all contractor "
+                "worksheets. Next month's opening equals that closing. "
+                "Safe to click again — only remaining gaps are posted."
+            )
         ),
     )
-    if post_all:
+    if post_all and not month_locked:
         try:
             result = db.post_contractors_physical_month(
                 ym, user_id=hlp.uid(), allow_negative=True,
@@ -1631,12 +1659,19 @@ def _tab_month_preview():
         }
         summary = {k: v for k, v in summary.items() if v is not None}
     else:
-        st.markdown(
-            "**Worksheet** — edit **Physical (month-end)** only; "
-            "Closing and Amount update below. "
-            "Same physical feeds **Sale & Production → Phy**. "
-            "Enter values and click **Save month record** (avoid clicking elsewhere mid-edit)."
-        )
+        if month_locked:
+            st.markdown(
+                "**Worksheet (locked)** — production already posted for this month. "
+                "Physical, Closing and Amount are read-only. "
+                "Reverse production on **Sale & Production** to unlock."
+            )
+        else:
+            st.markdown(
+                "**Worksheet** — edit **Physical (month-end)** only; "
+                "Closing and Amount update below. "
+                "Same physical feeds **Sale & Production → Phy**. "
+                "Enter values and click **Save month record** (avoid clicking elsewhere mid-edit)."
+            )
         editor_key = f"cl_ws_editor_{cid}_{ym}"
         seed_key = f"{editor_key}_seed"
         # Stable seed: rebuild only when editor remounts (Load / Save). Passing a
@@ -1670,15 +1705,18 @@ def _tab_month_preview():
             int(ln["product_id"]): (ln.get("billing_basis") or "closing")
             for ln in lines
         }
+        disabled_cols = [
+            "product_id", "Code", "Product", "Basis", "Sold Qty",
+            "Stock in hand", "Sale return", "Rate",
+        ]
+        if month_locked:
+            disabled_cols.append("Physical Manual")
         edited = st.data_editor(
             edit_df,
             hide_index=True,
             use_container_width=True,
             num_rows="fixed",
-            disabled=[
-                "product_id", "Code", "Product", "Basis", "Sold Qty",
-                "Stock in hand", "Sale return", "Rate",
-            ],
+            disabled=disabled_cols,
             column_config={
                 "product_id": None,
                 "Code": st.column_config.TextColumn("Code", width="small"),
@@ -1689,7 +1727,11 @@ def _tab_month_preview():
                 "Sale return": st.column_config.NumberColumn("Sale return", format="%.2f"),
                 "Physical Manual": st.column_config.NumberColumn(
                     "Physical (month-end)",
-                    help="Month-end physical count — shared with Sale & Production.",
+                    help=(
+                        "Locked — production already posted."
+                        if month_locked
+                        else "Month-end physical count — shared with Sale & Production."
+                    ),
                     min_value=0.0, step=1.0, format="%.2f",
                 ),
                 "Rate": st.column_config.NumberColumn("Rate", format="%.4f"),
@@ -1828,10 +1870,30 @@ def _tab_month_preview():
     notes = st.text_input(
         "Save notes (optional)",
         key=notes_key,
-        help="Saved with the month record and printed on the report. "
-             "Press Enter in the Physical Manual cell first so values are kept, then Save.",
+        disabled=month_locked and not is_prod and not is_lu and not is_purchase,
+        help=(
+            "Month locked — reverse production first."
+            if month_locked and not is_prod and not is_lu and not is_purchase
+            else (
+                "Saved with the month record and printed on the report. "
+                "Press Enter in the Physical Manual cell first so values are kept, then Save."
+            )
+        ),
     )
-    if st.button("Save month record", type="primary", key=f"cl_month_save_{cid}_{ym}"):
+    save_disabled = bool(month_locked and not is_prod and not is_lu and not is_purchase)
+    if st.button(
+        "Save month record",
+        type="primary",
+        key=f"cl_month_save_{cid}_{ym}",
+        disabled=save_disabled,
+        help="Month locked — reverse production first." if save_disabled else None,
+    ):
+        if save_disabled:
+            st.error(
+                f"Month {ym} is locked — production already posted. "
+                "Reverse production on Sale & Production before saving."
+            )
+            return
         try:
             excl_save = None
             if is_lu:

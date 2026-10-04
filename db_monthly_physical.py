@@ -211,6 +211,28 @@ def upsert_physical_map(
     if not cleaned:
         return 0
 
+    # Freeze Physical once Sale & Production is posted for this month
+    try:
+        from db_production_stock import is_production_month_posted
+
+        posted = is_production_month_posted(ym, warehouse_id=wh)
+        if posted is None:
+            posted = is_production_month_posted(ym)
+        if posted:
+            raise ValueError(
+                f"Month {ym} production is already posted"
+                + (
+                    f" ({posted.get('batch_ref')})"
+                    if posted.get("batch_ref")
+                    else ""
+                )
+                + ". Reverse production first before changing Physical."
+            )
+    except ValueError:
+        raise
+    except Exception:
+        pass
+
     ts = now()
     with get_connection() as conn:
         apply_monthly_physical(conn)
