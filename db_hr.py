@@ -134,6 +134,13 @@ def apply_hr(conn, db_module):
             "ON CONFLICT(key) DO UPDATE SET value='9'"
         )
         ver = 9
+    if ver < 10:
+        _apply_hr_v10(conn)
+        conn.execute(
+            "INSERT INTO schema_meta(key,value) VALUES('hr_version','10') "
+            "ON CONFLICT(key) DO UPDATE SET value='10'"
+        )
+        ver = 10
     # Idempotent: ensure Cash & HR role exists (do not re-assign users)
     try:
         aid = conn.execute("SELECT id FROM users WHERE username='admin'").fetchone()
@@ -198,6 +205,15 @@ def _apply_hr_v9(conn):
     _add_col(conn, "employee_advances", "settled_at", "TEXT")
     _add_col(conn, "employee_advances", "settled_by", "INTEGER")
     _add_col(conn, "employee_advances", "settlement_notes", "TEXT")
+
+
+def _apply_hr_v10(conn):
+    """Cash/bank loan recovery (employee pays installment in cash, not from salary)."""
+    _add_col(conn, "employee_loans", "settlement_document_no", "TEXT")
+    _add_col(conn, "employee_loans", "settled_at", "TEXT")
+    _add_col(conn, "employee_loans", "settled_by", "INTEGER")
+    _add_col(conn, "employee_loans", "settlement_notes", "TEXT")
+    _add_col(conn, "loan_installments", "cash_document_no", "TEXT")
 
 def _col_exists(conn, table, col):
     return col in [r[1] for r in conn.execute(f"PRAGMA table_info({table})").fetchall()]
@@ -4632,6 +4648,290 @@ def issue_loan(loan_id, user_id, payment_mode="cash", bank_account_id=None):
         }
 
 
+def list_loans_for_cash_recovery(limit: int = 80):
+    """Issued loans with outstanding — employee can pay cash instead of salary deduction."""
+    from database import get_connection, rows_to_list
+    with get_connection() as conn:
+        apply_hr(conn, __import__("database"))
+        rows = rows_to_list(conn.execute(
+            """SELECT l.*, e.full_name AS employee_name, e.code AS employee_code
+               FROM employee_loans l
+               JOIN employees e ON e.id=l.employee_id
+               WHERE l.status='issued' AND COALESCE(l.outstanding_amount,0)>0.01
+               ORDER BY l.id DESC
+               LIMIT ?""",
+            (int(limit),),
+        ).fetchall())
+    for r in rows:
+        code = (r.get("employee_code") or "").strip()
+        name = (r.get("employee_name") or "").strip()
+        if code and name:
+            r["employee_name"] = f"{code} - {name}"
+        r["effective_outstanding"] = round(float(r.get("outstanding_amount") or 0), 2)
+    return rows
+
+
+def _undo_draft_payroll_loan_recoveries_for_loan(conn, loan_id) -> list[int]:
+    """Un-apply recoveries sitting only on draft payroll so cash can be booked instead."""
+    rows = conn.execute(
+        """SELECT li.id, li.amount, li.payroll_id, pr.status, pr.document_no
+           FROM loan_installments li
+           LEFT JOIN payroll_runs pr ON pr.id=li.payroll_id
+           WHERE li.loan_id=? AND COALESCE(li.recovered,0)=1
+             AND li.payroll_id IS NOT NULL""",
+        (int(loan_id),),
+    ).fetchall()
+    payroll_ids = []
+    for row in rows:
+        st = str(row["status"] or "").lower()
+        if st and st not in ("draft",):
+            continue
+        amt = round(float(row["amount"] or 0), 2)
+        cur = conn.execute(
+            "SELECT recovered_amount, outstanding_amount, amount FROM employee_loans WHERE id=?",
+            (int(loan_id),),
+        ).fetchone()
+        if cur and amt > 0:
+            new_rec = max(0.0, float(cur[0] or 0) - amt)
+            new_out = min(float(cur[2] or 0), float(cur[1] or 0) + amt)
+            conn.execute(
+                """UPDATE employee_loans
+                   SET recovered_amount=?, outstanding_amount=?, status='issued'
+                   WHERE id=?""",
+                (new_rec, new_out, int(loan_id)),
+            )
+        conn.execute(
+            """UPDATE loan_installments
+               SET recovered=0, recovered_date=NULL, payroll_id=NULL, cash_document_no=NULL
+               WHERE id=?""",
+            (int(row["id"]),),
+        )
+        if row["payroll_id"]:
+            payroll_ids.append(int(row["payroll_id"]))
+    _rebuild_unpaid_loan_installments(conn, int(loan_id))
+    return sorted(set(payroll_ids))
+
+
+def _apply_loan_cash_to_installments(conn, loan_id, amount, rec_date, doc_no) -> float:
+    """Mark unpaid installments recovered by cash (no payroll_id). Returns applied amount."""
+    left = round(float(amount or 0), 2)
+    applied = 0.0
+    rec_date = str(rec_date)[:10]
+    while left > 0.009:
+        ln = conn.execute(
+            "SELECT outstanding_amount, recovered_amount, amount FROM employee_loans WHERE id=?",
+            (int(loan_id),),
+        ).fetchone()
+        if not ln or float(ln[0] or 0) <= 0.009:
+            break
+        inst = conn.execute(
+            """SELECT id, amount FROM loan_installments
+               WHERE loan_id=? AND COALESCE(recovered,0)=0
+               ORDER BY installment_no LIMIT 1""",
+            (int(loan_id),),
+        ).fetchone()
+        full = float(inst[1] or 0) if inst else float(ln[0] or 0)
+        amt = round(min(left, full, float(ln[0] or 0)), 2)
+        if amt <= 0.009:
+            break
+        new_out = round(float(ln[0] or 0) - amt, 2)
+        new_rec = round(float(ln[1] or 0) + amt, 2)
+        conn.execute(
+            "UPDATE employee_loans SET recovered_amount=?, outstanding_amount=?, status=? WHERE id=?",
+            (new_rec, new_out, "closed" if new_out <= 0.01 else "issued", int(loan_id)),
+        )
+        if inst:
+            leftover = round(full - amt, 2)
+            conn.execute(
+                """UPDATE loan_installments
+                   SET amount=?, recovered=1, recovered_date=?, payroll_id=NULL,
+                       cash_document_no=?
+                   WHERE id=?""",
+                (amt, rec_date, doc_no, int(inst[0])),
+            )
+            if leftover > 0.01:
+                nxt = conn.execute(
+                    """SELECT id, amount FROM loan_installments
+                       WHERE loan_id=? AND COALESCE(recovered,0)=0
+                       ORDER BY installment_no LIMIT 1""",
+                    (int(loan_id),),
+                ).fetchone()
+                if nxt:
+                    conn.execute(
+                        "UPDATE loan_installments SET amount=? WHERE id=?",
+                        (round(float(nxt[1] or 0) + leftover, 2), int(nxt[0])),
+                    )
+                else:
+                    max_no = conn.execute(
+                        "SELECT COALESCE(MAX(installment_no),0) FROM loan_installments WHERE loan_id=?",
+                        (int(loan_id),),
+                    ).fetchone()[0]
+                    conn.execute(
+                        """INSERT INTO loan_installments(loan_id,installment_no,due_date,amount)
+                           VALUES(?,?,?,?)""",
+                        (int(loan_id), int(max_no) + 1, rec_date, leftover),
+                    )
+        else:
+            max_no = conn.execute(
+                "SELECT COALESCE(MAX(installment_no),0) FROM loan_installments WHERE loan_id=?",
+                (int(loan_id),),
+            ).fetchone()[0]
+            conn.execute(
+                """INSERT INTO loan_installments(
+                       loan_id, installment_no, due_date, amount,
+                       recovered, recovered_date, payroll_id, cash_document_no
+                   ) VALUES(?,?,?,?,1,?,NULL,?)""",
+                (int(loan_id), int(max_no) + 1, rec_date, amt, rec_date, doc_no),
+            )
+        left = round(left - amt, 2)
+        applied = round(applied + amt, 2)
+    return applied
+
+
+def _sync_open_draft_loan_recoveries(conn, employee_id):
+    """Refresh Loan column on every unpaid draft payroll after cash recovery."""
+    rows = conn.execute(
+        """SELECT DISTINCT pr.payroll_year, pr.payroll_month
+           FROM payroll_runs pr
+           JOIN payroll_lines pl ON pl.payroll_id=pr.id
+           WHERE pr.status='draft' AND pl.employee_id=?
+             AND COALESCE(pl.paid_status,'') != 'paid'""",
+        (int(employee_id),),
+    ).fetchall()
+    last = None
+    for r in rows:
+        sm = f"{int(r[0]):04d}-{int(r[1]):02d}"
+        last = _sync_employee_recoveries_on_draft_payroll(conn, int(employee_id), sm)
+    return last
+
+
+def settle_loan_cash_recovery(
+    loan_id,
+    user_id,
+    *,
+    amount=None,
+    return_date=None,
+    payment_mode="cash",
+    bank_account_id=None,
+    notes=None,
+):
+    """Employee paid loan recovery in cash/bank instead of salary deduction.
+
+    GL: Dr Cash/Bank, Cr Employee Advance (100180).
+    Marks installments recovered without payroll_id so employee ledger shows a credit
+    and draft payroll Loan column is reduced.
+    """
+    import database as db
+    from db_v3 import post_gl, post_gl_account_id, resolve_cash_account_id
+
+    mode = (payment_mode or "cash").lower()
+    if mode not in ("cash", "bank"):
+        raise ValueError("Payment mode must be cash or bank.")
+    if mode == "bank" and not bank_account_id:
+        raise ValueError("Select a bank account for bank receipt.")
+
+    with db.get_connection() as conn:
+        apply_hr(conn, db)
+        ln = conn.execute(
+            """SELECT l.*, e.full_name AS employee_name, e.code AS emp_code
+               FROM employee_loans l
+               JOIN employees e ON e.id=l.employee_id
+               WHERE l.id=?""",
+            (int(loan_id),),
+        ).fetchone()
+        if not ln:
+            raise ValueError("Loan not found.")
+        ln = dict(ln)
+        if (ln.get("status") or "").lower() != "issued":
+            raise ValueError("Only issued loans can receive cash recovery.")
+
+        _undo_draft_payroll_loan_recoveries_for_loan(conn, int(loan_id))
+        ln = dict(conn.execute(
+            """SELECT l.*, e.full_name AS employee_name, e.code AS emp_code
+               FROM employee_loans l
+               JOIN employees e ON e.id=l.employee_id
+               WHERE l.id=?""",
+            (int(loan_id),),
+        ).fetchone())
+        out_amt = round(float(ln.get("outstanding_amount") or 0), 2)
+        if out_amt <= 0.01:
+            raise ValueError("Loan outstanding is already NIL.")
+        pay_amt = round(float(amount if amount is not None else out_amt), 2)
+        if pay_amt <= 0.01:
+            raise ValueError("Enter a cash recovery amount greater than zero.")
+        if pay_amt > out_amt + 0.05:
+            raise ValueError(
+                f"Cash recovery Rs. {pay_amt:,.2f} exceeds outstanding Rs. {out_amt:,.2f}."
+            )
+        pay_amt = min(pay_amt, out_amt)
+
+        post_date = str(return_date or date.today())[:10]
+        emp_lbl = f"{ln.get('employee_name') or ''} ({ln.get('emp_code') or ''})".strip()
+        label = f"Loan recovery {ln['document_no']} - {emp_lbl}"
+        if notes:
+            label = f"{label} — {str(notes).strip()[:80]}"
+        adv_acct = conn.execute(
+            "SELECT id FROM chart_of_accounts WHERE code=?", (HR_AC["employee_advance"],)
+        ).fetchone()
+        adv_acct_id = int(adv_acct[0]) if adv_acct else None
+        if not adv_acct_id:
+            raise ValueError("Employee Advance account (100180) not found.")
+
+        if mode == "cash":
+            entry_id, doc_no = db._add_cash_receipt(
+                conn, post_date, label, ln["document_no"], pay_amt, user_id,
+                account_id=adv_acct_id,
+                party_type="account", party_id=adv_acct_id,
+            )
+            asset_id = resolve_cash_account_id(conn)
+        else:
+            entry_id, doc_no = db._add_bank_receipt(
+                conn, post_date, label, ln["document_no"], pay_amt, bank_account_id, user_id,
+                party_type="account", party_id=adv_acct_id,
+            )
+            asset_id = bank_account_id
+        if not asset_id:
+            raise ValueError("Cash/bank account not found for settlement receipt.")
+
+        post_gl_account_id(
+            conn, post_date, asset_id, pay_amt, 0,
+            label, "employee_loan_recovery", int(loan_id), doc_no, user_id,
+        )
+        post_gl(
+            conn, post_date, HR_AC["employee_advance"], 0, pay_amt,
+            label, "employee_loan_recovery", int(loan_id), doc_no, user_id,
+        )
+
+        applied = _apply_loan_cash_to_installments(
+            conn, int(loan_id), pay_amt, post_date, doc_no,
+        )
+        conn.execute(
+            """UPDATE employee_loans
+               SET settlement_document_no=?, settled_at=?, settled_by=?, settlement_notes=?
+               WHERE id=?""",
+            (doc_no, now(), user_id, (str(notes).strip() if notes else None), int(loan_id)),
+        )
+        remaining = float(conn.execute(
+            "SELECT outstanding_amount FROM employee_loans WHERE id=?",
+            (int(loan_id),),
+        ).fetchone()[0] or 0)
+        if remaining > 0.01:
+            _rebuild_unpaid_loan_installments(conn, int(loan_id))
+        sync = _sync_open_draft_loan_recoveries(conn, ln["employee_id"])
+        return {
+            "document_no": ln["document_no"],
+            "settlement_document_no": doc_no,
+            "receipt_id": entry_id,
+            "vch_source": "cash_receipt" if mode == "cash" else "bank_receipt",
+            "amount": applied,
+            "outstanding": round(remaining, 2),
+            "payment_mode": mode,
+            "employee": ln.get("employee_name"),
+            "return_date": post_date,
+            "payroll_sync": sync,
+        }
+
+
 def resolve_cash_bank_voucher(document_no):
     """Map CP-/BP- document_no → {id, vch_source, document_no} for print toolbar."""
     from database import get_connection
@@ -4951,6 +5251,45 @@ def get_employee_ledger(employee_id, from_date=None, to_date=None):
         ).fetchall()):
             dt = ln.get("issued_at") or ln.get("issue_date")
             raw.append((dt, ln["document_no"], "Loan issued", float(ln["amount"] or 0), 0.0))
+
+        try:
+            for rec in rows_to_list(conn.execute(
+                """SELECT li.recovered_date, li.cash_document_no, li.amount, l.document_no
+                   FROM loan_installments li
+                   JOIN employee_loans l ON l.id=li.loan_id
+                   WHERE l.employee_id=?
+                     AND COALESCE(li.recovered,0)=1
+                     AND TRIM(COALESCE(li.cash_document_no,'')) != ''""",
+                (employee_id,),
+            ).fetchall()):
+                raw.append((
+                    rec.get("recovered_date"),
+                    rec.get("cash_document_no") or rec.get("document_no"),
+                    f"Loan recovery cash ({rec.get('document_no') or 'loan'})",
+                    0.0,
+                    float(rec.get("amount") or 0),
+                ))
+        except Exception:
+            pass
+
+        try:
+            for advs in rows_to_list(conn.execute(
+                """SELECT settled_at, settlement_document_no, document_no,
+                          COALESCE(recovered_amount, amount) AS amt
+                   FROM employee_advances
+                   WHERE employee_id=?
+                     AND TRIM(COALESCE(settlement_document_no,'')) != ''""",
+                (employee_id,),
+            ).fetchall()):
+                raw.append((
+                    advs.get("settled_at"),
+                    advs.get("settlement_document_no") or advs.get("document_no"),
+                    f"Advance return cash ({advs.get('document_no') or 'ADV'})",
+                    0.0,
+                    float(advs.get("amt") or 0),
+                ))
+        except Exception:
+            pass
 
         payroll_rows = rows_to_list(conn.execute(
             """SELECT pr.document_no, pr.run_date, pr.payroll_month, pr.payroll_year, pr.status,

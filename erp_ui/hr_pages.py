@@ -4342,6 +4342,101 @@ def page_loans():
             outstanding_fn=db.report_outstanding_loans,
             outstanding_heading="Outstanding Loans",
         )
+        open_loans = []
+        if hasattr(db, "list_loans_for_cash_recovery"):
+            open_loans = db.list_loans_for_cash_recovery() or []
+        if open_loans and db.user_can_hr(st.session_state.user, "post"):
+            st.subheader("Cash / bank loan recovery")
+            st.caption(
+                "Employee paid the installment **in cash** (not deducted from salary). "
+                "This posts a **Cash Receipt**, credits account **100180**, reduces loan outstanding, "
+                "shows a credit on **Employee Ledger**, and lowers draft payroll **Loan recovery** "
+                "so salary is not deducted twice. Do **not** also enter a separate cash-book receipt. "
+                "Cash day for the receipt date must be **open**."
+            )
+            loan_pick = {
+                f"{r['document_no']} · {r['employee_name']} · "
+                f"out {fmt(r.get('effective_outstanding'))} · "
+                f"inst {fmt(r.get('monthly_installment'))}": r
+                for r in open_loans
+            }
+            loan_sel = st.selectbox(
+                "Issued loan",
+                list(loan_pick.keys()),
+                key="hr_loan_cash_sel",
+            )
+            row = loan_pick[loan_sel]
+            out_now = float(row.get("effective_outstanding") or 0)
+            inst_now = float(row.get("monthly_installment") or 0)
+            default_pay = inst_now if 0.01 < inst_now <= out_now else out_now
+            c1, c2, c3, c4 = st.columns([1.1, 1.1, 1.0, 1.4])
+            rec_date = c1.date_input(
+                "Receipt date",
+                value=date.today(),
+                key="hr_loan_cash_date",
+            )
+            rec_amt = c2.number_input(
+                "Amount received",
+                min_value=0.0,
+                max_value=float(out_now),
+                value=float(default_pay),
+                step=100.0,
+                key="hr_loan_cash_amt",
+                help=f"Outstanding {fmt(out_now)}. Monthly installment {fmt(inst_now)}.",
+            )
+            rec_mode = c3.radio(
+                "Receive as", ["cash", "bank"], horizontal=True,
+                key="hr_loan_cash_mode",
+            )
+            rec_bank_id = None
+            if rec_mode == "bank":
+                bank_accts = [
+                    a for a in db.get_accounts()
+                    if (a.get("account_type") or "").lower() in ("bank", "asset")
+                    and str(a.get("code") or "").startswith("11")
+                ] or [a for a in db.get_accounts() if a.get("is_active")]
+                bank_opts = {f"{a['code']} - {a['name']}": a["id"] for a in bank_accts}
+                if bank_opts:
+                    rec_bank_id = bank_opts[st.selectbox(
+                        "Bank account", list(bank_opts.keys()), key="hr_loan_cash_bank",
+                    )]
+            rec_notes = c4.text_input(
+                "Notes (optional)",
+                value="Loan recovery in cash",
+                key="hr_loan_cash_notes",
+            )
+            if st.button(
+                "Post cash recovery to ledger",
+                type="primary",
+                key="hr_loan_cash_btn",
+                use_container_width=True,
+            ):
+                try:
+                    if rec_mode == "bank" and not rec_bank_id:
+                        raise ValueError("Select bank account.")
+                    res = db.settle_loan_cash_recovery(
+                        row["id"],
+                        uid(),
+                        amount=float(rec_amt),
+                        return_date=str(rec_date),
+                        payment_mode=rec_mode,
+                        bank_account_id=rec_bank_id,
+                        notes=rec_notes,
+                    )
+                    msg = (
+                        f"**{res['document_no']}** — receipt **{res['settlement_document_no']}** "
+                        f"({fmt(res['amount'])}) on {res.get('return_date')}. "
+                        f"Outstanding now **{fmt(res.get('outstanding'))}**."
+                    )
+                    sync = res.get("payroll_sync") or {}
+                    if sync.get("synced"):
+                        msg += (
+                            f" Draft **{sync.get('payroll_no')}** Loan recovery now "
+                            f"**{fmt(sync.get('loan_recovery'))}**."
+                        )
+                    ff.action_done(msg, retain={"hr_loan_tab": "Loan List"})
+                except Exception as e:
+                    st.error(str(e))
     elif tab == "New Request":
         emps = _emp_opts()
         if not emps:
@@ -4657,9 +4752,11 @@ def page_employee_ledger():
     require_hr("view")
     std_page_header("Employee Ledger", status="posted", status_kind="shell")
     st.caption(
-        "Debit = advance/loan issued or salary paid. Credit = recoveries and net salary accrued. "
+        "Debit = advance/loan issued or salary paid. Credit = salary recoveries, "
+        "**cash loan recovery**, advance cash return, and net salary accrued. "
         "Closing = outstanding advance + loan − unpaid salary. "
-        "Opening Balance adjusts for imported payroll recoveries that have no matching issue documents."
+        "To book cash loan recovery: **HR → Employee Loans → Cash / bank loan recovery** "
+        "(do not deduct the same amount again on payroll)."
     )
     emps = _emp_opts()
     if not emps:
