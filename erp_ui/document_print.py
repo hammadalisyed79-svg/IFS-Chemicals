@@ -441,7 +441,9 @@ def _sales_invoice_money_rows(inv, *, has_disc: bool = False) -> list[tuple[str,
         rows.append(("Loading", loading))
     if other > 0.005:
         rows.append(("Other Charges", other))
-    if abs(round_off) > 0.005:
+    if round_off < -0.005:
+        rows.append(("Manual Discount", round_off))
+    elif abs(round_off) > 0.005:
         rows.append(("Round Off", round_off))
     return rows
 

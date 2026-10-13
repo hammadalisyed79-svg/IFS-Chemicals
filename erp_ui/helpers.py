@@ -1572,7 +1572,12 @@ def invoice_tax_form(key_prefix, line_items, defaults=None, party_id=None, party
             "Discount is on RP only and does **not** reduce Sales Tax."
         )
 
-    ch1, ch2, ch3, ch4 = st.columns(4)
+    st.caption(
+        "**Charges:** enter full Freight / Loading / Other. "
+        "To discount freight or any bill amount, use **Manual discount** (Rs) — "
+        "or type the already-discounted freight amount."
+    )
+    ch1, ch2, ch3, ch4, ch5 = st.columns(5)
     with ch1:
         freight = money_input(
             "Freight", value=float(defaults.get("freight", 0)), key=f"{key_prefix}_freight", min_value=0.0,
@@ -1585,10 +1590,28 @@ def invoice_tax_form(key_prefix, line_items, defaults=None, party_id=None, party
         other = money_input(
             "Other Charges", value=float(defaults.get("other_charges", 0)), key=f"{key_prefix}_other", min_value=0.0,
         )
+    # Manual discount is stored inside round_off as a negative amount (no new DB column).
+    # On edit: prior negative round_off loads as Manual discount; leftover ± paisa stays in Round Off.
+    prior_round = float(defaults.get("round_off") or 0)
+    default_manual = abs(prior_round) if prior_round < -0.005 else 0.0
+    default_round = prior_round if prior_round >= -0.005 else 0.0
     with ch4:
-        round_off = money_input(
-            "Round Off", value=float(defaults.get("round_off", 0)), key=f"{key_prefix}_round",
+        manual_disc = money_input(
+            "Manual discount",
+            value=float(defaults.get("manual_discount", default_manual) or 0),
+            key=f"{key_prefix}_manual_disc",
+            min_value=0.0,
+            help="Rs discount on freight / charges / bill total (not product Disc %). Example: freight 40,640 with 2,000 off → Manual discount 2,000.",
         )
+    with ch5:
+        round_adj = money_input(
+            "Round Off",
+            value=float(defaults.get("round_off_adj", default_round) or 0),
+            key=f"{key_prefix}_round",
+            help="Small ± paisa adjustment only. Prefer Manual discount for bill/freight discounts.",
+        )
+    # Combined stored field: round_off = round_adj − manual_disc
+    round_off = round(float(round_adj or 0) - float(manual_disc or 0), 2)
 
     hdr = {
         "discount_pct": discount_pct,
@@ -1613,6 +1636,12 @@ def invoice_tax_form(key_prefix, line_items, defaults=None, party_id=None, party
     totals["loading_charges"] = loading
     totals["other_charges"] = other
     totals["round_off"] = round_off
+    totals["manual_discount"] = float(manual_disc or 0)
+    if float(manual_disc or 0) > 0.005:
+        st.caption(
+            f"Manual discount **{fmt_money(manual_disc)}** reduces net "
+            f"(freight/charges/bill). Net invoice **{fmt_money(totals.get('total'))}**."
+        )
 
     # RP total = ex-tax base before discount (for MRP mode display)
     rp_total = float(totals.get("rp_base") or 0)
