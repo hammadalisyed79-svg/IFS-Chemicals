@@ -195,9 +195,17 @@ def compute_document_totals(line_items, header=None, get_tax_rate_fn=None):
     add_tax = _r(sums["sales_tax"] + sums["further_tax"] + sums["extra_tax"] + sums["fed_tax"])
     sums["total_tax"] = add_tax
     total = _r(sums["taxable"] + add_tax - sums["wht_tax"])
+    # Freight / loading / other / round-off increase invoice total (party AR/AP).
+    charges = 0.0
     if header:
-        charges = sum(float(header.get(k) or 0) for k in ("freight", "loading_charges", "other_charges", "round_off"))
+        charges = _r(
+            sum(
+                float(header.get(k) or 0)
+                for k in ("freight", "loading_charges", "other_charges", "round_off")
+            )
+        )
         total = _r(total + charges)
+    sums["charges"] = charges
     sums["total"] = total
     sums["net_amount"] = total
     sums["discount_pct"] = default_disc
@@ -205,8 +213,9 @@ def compute_document_totals(line_items, header=None, get_tax_rate_fn=None):
     sums["tax_pct"] = _r(add_tax / sums["taxable"] * 100) if sums["taxable"] else 0.0
     sums["tax_inclusive"] = int(tax_inclusive)
 
-    # Balance validation: debits = credits pattern
-    credits = _r(sums["taxable"] + add_tax)
+    # Balance: Customer/Supplier total + WHT = Taxable + Tax + Charges
+    # (WHT is deducted from party total but still a debit/credit on the tax side.)
+    credits = _r(sums["taxable"] + add_tax + charges)
     debits = _r(total + sums["wht_tax"])
     if abs(credits - debits) > 0.02:
         raise ValueError(f"Invoice totals not balanced: credits {credits} vs debits {debits}")

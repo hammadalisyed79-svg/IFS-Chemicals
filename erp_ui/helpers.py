@@ -1608,13 +1608,11 @@ def invoice_tax_form(key_prefix, line_items, defaults=None, party_id=None, party
             row.pop("discount_pct", None)
         calc_lines.append(row)
     totals = db.compute_invoice_totals(calc_lines, hdr)
-    charges = float(freight) + float(loading) + float(other) + float(round_off)
-    net_with_charges = float(totals.get("total") or 0) + charges
+    # compute_invoice_totals already includes freight/loading/other/round_off in total
     totals["freight"] = freight
     totals["loading_charges"] = loading
     totals["other_charges"] = other
     totals["round_off"] = round_off
-    totals["total"] = net_with_charges
 
     # RP total = ex-tax base before discount (for MRP mode display)
     rp_total = float(totals.get("rp_base") or 0)

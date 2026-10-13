@@ -7005,12 +7005,19 @@ def post_sales_invoice_gl(invoice_id, user_id):
         taxable = _invoice_taxable(inv)
         tax_payable = _invoice_tax_payable(inv)
         wht = round(inv.get("wht_tax") or 0, 2)
+        charges = round(
+            sum(
+                float(inv.get(k) or 0)
+                for k in ("freight", "loading_charges", "other_charges", "round_off")
+            ),
+            2,
+        )
         ref = inv["document_no"]
         dt = inv["invoice_date"]
         party = _gl_party_label(conn, "sales_invoice", invoice_id)
 
         debits = round((total - paid) + paid + wht, 2)
-        credits = round(taxable + tax_payable, 2)
+        credits = round(taxable + tax_payable + charges, 2)
         if abs(debits - credits) > 0.02:
             raise ValueError(f"Sales invoice GL not balanced: debits {debits} credits {credits}")
 
@@ -7019,6 +7026,12 @@ def post_sales_invoice_gl(invoice_id, user_id):
             _gl_narration("Sales invoice", party), "sales_invoice", invoice_id, ref, user_id,
         )
         post_gl(conn, dt, gl_account_code("sales"), 0, taxable, _gl_narration("Sales revenue", party), "sales_invoice", invoice_id, ref, user_id)
+        if charges:
+            post_gl(
+                conn, dt, gl_account_code("sales"), 0, charges,
+                _gl_narration("Freight / other charges", party),
+                "sales_invoice", invoice_id, ref, user_id,
+            )
         if tax_payable:
             post_gl(conn, dt, gl_account_code("st_payable"), 0, tax_payable, _gl_narration("Sales tax / Output tax", party), "sales_invoice", invoice_id, ref, user_id)
         if wht:
@@ -7083,16 +7096,29 @@ def post_purchase_invoice_gl(invoice_id, user_id):
         taxable = _invoice_taxable(inv)
         input_tax = _invoice_tax_payable(inv)
         wht = round(inv.get("wht_tax") or 0, 2)
+        charges = round(
+            sum(
+                float(inv.get(k) or 0)
+                for k in ("freight", "loading_charges", "other_charges", "round_off")
+            ),
+            2,
+        )
         ref = inv["document_no"]
         dt = inv["invoice_date"]
         party = _gl_party_label(conn, "purchase_invoice", invoice_id)
 
-        debits = round(taxable + input_tax, 2)
+        debits = round(taxable + input_tax + charges, 2)
         credits = round((total - paid) + paid + wht, 2)
         if abs(debits - credits) > 0.02:
             raise ValueError(f"Purchase invoice GL not balanced: debits {debits} credits {credits}")
 
         post_gl(conn, dt, gl_account_code("raw_inv"), taxable, 0, _gl_narration("Purchase", party), "purchase_invoice", invoice_id, ref, user_id)
+        if charges:
+            post_gl(
+                conn, dt, gl_account_code("raw_inv"), charges, 0,
+                _gl_narration("Freight / other charges", party),
+                "purchase_invoice", invoice_id, ref, user_id,
+            )
         if input_tax:
             post_gl(conn, dt, gl_account_code("st_receivable"), input_tax, 0, _gl_narration("Input tax", party), "purchase_invoice", invoice_id, ref, user_id)
         post_gl(
