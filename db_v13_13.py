@@ -260,12 +260,28 @@ def persist_invoice_v13_extras(conn, table: str, record_id: int, data: dict) -> 
         return
     if not _table_exists(conn, table):
         return
+    # Always persist charge amounts when present (0 clears prior values).
+    # Manual discount is stored as negative round_off by the invoice tax form.
+    money_cols = {"freight", "loading_charges", "other_charges", "round_off"}
     sets = []
     vals = []
     for col in fields:
-        if col in data and _col_exists(conn, table, col):
-            sets.append(f"{col}=?")
-            vals.append(data[col])
+        if not _col_exists(conn, table, col):
+            continue
+        if col in data:
+            val = data[col]
+        elif col in money_cols:
+            # If header omitted a charge key, do not wipe existing DB value.
+            continue
+        else:
+            continue
+        if col in money_cols:
+            try:
+                val = round(float(val or 0), 2)
+            except (TypeError, ValueError):
+                val = 0.0
+        sets.append(f"{col}=?")
+        vals.append(val)
     if sets:
         vals.append(record_id)
         conn.execute(f"UPDATE {table} SET {', '.join(sets)} WHERE id=?", vals)

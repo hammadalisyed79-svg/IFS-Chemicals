@@ -24,6 +24,17 @@ def item_options(active_only=True):
 
 def _seed_pur_edit(purchase, sup_opts, *, sup=None, inv=None, pdate=None, pay_mode=None, paid=None, notes=None, from_form=False):
     st.session_state["pur_edit_id"] = purchase["id"]
+    for k in list(st.session_state.keys()):
+        if not isinstance(k, str):
+            continue
+        if (
+            k.startswith("pur_edit_freight")
+            or k.startswith("pur_edit_load")
+            or k.startswith("pur_edit_other")
+            or k.startswith("pur_edit_manual_disc")
+            or k.startswith("pur_edit_round")
+        ):
+            st.session_state.pop(k, None)
     st.session_state["pur_edit_header"] = {
         "invoice_no": inv if from_form else purchase["invoice_no"],
         "supplier_id": sup_opts[sup] if from_form and sup else purchase["supplier_id"],
@@ -37,6 +48,12 @@ def _seed_pur_edit(purchase, sup_opts, *, sup=None, inv=None, pdate=None, pay_mo
         "weight_slip_id": purchase.get("weight_slip_id"),
         # Keep PO link on edit — otherwise save clears order_id and reopens the PO
         "order_id": purchase.get("order_id"),
+        "freight": float(purchase.get("freight") or 0),
+        "loading_charges": float(purchase.get("loading_charges") or 0),
+        "other_charges": float(purchase.get("other_charges") or 0),
+        "round_off": float(purchase.get("round_off") or 0),
+        "manual_discount": float(purchase.get("manual_discount") or 0),
+        "round_off_adj": float(purchase.get("round_off_adj") or 0),
     }
     st.session_state["pur_edit_lines"] = hlp._pad_line_rows([
         {"item_id": li["item_id"], "quantity": li["quantity"], "rate": li["rate"],

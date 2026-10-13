@@ -1591,14 +1591,22 @@ def invoice_tax_form(key_prefix, line_items, defaults=None, party_id=None, party
             "Other Charges", value=float(defaults.get("other_charges", 0)), key=f"{key_prefix}_other", min_value=0.0,
         )
     # Manual discount is stored inside round_off as a negative amount (no new DB column).
-    # On edit: prior negative round_off loads as Manual discount; leftover ± paisa stays in Round Off.
+    # On edit: get_sale/get_purchase expose manual_discount + round_off_adj from round_off.
     prior_round = float(defaults.get("round_off") or 0)
-    default_manual = abs(prior_round) if prior_round < -0.005 else 0.0
-    default_round = prior_round if prior_round >= -0.005 else 0.0
+    default_manual = float(
+        defaults.get("manual_discount")
+        if defaults.get("manual_discount") is not None
+        else (abs(prior_round) if prior_round < -0.005 else 0.0)
+    )
+    default_round = float(
+        defaults.get("round_off_adj")
+        if defaults.get("round_off_adj") is not None
+        else (prior_round if prior_round >= -0.005 else 0.0)
+    )
     with ch4:
         manual_disc = money_input(
             "Manual discount",
-            value=float(defaults.get("manual_discount", default_manual) or 0),
+            value=default_manual,
             key=f"{key_prefix}_manual_disc",
             min_value=0.0,
             help="Rs discount on freight / charges / bill total (not product Disc %). Example: freight 40,640 with 2,000 off → Manual discount 2,000.",
@@ -1606,7 +1614,7 @@ def invoice_tax_form(key_prefix, line_items, defaults=None, party_id=None, party
     with ch5:
         round_adj = money_input(
             "Round Off",
-            value=float(defaults.get("round_off_adj", default_round) or 0),
+            value=default_round,
             key=f"{key_prefix}_round",
             help="Small ± paisa adjustment only. Prefer Manual discount for bill/freight discounts.",
         )
@@ -1622,6 +1630,7 @@ def invoice_tax_form(key_prefix, line_items, defaults=None, party_id=None, party
         "loading_charges": loading,
         "other_charges": other,
         "round_off": round_off,
+        "manual_discount": float(manual_disc or 0),
     }
     # Line Disc % > 0 overrides header; 0/missing uses header default.
     calc_lines = []

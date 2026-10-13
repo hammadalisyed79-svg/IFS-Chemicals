@@ -28,13 +28,20 @@ def _seed_sal_edit(sale, cust_opts, *, cust=None, inv=None, sdate=None, notes=No
     st.session_state["sal_edit_tax_inc"] = bool(sale.get("tax_inclusive"))
     st.session_state["sal_edit_disc_pct"] = float(sale.get("discount_pct") or 0)
     st.session_state["sal_edit_customer_order_no"] = sale.get("customer_order_no") or ""
-    # Drop sticky line Rate/Disc widgets so seeded Disc % (MRP-aware) is shown
+    # Drop sticky line Rate/Disc + charge widgets so freight / manual discount reload from DB
     for k in list(st.session_state.keys()):
-        if isinstance(k, str) and (
+        if not isinstance(k, str):
+            continue
+        if (
             k.startswith("sal_edit_d_")
             or k.startswith("sal_edit_ir_")
             or k.startswith("sal_edit_psig_")
             or k.startswith("sal_edit_iq_")
+            or k.startswith("sal_edit_freight")
+            or k.startswith("sal_edit_load")
+            or k.startswith("sal_edit_other")
+            or k.startswith("sal_edit_manual_disc")
+            or k.startswith("sal_edit_round")
         ):
             st.session_state.pop(k, None)
     st.session_state["sal_edit_header"] = {
@@ -57,6 +64,12 @@ def _seed_sal_edit(sale, cust_opts, *, cust=None, inv=None, sdate=None, notes=No
         # Keep SO/quotation link on edit — otherwise save clears order_id and reopens the SO
         "order_id": sale.get("order_id"),
         "quotation_id": sale.get("quotation_id"),
+        "freight": float(sale.get("freight") or 0),
+        "loading_charges": float(sale.get("loading_charges") or 0),
+        "other_charges": float(sale.get("other_charges") or 0),
+        "round_off": float(sale.get("round_off") or 0),
+        "manual_discount": float(sale.get("manual_discount") or 0),
+        "round_off_adj": float(sale.get("round_off_adj") or 0),
     }
     st.session_state["sal_edit_lines"] = hlp._pad_line_rows([
         {"item_id": li["item_id"], "quantity": li["quantity"], "rate": li["rate"],

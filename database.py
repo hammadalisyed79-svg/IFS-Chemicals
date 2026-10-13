@@ -2138,6 +2138,16 @@ def get_purchase(purchase_id):
         header = row_to_dict(conn.execute(
             """SELECT p.id, p.document_no AS invoice_no, p.invoice_date AS purchase_date, p.supplier_id,
                       p.subtotal, p.discount, p.discount_pct, p.tax, p.tax_rate_id, p.tax_inclusive,
+                      COALESCE(p.sales_tax, 0) AS sales_tax,
+                      COALESCE(p.further_tax, 0) AS further_tax,
+                      COALESCE(p.extra_tax, 0) AS extra_tax,
+                      COALESCE(p.fed_tax, 0) AS fed_tax,
+                      COALESCE(p.wht_tax, 0) AS wht_tax,
+                      COALESCE(p.taxable_amount, 0) AS taxable_amount,
+                      COALESCE(p.freight, 0) AS freight,
+                      COALESCE(p.loading_charges, 0) AS loading_charges,
+                      COALESCE(p.other_charges, 0) AS other_charges,
+                      COALESCE(p.round_off, 0) AS round_off,
                       p.total, p.paid_amount, p.payment_mode, p.notes, p.status, p.weight_slip_id,
                       p.order_id, p.grn_id, p.weighbridge_required,
                       p.total_net_weight, p.physical_weight_kg, p.weight_variance_kg, p.weight_variance_pct,
@@ -2149,6 +2159,12 @@ def get_purchase(purchase_id):
         ).fetchone())
         if not header:
             return None
+        try:
+            _ro = float(header.get("round_off") or 0)
+        except (TypeError, ValueError):
+            _ro = 0.0
+        header["manual_discount"] = abs(_ro) if _ro < -0.005 else 0.0
+        header["round_off_adj"] = _ro if _ro >= -0.005 else 0.0
         header["items"] = rows_to_list(conn.execute(
             """SELECT pi.id, pi.invoice_id AS purchase_id, pi.product_id AS item_id,
                       pi.quantity, pi.rate, pi.amount, pi.net_weight,
@@ -2555,6 +2571,16 @@ def get_sale(sale_id):
         header = row_to_dict(conn.execute(
             """SELECT s.id, s.document_no AS invoice_no, s.invoice_date AS sale_date, s.customer_id,
                       s.subtotal, s.discount, s.discount_pct, s.tax, s.tax_rate_id, s.tax_inclusive,
+                      COALESCE(s.sales_tax, 0) AS sales_tax,
+                      COALESCE(s.further_tax, 0) AS further_tax,
+                      COALESCE(s.extra_tax, 0) AS extra_tax,
+                      COALESCE(s.fed_tax, 0) AS fed_tax,
+                      COALESCE(s.wht_tax, 0) AS wht_tax,
+                      COALESCE(s.taxable_amount, 0) AS taxable_amount,
+                      COALESCE(s.freight, 0) AS freight,
+                      COALESCE(s.loading_charges, 0) AS loading_charges,
+                      COALESCE(s.other_charges, 0) AS other_charges,
+                      COALESCE(s.round_off, 0) AS round_off,
                       s.total, s.paid_amount, s.payment_mode, s.notes, s.status, s.weight_slip_id,
                       s.order_id, s.quotation_id, s.weighbridge_required,
                       s.vehicle_no, s.driver_name, s.driver_contact, s.dispatch_remarks,
@@ -2570,6 +2596,13 @@ def get_sale(sale_id):
         ).fetchone())
         if not header:
             return None
+        # Manual discount is stored as negative round_off
+        try:
+            _ro = float(header.get("round_off") or 0)
+        except (TypeError, ValueError):
+            _ro = 0.0
+        header["manual_discount"] = abs(_ro) if _ro < -0.005 else 0.0
+        header["round_off_adj"] = _ro if _ro >= -0.005 else 0.0
         header["items"] = rows_to_list(conn.execute(
             """SELECT si.id, si.invoice_id AS sale_id, si.product_id AS item_id,
                       si.product_id,
