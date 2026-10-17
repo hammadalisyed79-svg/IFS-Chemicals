@@ -739,7 +739,10 @@ def transaction_picker(key_prefix, search_fn, row_label_fn, party_label=None, pa
     if pending_key in st.session_state:
         st.session_state[pick_key] = st.session_state.pop(pending_key)
 
-    st.caption("Search and pick a record (server-side search). Empty search shows the last 30 days.")
+    st.caption(
+        "Search and pick a record. Type invoice no or party name for **all dates**. "
+        "Empty search: recent invoices; party / draft / rejected / pending = no date cut-off."
+    )
     q = st.text_input("Find", placeholder=placeholder, key=f"{key_prefix}_pick_q")
     party_id = None
     status = "All"
@@ -750,17 +753,23 @@ def transaction_picker(key_prefix, search_fn, row_label_fn, party_label=None, pa
         if status_filter:
             status = c2.selectbox("Status", STATUS_OPTIONS, key=f"{key_prefix}_pick_st")
     kw = {"q": (q or "").strip() or None, "page": 1, "page_size": 30}
-    # Without a search term, limit to recent invoices so Edit doesn't scan full history
-    # — except rejected/pending, which must surface older docs (e.g. Metro Jul–Aug).
-    status_l = (status or "").lower()
-    if not kw["q"] and status_l not in ("rejected", "pending_approval"):
-        today = date.today()
-        kw["from_date"] = str(today - timedelta(days=29))
-        kw["to_date"] = str(today)
     if party_kw and party_id:
         kw[party_kw] = party_id
     if status_filter and status != "All":
         kw["status"] = status
+    # Without a search term, limit to recent invoices so Edit doesn't scan full history.
+    # Skip the cut-off when party is chosen, or status is draft/rejected/pending (older
+    # editable docs must stay findable — e.g. Wasif Subhan 02 Sep rejected).
+    status_l = (status or "").lower()
+    skip_date = bool(kw["q"]) or bool(party_id) or status_l in (
+        "rejected", "pending_approval", "draft",
+    )
+    if not skip_date:
+        today = date.today()
+        # Status=All: 120 days so mid-prior-month invoices still appear without typing a search.
+        days = 119 if status_l in ("", "all") else 29
+        kw["from_date"] = str(today - timedelta(days=days))
+        kw["to_date"] = str(today)
     result = search_fn(**kw)
     items = result["items"]
     if not items:
