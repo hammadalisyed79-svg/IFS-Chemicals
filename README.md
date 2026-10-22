@@ -37,7 +37,9 @@ After install or upgrade, run **`reset_admin_password.bat`** and open **`ADMIN_B
 
 ## Operations (this server)
 
-- **Start / recover:** `START_ERP.bat`
+- **Start / recover:** `START_ERP.bat` (Admin) — also starts the keepalive watchdog
+- **Install auto-start (once):** `INSTALL_ERP_AUTOSTART.bat` (Admin) — boot + watchdog scheduled tasks
+- **Watchdog log:** `logs/erp_watchdog.log` (restarts Streamlit/proxy if health fails)
 - **Redeploy after code pull:** `deploy_restart_erp.bat` (restarts Streamlit + runs `tools/_smoke_pages.py`)
 - **Archived reports/guides:** `archive/docs/` (e.g. deployment guide)
 

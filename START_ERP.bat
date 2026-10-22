@@ -70,12 +70,17 @@ if errorlevel 1 (
   exit /b 1
 )
 
+echo [6] Start keepalive watchdog (auto-restart if Streamlit/proxy die) ...
+powershell -NoProfile -Command "Start-Process -FilePath '%PY%' -ArgumentList 'erp_watchdog.py' -WorkingDirectory '%CD%' -RedirectStandardOutput '%CD%\logs\erp_watchdog.out.log' -RedirectStandardError '%CD%\logs\erp_watchdog.err.log' -WindowStyle Hidden"
+
 echo.
 echo ============================================================
 echo  READY — open in browser:
 echo    https://erp.ifschemicals.com/
 echo  Local health:
 echo    http://127.0.0.1:8501/_stcore/health
+echo  Watchdog log:
+echo    logs\erp_watchdog.log
 echo ============================================================
 echo.
 start "" "https://erp.ifschemicals.com/"
