@@ -48,6 +48,12 @@ if (-not $existing) {
     Start-Sleep 2
 }
 
+# Recurring daytime keep-alive (watchdog alone can die with the session)
+$keepScript = Join-Path $Root "tools\_install_erp_keepalive_task.ps1"
+if (Test-Path $keepScript) {
+    & $keepScript
+}
+
 Write-Host "OK: IFS ERP Boot + IFS ERP Watchdog installed"
 schtasks /Query /TN "IFS ERP Boot" /FO LIST | Select-String "TaskName|Status|Task To Run"
 schtasks /Query /TN "IFS ERP Watchdog" /FO LIST | Select-String "TaskName|Status|Task To Run"
