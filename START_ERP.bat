@@ -7,9 +7,12 @@ title IFS Chemicals ERP — public start
 net session >nul 2>&1
 if errorlevel 1 (
   echo Requesting Administrator rights for public HTTPS (ports 80 + 443)...
+  echo If a UAC prompt appears, click Yes.
   powershell -NoProfile -Command "Start-Process -FilePath '%~f0' -Verb RunAs -WorkingDirectory '%~dp0'"
   exit /b
 )
+
+if not exist "%CD%\logs" mkdir "%CD%\logs" >nul 2>&1
 
 echo ============================================================
 echo  IFS Chemicals ERP — PUBLIC START
@@ -35,32 +38,33 @@ if not exist "%CD%\certs\config\live\erp.ifschemicals.com\fullchain.pem" (
 
 echo [1] Stop old Streamlit + HTTPS proxy ...
 powershell -NoProfile -Command ^
-  "Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -and ($_.CommandLine -match 'streamlit run app\.py|ifs_reverse_proxy') } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }; Get-NetTCPConnection -LocalPort 8501,80,443 -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }"
-timeout /t 2 /nobreak >nul
+  "Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -and ($_.CommandLine -match 'streamlit run app\.py|ifs_reverse_proxy') } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }; Get-NetTCPConnection -LocalPort 8501,80,443 -ErrorAction SilentlyContinue | ForEach-Object { if ($_.OwningProcess -gt 0) { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue } }"
+timeout /t 3 /nobreak >nul
 
 echo [2] Start Streamlit (local backend 127.0.0.1:8501) ...
 set "STREAMLIT_SERVER_ENABLE_CORS=false"
 set "STREAMLIT_SERVER_ENABLE_XSRF_PROTECTION=false"
-powershell -NoProfile -Command "Start-Process -FilePath '%PY%' -ArgumentList '-m','streamlit','run','app.py','--server.headless','true','--server.address','127.0.0.1','--server.port','8501','--browser.gatherUsageStats','false' -WorkingDirectory '%CD%' -WindowStyle Minimized"
+powershell -NoProfile -Command "Start-Process -FilePath '%PY%' -ArgumentList '-m','streamlit','run','app.py','--server.headless','true','--server.address','127.0.0.1','--server.port','8501','--browser.gatherUsageStats','false' -WorkingDirectory '%CD%' -RedirectStandardOutput '%CD%\logs\streamlit_start.out.log' -RedirectStandardError '%CD%\logs\streamlit_start.err.log' -WindowStyle Hidden"
 
 echo [3] Wait for local health ...
-powershell -NoProfile -Command "for ($i=1; $i -le 60; $i++) { try { $r = Invoke-WebRequest -Uri 'http://127.0.0.1:8501/_stcore/health' -UseBasicParsing -TimeoutSec 2; if ($r.Content -eq 'ok' -or $r.StatusCode -eq 200) { Write-Host ('Backend ready in ' + $i + 's'); exit 0 } } catch {}; Start-Sleep 1 }; Write-Host 'ERROR: Backend did not become healthy.'; exit 1"
+powershell -NoProfile -Command "for ($i=1; $i -le 90; $i++) { try { $r = Invoke-WebRequest -Uri 'http://127.0.0.1:8501/_stcore/health' -UseBasicParsing -TimeoutSec 2; if ($r.Content -eq 'ok' -or $r.StatusCode -eq 200) { Write-Host ('Backend ready in ' + $i + 's'); exit 0 } } catch {}; Start-Sleep 1 }; Write-Host 'ERROR: Backend did not become healthy.'; if (Test-Path '%CD%\logs\streamlit_start.err.log') { Write-Host '--- streamlit_start.err.log ---'; Get-Content '%CD%\logs\streamlit_start.err.log' -Tail 40 }; exit 1"
 if errorlevel 1 (
   echo.
-  echo Failed to start Streamlit. Check venv and app.py.
+  echo Failed to start Streamlit. See logs\streamlit_start.err.log
   pause
   exit /b 1
 )
 
 echo [4] Start public HTTPS reverse proxy (ports 80 + 443) ...
-powershell -NoProfile -Command "Start-Process -FilePath '%PY%' -ArgumentList 'ifs_reverse_proxy.py' -WorkingDirectory '%CD%' -WindowStyle Minimized"
+powershell -NoProfile -Command "Start-Process -FilePath '%PY%' -ArgumentList 'ifs_reverse_proxy.py' -WorkingDirectory '%CD%' -RedirectStandardOutput '%CD%\logs\proxy_start.out.log' -RedirectStandardError '%CD%\logs\proxy_start.err.log' -WindowStyle Hidden"
 
 echo [5] Wait for public site https://erp.ifschemicals.com/ ...
-powershell -NoProfile -Command "for ($i=1; $i -le 45; $i++) { try { $r = Invoke-WebRequest -Uri 'https://erp.ifschemicals.com/_stcore/health' -UseBasicParsing -TimeoutSec 3; if ($r.Content -eq 'ok') { Write-Host ('PUBLIC site ready in ' + $i + 's'); exit 0 } } catch {}; Start-Sleep 1 }; Write-Host 'ERROR: Public HTTPS still not ready.'; exit 1"
+powershell -NoProfile -Command "for ($i=1; $i -le 45; $i++) { try { $r = Invoke-WebRequest -Uri 'https://erp.ifschemicals.com/_stcore/health' -UseBasicParsing -TimeoutSec 3; if ($r.Content -eq 'ok') { Write-Host ('PUBLIC site ready in ' + $i + 's'); exit 0 } } catch {}; Start-Sleep 1 }; Write-Host 'ERROR: Public HTTPS still not ready.'; if (Test-Path '%CD%\logs\proxy_start.err.log') { Write-Host '--- proxy_start.err.log ---'; Get-Content '%CD%\logs\proxy_start.err.log' -Tail 40 }; exit 1"
 if errorlevel 1 (
   echo.
   echo Local ERP is running, but PUBLIC site failed.
   echo Check firewall and that ports 80/443 are free.
+  echo Logs: logs\proxy_start.err.log
   echo Then run this file again as Administrator.
   pause
   exit /b 1
