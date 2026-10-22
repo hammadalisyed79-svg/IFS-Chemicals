@@ -3016,17 +3016,20 @@ def get_purchase_return(return_id):
         header = row_to_dict(conn.execute(
             """SELECT pr.id, pr.document_no AS return_no, pr.return_date, pr.invoice_id AS purchase_id,
                       pr.supplier_id, pr.subtotal, pr.total, pr.notes, pr.created_at, pr.modified_at,
+                      pr.weight_slip_id, pr.total_net_weight, pr.weighbridge_required,
                       s.name AS supplier_name, s.code AS supplier_code,
-                      pi.document_no AS invoice_no
+                      pi.document_no AS invoice_no, ws.document_no AS weight_slip_no
                FROM purchase_returns pr
                JOIN suppliers s ON pr.supplier_id=s.id
                LEFT JOIN purchase_invoices pi ON pr.invoice_id=pi.id
+               LEFT JOIN weight_slips ws ON pr.weight_slip_id=ws.id
                WHERE pr.id=?""",
             (return_id,),
         ).fetchone())
         if header:
             header["items"] = rows_to_list(conn.execute(
                 """SELECT pri.id, pri.return_id, pri.product_id AS item_id, pri.quantity, pri.rate, pri.amount,
+                          COALESCE(pri.net_weight, 0) AS net_weight,
                           p.name AS item_name FROM purchase_return_items pri
                    JOIN products p ON pri.product_id=p.id WHERE pri.return_id=?""",
                 (return_id,),
@@ -3035,16 +3038,19 @@ def get_purchase_return(return_id):
 
 
 def save_purchase_return(data, line_items, return_id=None, user_id=None):
-    from db_commercial import apply_invoice_totals_to_data
+    from db_commercial import apply_invoice_totals_to_data, link_weight_slip_to_invoice, enrich_line_weights
     from erp_core.transaction_validation import validate_purchase_invoice
     data, totals = apply_invoice_totals_to_data(data, line_items)
     vr = validate_purchase_invoice(data, totals.get("lines") or line_items, totals, stage="draft")
     vr.raise_if_invalid("Purchase return")
     line_items = totals["lines"]
     with get_connection() as conn:
+        line_items = enrich_line_weights(conn, line_items)
         wh = _default_warehouse_id(conn)
         subtotal = totals["subtotal"]
         total = totals["total"]
+        total_net_weight = round(sum(float(li.get("net_weight") or 0) for li in line_items), 3)
+        weighbridge = 1 if data.get("weighbridge_required") or data.get("weight_slip_id") else 0
         ts = _now()
         if not return_id:
             data["return_no"] = ensure_document_no("PR", data.get("return_no"), conn)
@@ -3062,16 +3068,20 @@ def save_purchase_return(data, line_items, return_id=None, user_id=None):
             conn.execute("DELETE FROM purchase_return_items WHERE return_id=?", (return_id,))
             conn.execute(
                 """UPDATE purchase_returns SET document_no=?, invoice_id=?, supplier_id=?, return_date=?,
-                   subtotal=?, total=?, notes=?, modified_by=?, modified_at=? WHERE id=?""",
+                   subtotal=?, total=?, notes=?, weight_slip_id=?, total_net_weight=?,
+                   weighbridge_required=?, modified_by=?, modified_at=? WHERE id=?""",
                 (data["return_no"], data.get("purchase_id"), data["supplier_id"], data["return_date"],
-                 subtotal, total, data.get("notes"), user_id, ts, return_id),
+                 subtotal, total, data.get("notes"), data.get("weight_slip_id"), total_net_weight,
+                 weighbridge, user_id, ts, return_id),
             )
         else:
             cur = conn.execute(
                 """INSERT INTO purchase_returns (document_no, invoice_id, supplier_id, return_date,
-                   warehouse_id, subtotal, total, notes, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                   warehouse_id, subtotal, total, notes, weight_slip_id, total_net_weight,
+                   weighbridge_required, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (data["return_no"], data.get("purchase_id"), data["supplier_id"], data["return_date"],
-                 wh, subtotal, total, data.get("notes"), user_id),
+                 wh, subtotal, total, data.get("notes"), data.get("weight_slip_id"), total_net_weight,
+                 weighbridge, user_id),
             )
             return_id = cur.lastrowid
 
@@ -3082,8 +3092,11 @@ def save_purchase_return(data, line_items, return_id=None, user_id=None):
             if (stock[0] if stock else 0) < li["quantity"] and not allow_neg:
                 raise ValueError(f"Insufficient stock for return item ID {pid}")
             conn.execute(
-                "INSERT INTO purchase_return_items (return_id, product_id, quantity, rate, amount) VALUES (?, ?, ?, ?, ?)",
-                (return_id, pid, li["quantity"], li["rate"], li["line_amount"]),
+                """INSERT INTO purchase_return_items
+                   (return_id, product_id, quantity, rate, amount, net_weight)
+                   VALUES (?, ?, ?, ?, ?, ?)""",
+                (return_id, pid, li["quantity"], li["rate"], li["line_amount"],
+                 float(li.get("net_weight") or 0)),
             )
             _adjust_warehouse_stock(conn, pid, wh, -li["quantity"])
             _record_movement(
@@ -3092,7 +3105,12 @@ def save_purchase_return(data, line_items, return_id=None, user_id=None):
             )
 
         conn.execute("UPDATE suppliers SET current_balance=current_balance+? WHERE id=?", (total, data["supplier_id"]))
-        return return_id
+    if data.get("weight_slip_id"):
+        link_weight_slip_to_invoice(
+            data["weight_slip_id"], "purchase_return", return_id, user_id,
+            as_primary=data.get("weight_slip_as_primary"),
+        )
+    return return_id
 
 
 def delete_purchase_return(return_id):
@@ -3176,17 +3194,20 @@ def get_sale_return(return_id):
         header = row_to_dict(conn.execute(
             """SELECT sr.id, sr.document_no AS return_no, sr.return_date, sr.invoice_id AS sale_id,
                       sr.customer_id, sr.subtotal, sr.total, sr.notes, sr.created_at, sr.modified_at,
+                      sr.weight_slip_id, sr.total_net_weight, sr.weighbridge_required,
                       c.name AS customer_name, c.code AS customer_code,
-                      si.document_no AS invoice_no
+                      si.document_no AS invoice_no, ws.document_no AS weight_slip_no
                FROM sales_returns sr
                JOIN customers c ON sr.customer_id=c.id
                LEFT JOIN sales_invoices si ON sr.invoice_id=si.id
+               LEFT JOIN weight_slips ws ON sr.weight_slip_id=ws.id
                WHERE sr.id=?""",
             (return_id,),
         ).fetchone())
         if header:
             header["items"] = rows_to_list(conn.execute(
                 """SELECT sri.id, sri.return_id, sri.product_id AS item_id, sri.quantity, sri.rate, sri.amount,
+                          COALESCE(sri.net_weight, 0) AS net_weight,
                           p.name AS item_name FROM sales_return_items sri
                    JOIN products p ON sri.product_id=p.id WHERE sri.return_id=?""",
                 (return_id,),
@@ -3195,16 +3216,19 @@ def get_sale_return(return_id):
 
 
 def save_sale_return(data, line_items, return_id=None, user_id=None):
-    from db_commercial import apply_invoice_totals_to_data
+    from db_commercial import apply_invoice_totals_to_data, link_weight_slip_to_invoice, enrich_line_weights
     from erp_core.transaction_validation import validate_sale_invoice
     data, totals = apply_invoice_totals_to_data(data, line_items)
     vr = validate_sale_invoice(data, totals.get("lines") or line_items, totals, stage="draft")
     vr.raise_if_invalid("Sales return")
     line_items = totals["lines"]
     with get_connection() as conn:
+        line_items = enrich_line_weights(conn, line_items)
         wh = _default_warehouse_id(conn)
         subtotal = totals["subtotal"]
         total = totals["total"]
+        total_net_weight = round(sum(float(li.get("net_weight") or 0) for li in line_items), 3)
+        weighbridge = 1 if data.get("weighbridge_required") or data.get("weight_slip_id") else 0
         ts = _now()
         if not return_id:
             data["return_no"] = ensure_document_no("SR", data.get("return_no"), conn)
@@ -3222,24 +3246,31 @@ def save_sale_return(data, line_items, return_id=None, user_id=None):
             conn.execute("DELETE FROM sales_return_items WHERE return_id=?", (return_id,))
             conn.execute(
                 """UPDATE sales_returns SET document_no=?, invoice_id=?, customer_id=?, return_date=?,
-                   subtotal=?, total=?, notes=?, modified_by=?, modified_at=? WHERE id=?""",
+                   subtotal=?, total=?, notes=?, weight_slip_id=?, total_net_weight=?,
+                   weighbridge_required=?, modified_by=?, modified_at=? WHERE id=?""",
                 (data["return_no"], data.get("sale_id"), data["customer_id"], data["return_date"],
-                 subtotal, total, data.get("notes"), user_id, ts, return_id),
+                 subtotal, total, data.get("notes"), data.get("weight_slip_id"), total_net_weight,
+                 weighbridge, user_id, ts, return_id),
             )
         else:
             cur = conn.execute(
                 """INSERT INTO sales_returns (document_no, invoice_id, customer_id, return_date,
-                   warehouse_id, subtotal, total, notes, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                   warehouse_id, subtotal, total, notes, weight_slip_id, total_net_weight,
+                   weighbridge_required, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (data["return_no"], data.get("sale_id"), data["customer_id"], data["return_date"],
-                 wh, subtotal, total, data.get("notes"), user_id),
+                 wh, subtotal, total, data.get("notes"), data.get("weight_slip_id"), total_net_weight,
+                 weighbridge, user_id),
             )
             return_id = cur.lastrowid
 
         for li in line_items:
             pid = li["item_id"]
             conn.execute(
-                "INSERT INTO sales_return_items (return_id, product_id, quantity, rate, amount) VALUES (?, ?, ?, ?, ?)",
-                (return_id, pid, li["quantity"], li["rate"], li.get("line_amount", li.get("amount", 0))),
+                """INSERT INTO sales_return_items
+                   (return_id, product_id, quantity, rate, amount, net_weight)
+                   VALUES (?, ?, ?, ?, ?, ?)""",
+                (return_id, pid, li["quantity"], li["rate"],
+                 li.get("line_amount", li.get("amount", 0)), float(li.get("net_weight") or 0)),
             )
             _adjust_warehouse_stock(conn, pid, wh, li["quantity"])
             _record_movement(
@@ -3248,7 +3279,12 @@ def save_sale_return(data, line_items, return_id=None, user_id=None):
             )
 
         conn.execute("UPDATE customers SET current_balance=current_balance-? WHERE id=?", (total, data["customer_id"]))
-        return return_id
+    if data.get("weight_slip_id"):
+        link_weight_slip_to_invoice(
+            data["weight_slip_id"], "sales_return", return_id, user_id,
+            as_primary=data.get("weight_slip_as_primary"),
+        )
+    return return_id
 
 
 def delete_sale_return(return_id):

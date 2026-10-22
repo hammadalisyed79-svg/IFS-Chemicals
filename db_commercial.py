@@ -32,7 +32,25 @@ def next_weight_slip_no(conn=None):
 
 
 def slip_transaction_type(slip_row):
-    """Map slip to SALE / PURCHASE like reference weight scale software."""
+    """Map slip to SALE / SALE_RETURN / PURCHASE / PURCHASE_RETURN."""
+    kind = (slip_row.get("transaction_kind") or "").strip().upper().replace(" ", "_")
+    if kind in ("SALE", "SALE_RETURN", "PURCHASE", "PURCHASE_RETURN"):
+        return kind
+    ref = (slip_row.get("reference_type") or "").lower()
+    if ref == "sales_return":
+        return "SALE_RETURN"
+    if ref == "purchase_return":
+        return "PURCHASE_RETURN"
+    if ref == "sales_invoice" or slip_row.get("sales_invoice_no") or slip_row.get("sales_return_no"):
+        if slip_row.get("sales_return_no") and not slip_row.get("sales_invoice_no"):
+            return "SALE_RETURN"
+        if ref == "sales_invoice":
+            return "SALE"
+    if ref == "purchase_invoice" or slip_row.get("purchase_invoice_no") or slip_row.get("purchase_return_no"):
+        if slip_row.get("purchase_return_no") and not slip_row.get("purchase_invoice_no"):
+            return "PURCHASE_RETURN"
+        if ref == "purchase_invoice":
+            return "PURCHASE"
     if slip_row.get("customer_id"):
         return "SALE"
     if slip_row.get("supplier_id"):
@@ -43,6 +61,65 @@ def slip_transaction_type(slip_row):
     if pt == "supplier":
         return "PURCHASE"
     return "GENERAL"
+
+
+# reference_type / kind helpers for invoices + returns
+_WS_DOC_KINDS = {
+    "sales_invoice": {
+        "kind": "sales",
+        "table": "sales_invoices",
+        "items": "sales_invoice_items",
+        "item_fk": "invoice_id",
+        "party_col": "customer_id",
+        "party_type": "customer",
+        "is_return": False,
+    },
+    "purchase_invoice": {
+        "kind": "purchase",
+        "table": "purchase_invoices",
+        "items": "purchase_invoice_items",
+        "item_fk": "invoice_id",
+        "party_col": "supplier_id",
+        "party_type": "supplier",
+        "is_return": False,
+    },
+    "sales_return": {
+        "kind": "sales_return",
+        "table": "sales_returns",
+        "items": "sales_return_items",
+        "item_fk": "return_id",
+        "party_col": "customer_id",
+        "party_type": "customer",
+        "is_return": True,
+    },
+    "purchase_return": {
+        "kind": "purchase_return",
+        "table": "purchase_returns",
+        "items": "purchase_return_items",
+        "item_fk": "return_id",
+        "party_col": "supplier_id",
+        "party_type": "supplier",
+        "is_return": True,
+    },
+}
+
+
+def _ws_meta(ref_type_or_kind):
+    """Resolve doc meta from reference_type or short kind."""
+    key = (ref_type_or_kind or "").strip().lower()
+    if key in _WS_DOC_KINDS:
+        return _WS_DOC_KINDS[key]
+    for meta in _WS_DOC_KINDS.values():
+        if meta["kind"] == key:
+            return meta
+    return None
+
+
+def _ref_type_for_kind(kind):
+    for ref, meta in _WS_DOC_KINDS.items():
+        if meta["kind"] == kind:
+            return ref
+    return None
 
 
 def _commercial_ver(conn):
@@ -133,6 +210,12 @@ def apply_commercial(conn, db_module):
         conn.execute(
             "INSERT INTO schema_meta(key,value) VALUES('commercial_version','11') "
             "ON CONFLICT(key) DO UPDATE SET value='11'"
+        )
+    if _commercial_ver(conn) < 12:
+        _apply_weight_returns_v12(conn)
+        conn.execute(
+            "INSERT INTO schema_meta(key,value) VALUES('commercial_version','12') "
+            "ON CONFLICT(key) DO UPDATE SET value='12'"
         )
     ensure_gate_pass_schema(conn)
     if _col_exists(conn, "weight_slips", "status"):
@@ -257,6 +340,25 @@ def _apply_weight_invoice_v4(conn):
         _add_col(conn, t, col, ddl)
 
 
+def _apply_weight_returns_v12(conn):
+    """Link weight slips to sale/purchase returns (parity with invoices)."""
+    ret_hdr = [
+        ("weight_slip_id", "INTEGER REFERENCES weight_slips(id)"),
+        ("total_net_weight", "REAL DEFAULT 0"),
+        ("weighbridge_required", "INTEGER DEFAULT 0"),
+        ("physical_weight_kg", "REAL DEFAULT 0"),
+        ("weight_variance_kg", "REAL DEFAULT 0"),
+        ("weight_variance_pct", "REAL DEFAULT 0"),
+        ("weight_match_status", "TEXT"),
+    ]
+    for t in ("sales_returns", "purchase_returns"):
+        for col, ddl in ret_hdr:
+            _add_col(conn, t, col, ddl)
+    for t in ("sales_return_items", "purchase_return_items"):
+        _add_col(conn, t, "net_weight", "REAL DEFAULT 0")
+    _add_col(conn, "weight_slips", "transaction_kind", "TEXT")
+
+
 def _apply_invoice_workflow_v5(conn):
     inv_cols = [
         ("submitted_by", "INTEGER"), ("submitted_at", "TEXT"),
@@ -304,18 +406,30 @@ def enrich_line_weights(conn, line_items):
 
 
 def invoice_lines_net_weight(conn, invoice_id, kind="sales"):
-    table = "sales_invoice_items" if kind == "sales" else "purchase_invoice_items"
-    col = "invoice_id"
-    r = conn.execute(f"SELECT COALESCE(SUM(net_weight),0) FROM {table} WHERE {col}=?", (invoice_id,)).fetchone()
+    meta = _ws_meta(kind) or _ws_meta("sales_invoice" if kind == "sales" else "purchase_invoice")
+    if not meta:
+        meta = _WS_DOC_KINDS["sales_invoice"]
+    table, col = meta["items"], meta["item_fk"]
+    # Prefer stored net_weight; fall back to quantity when column empty (legacy return lines)
+    r = conn.execute(
+        f"""SELECT COALESCE(SUM(
+                CASE WHEN COALESCE(net_weight, 0) > 0 THEN net_weight ELSE quantity END
+            ), 0)
+            FROM {table} WHERE {col}=?""",
+        (invoice_id,),
+    ).fetchone()
     return float(r[0] or 0)
 
 
 def invoice_primary_product_id(conn, invoice_id, kind="sales"):
-    """Main line product on invoice (highest net weight line) for slip item sync."""
-    table = "sales_invoice_items" if kind == "sales" else "purchase_invoice_items"
+    """Main line product on invoice/return (highest net weight line) for slip item sync."""
+    meta = _ws_meta(kind) or _ws_meta("sales_invoice" if kind == "sales" else "purchase_invoice")
+    if not meta:
+        return None
+    table, col = meta["items"], meta["item_fk"]
     row = conn.execute(
         f"""SELECT product_id FROM {table}
-            WHERE invoice_id=? AND product_id IS NOT NULL
+            WHERE {col}=? AND product_id IS NOT NULL
             ORDER BY COALESCE(net_weight, 0) DESC, id ASC LIMIT 1""",
         (invoice_id,),
     ).fetchone()
@@ -323,23 +437,24 @@ def invoice_primary_product_id(conn, invoice_id, kind="sales"):
 
 
 def link_weight_slip_to_invoice(slip_id, ref_type, ref_id, user_id=None, *, as_primary=None):
-    """Link weight slip ↔ sales/purchase invoice.
+    """Link weight slip ↔ sales/purchase invoice or sale/purchase return.
 
-    One slip may attach to many invoices:
-    - **Primary** (default when slip has no owner): full net weight + variance on this invoice;
+    One slip may attach to many documents:
+    - **Primary** (default when slip has no owner): full net weight + variance;
       updates weight_slips.reference_*.
-    - **Reference-only**: invoice shows the slip number only; no weight split/variance.
-      Used when the slip is already primary on another invoice (or as_primary=False).
+    - **Reference-only**: document shows the slip number only; no weight split/variance.
     """
     from database import get_connection
-    from db_invoice_workflow import (
-        _is_primary_weight_slip_for_invoice,
-        refresh_invoice_weight_match,
-    )
-    if ref_type not in ("sales_invoice", "purchase_invoice") or not ref_id:
+    from db_invoice_workflow import refresh_invoice_weight_match
+
+    meta = _ws_meta(ref_type)
+    if not meta or not ref_id:
         return
-    kind = "sales" if ref_type == "sales_invoice" else "purchase"
-    inv_table = "sales_invoices" if kind == "sales" else "purchase_invoices"
+    kind = meta["kind"]
+    inv_table = meta["table"]
+    party_col = meta["party_col"]
+    party_type = meta["party_type"]
+    primary_refs = tuple(_WS_DOC_KINDS.keys())
     with get_connection() as conn:
         slip = conn.execute(
             "SELECT net_weight, status, reference_type, reference_id FROM weight_slips WHERE id=?",
@@ -348,15 +463,15 @@ def link_weight_slip_to_invoice(slip_id, ref_type, ref_id, user_id=None, *, as_p
         if not slip:
             return
         if slip["status"] != "completed" or float(slip["net_weight"] or 0) <= 0:
-            raise ValueError("Only completed slips with net weight can be linked to an invoice.")
+            raise ValueError("Only completed slips with net weight can be linked.")
         inv_row = conn.execute(
             f"SELECT weight_slip_id FROM {inv_table} WHERE id=?", (ref_id,),
         ).fetchone()
         if inv_row and inv_row["weight_slip_id"] and int(inv_row["weight_slip_id"]) != int(slip_id):
-            raise ValueError("That invoice already has a different weight slip linked.")
+            raise ValueError("That document already has a different weight slip linked.")
 
         has_primary = (
-            slip["reference_type"] in ("sales_invoice", "purchase_invoice")
+            slip["reference_type"] in primary_refs
             and slip["reference_id"] is not None
         )
         same_primary = (
@@ -369,8 +484,6 @@ def link_weight_slip_to_invoice(slip_id, ref_type, ref_id, user_id=None, *, as_p
         else:
             claim_primary = bool(as_primary)
             if claim_primary and has_primary and not same_primary:
-                # Re-save / Submit for Approval on an invoice that already has this slip:
-                # keep reference-only instead of failing (do not steal another invoice's primary).
                 already_on_this = (
                     inv_row
                     and inv_row["weight_slip_id"]
@@ -380,8 +493,8 @@ def link_weight_slip_to_invoice(slip_id, ref_type, ref_id, user_id=None, *, as_p
                     claim_primary = False
                 else:
                     raise ValueError(
-                        "This weight slip already has a primary invoice. "
-                        "Attach as reference-only, or detach the primary invoice first."
+                        "This weight slip already has a primary document. "
+                        "Attach as reference-only, or detach the primary document first."
                     )
 
         inv_wt = invoice_lines_net_weight(conn, ref_id, kind)
@@ -394,103 +507,130 @@ def link_weight_slip_to_invoice(slip_id, ref_type, ref_id, user_id=None, *, as_p
             physical = float(slip["net_weight"] or 0)
             variance = round(physical - inv_wt, 3)
             pid = invoice_primary_product_id(conn, ref_id, kind)
-            if kind == "sales":
-                inv = conn.execute(
-                    "SELECT customer_id FROM sales_invoices WHERE id=?", (ref_id,),
-                ).fetchone()
-                cust_id = inv["customer_id"] if inv else None
+            party = conn.execute(
+                f"SELECT {party_col} FROM {inv_table} WHERE id=?", (ref_id,),
+            ).fetchone()
+            party_id = party[party_col] if party else None
+            tx_kind = {
+                "sales": "SALE",
+                "purchase": "PURCHASE",
+                "sales_return": "SALE_RETURN",
+                "purchase_return": "PURCHASE_RETURN",
+            }.get(kind)
+            if party_type == "customer":
                 conn.execute(
                     """UPDATE weight_slips SET reference_type=?, reference_id=?, weight_difference=?,
                        product_id=COALESCE(?, product_id), customer_id=COALESCE(?, customer_id),
-                       supplier_id=NULL, party_type='customer', modified_at=?, modified_by=? WHERE id=?""",
-                    (ref_type, ref_id, variance, pid, cust_id, now(), user_id, slip_id),
+                       supplier_id=NULL, party_type='customer',
+                       transaction_kind=COALESCE(?, transaction_kind),
+                       modified_at=?, modified_by=? WHERE id=?""",
+                    (ref_type, ref_id, variance, pid, party_id, tx_kind, now(), user_id, slip_id),
                 )
             else:
-                inv = conn.execute(
-                    "SELECT supplier_id FROM purchase_invoices WHERE id=?", (ref_id,),
-                ).fetchone()
-                sup_id = inv["supplier_id"] if inv else None
                 conn.execute(
                     """UPDATE weight_slips SET reference_type=?, reference_id=?, weight_difference=?,
                        product_id=COALESCE(?, product_id), supplier_id=COALESCE(?, supplier_id),
-                       customer_id=NULL, party_type='supplier', modified_at=?, modified_by=? WHERE id=?""",
-                    (ref_type, ref_id, variance, pid, sup_id, now(), user_id, slip_id),
+                       customer_id=NULL, party_type='supplier',
+                       transaction_kind=COALESCE(?, transaction_kind),
+                       modified_at=?, modified_by=? WHERE id=?""",
+                    (ref_type, ref_id, variance, pid, party_id, tx_kind, now(), user_id, slip_id),
                 )
             refresh_invoice_weight_match(conn, ref_id, kind)
         else:
-            # Reference-only: do not move slip.reference_* or overwrite weight_difference
             refresh_invoice_weight_match(conn, ref_id, kind)
 
 
 def get_weight_slip_invoice_attachment(slip_id):
-    """Return the **primary** sales/purchase invoice for this slip, if any."""
+    """Return the **primary** invoice/return for this slip, if any."""
     from database import get_connection, row_to_dict
 
     with get_connection() as conn:
         slip = conn.execute(
             "SELECT reference_type, reference_id FROM weight_slips WHERE id=?", (slip_id,),
         ).fetchone()
-        if slip and slip["reference_type"] in ("sales_invoice", "purchase_invoice") and slip["reference_id"]:
-            kind = "sales" if slip["reference_type"] == "sales_invoice" else "purchase"
-            table = "sales_invoices" if kind == "sales" else "purchase_invoices"
-            row = conn.execute(
-                f"""SELECT id, document_no AS invoice_no, status, gate_pass_id, ? AS kind,
-                           'primary' AS link_role
-                    FROM {table} WHERE id=?""",
-                (kind, slip["reference_id"]),
-            ).fetchone()
+        if slip and slip["reference_type"] in _WS_DOC_KINDS and slip["reference_id"]:
+            meta = _WS_DOC_KINDS[slip["reference_type"]]
+            kind = meta["kind"]
+            table = meta["table"]
+            if meta["is_return"]:
+                row = conn.execute(
+                    f"""SELECT id, document_no AS invoice_no, 'draft' AS status,
+                               NULL AS gate_pass_id, ? AS kind, 'primary' AS link_role
+                        FROM {table} WHERE id=?""",
+                    (kind, slip["reference_id"]),
+                ).fetchone()
+            else:
+                row = conn.execute(
+                    f"""SELECT id, document_no AS invoice_no, status, gate_pass_id, ? AS kind,
+                               'primary' AS link_role
+                        FROM {table} WHERE id=?""",
+                    (kind, slip["reference_id"]),
+                ).fetchone()
             if row:
                 return row_to_dict(row)
-        # Fallback: earliest invoice still pointing at this slip
-        row = conn.execute(
-            """SELECT id, document_no AS invoice_no, status, gate_pass_id, 'sales' AS kind,
-                      'primary' AS link_role
-               FROM sales_invoices WHERE weight_slip_id=? ORDER BY id LIMIT 1""",
-            (slip_id,),
-        ).fetchone()
-        if row:
-            return row_to_dict(row)
-        row = conn.execute(
-            """SELECT id, document_no AS invoice_no, status, gate_pass_id, 'purchase' AS kind,
-                      'primary' AS link_role
-               FROM purchase_invoices WHERE weight_slip_id=? ORDER BY id LIMIT 1""",
-            (slip_id,),
-        ).fetchone()
-        if row:
-            return row_to_dict(row)
+        # Fallback: earliest document still pointing at this slip
+        for kind, table, is_ret in (
+            ("sales", "sales_invoices", False),
+            ("purchase", "purchase_invoices", False),
+            ("sales_return", "sales_returns", True),
+            ("purchase_return", "purchase_returns", True),
+        ):
+            if is_ret:
+                row = conn.execute(
+                    f"""SELECT id, document_no AS invoice_no, 'draft' AS status,
+                               NULL AS gate_pass_id, ? AS kind, 'primary' AS link_role
+                        FROM {table} WHERE weight_slip_id=? ORDER BY id LIMIT 1""",
+                    (kind, slip_id),
+                ).fetchone()
+            else:
+                row = conn.execute(
+                    f"""SELECT id, document_no AS invoice_no, status, gate_pass_id, ? AS kind,
+                               'primary' AS link_role
+                        FROM {table} WHERE weight_slip_id=? ORDER BY id LIMIT 1""",
+                    (kind, slip_id),
+                ).fetchone()
+            if row:
+                return row_to_dict(row)
     return None
 
 
 def list_weight_slip_invoice_attachments(slip_id):
-    """All invoices that reference this slip (primary first, then reference-only)."""
+    """All invoices/returns that reference this slip (primary first, then reference-only)."""
     from database import get_connection, rows_to_list
 
     primary = get_weight_slip_invoice_attachment(slip_id)
     primary_key = (primary["kind"], int(primary["id"])) if primary else None
     out = []
     with get_connection() as conn:
-        for kind, table in (("sales", "sales_invoices"), ("purchase", "purchase_invoices")):
-            for row in rows_to_list(conn.execute(
-                f"""SELECT id, document_no AS invoice_no, status, gate_pass_id, ? AS kind
-                    FROM {table} WHERE weight_slip_id=? ORDER BY id""",
-                (kind, slip_id),
-            )):
+        for kind, table, is_ret in (
+            ("sales", "sales_invoices", False),
+            ("purchase", "purchase_invoices", False),
+            ("sales_return", "sales_returns", True),
+            ("purchase_return", "purchase_returns", True),
+        ):
+            if is_ret:
+                sql = f"""SELECT id, document_no AS invoice_no, 'draft' AS status,
+                                 NULL AS gate_pass_id, ? AS kind
+                          FROM {table} WHERE weight_slip_id=? ORDER BY id"""
+            else:
+                sql = f"""SELECT id, document_no AS invoice_no, status, gate_pass_id, ? AS kind
+                          FROM {table} WHERE weight_slip_id=? ORDER BY id"""
+            for row in rows_to_list(conn.execute(sql, (kind, slip_id))):
                 role = "primary" if primary_key == (kind, int(row["id"])) else "reference"
                 row["link_role"] = role
                 out.append(row)
-    # Ensure primary is first
     out.sort(key=lambda r: (0 if r.get("link_role") == "primary" else 1, r.get("id") or 0))
     return out
 
 
 def detach_weight_slip_from_invoice(slip_id, user_id=None, invoice_id=None, kind=None):
-    """Remove slip from a **draft** invoice. If primary is detached, promote another link or clear."""
+    """Remove slip from a **draft** invoice (or any return). Promote another link or clear."""
     from database import get_connection
     from db_invoice_workflow import refresh_invoice_weight_match
 
     attachments = list_weight_slip_invoice_attachments(slip_id)
     if not attachments:
-        raise ValueError("This weight slip is not attached to an invoice.")
+        raise ValueError("This weight slip is not attached to an invoice or return.")
 
     if invoice_id and kind:
         att = next(
@@ -498,12 +638,15 @@ def detach_weight_slip_from_invoice(slip_id, user_id=None, invoice_id=None, kind
             None,
         )
         if not att:
-            raise ValueError("That invoice is not linked to this weight slip.")
+            raise ValueError("That document is not linked to this weight slip.")
     else:
         att = get_weight_slip_invoice_attachment(slip_id) or attachments[0]
 
+    kind = att["kind"]
+    meta = _ws_meta(kind)
+    is_return = bool(meta and meta["is_return"])
     status = (att.get("status") or "draft").lower()
-    if status != "draft":
+    if not is_return and status != "draft":
         if status == "approved":
             raise ValueError(
                 f"Invoice **{att.get('invoice_no')}** is **approved**. "
@@ -519,30 +662,34 @@ def detach_weight_slip_from_invoice(slip_id, user_id=None, invoice_id=None, kind
             f"Invoice **{att.get('invoice_no')}** is **{status}**. "
             "Detach is only allowed when the invoice is **draft** (e.g. after admin unapprove)."
         )
-    kind = att["kind"]
     inv_id = att["id"]
     was_primary = att.get("link_role") == "primary"
-    inv_table = "sales_invoices" if kind == "sales" else "purchase_invoices"
-    gp_col = "sales_invoice_id" if kind == "sales" else "purchase_invoice_id"
+    inv_table = meta["table"] if meta else ("sales_invoices" if kind == "sales" else "purchase_invoices")
     with get_connection() as conn:
         conn.execute(f"UPDATE {inv_table} SET weight_slip_id=NULL WHERE id=?", (inv_id,))
-        conn.execute(
-            f"UPDATE gate_passes SET weight_slip_id=NULL WHERE weight_slip_id=? AND {gp_col}=?",
-            (slip_id, inv_id),
-        )
+        if not is_return:
+            gp_col = "sales_invoice_id" if kind == "sales" else "purchase_invoice_id"
+            conn.execute(
+                f"UPDATE gate_passes SET weight_slip_id=NULL WHERE weight_slip_id=? AND {gp_col}=?",
+                (slip_id, inv_id),
+            )
         if was_primary:
             nxt = conn.execute(
                 """SELECT id, kind FROM (
                      SELECT id, 'sales' AS kind FROM sales_invoices WHERE weight_slip_id=?
                      UNION ALL
                      SELECT id, 'purchase' AS kind FROM purchase_invoices WHERE weight_slip_id=?
+                     UNION ALL
+                     SELECT id, 'sales_return' AS kind FROM sales_returns WHERE weight_slip_id=?
+                     UNION ALL
+                     SELECT id, 'purchase_return' AS kind FROM purchase_returns WHERE weight_slip_id=?
                    ) ORDER BY id LIMIT 1""",
-                (slip_id, slip_id),
+                (slip_id, slip_id, slip_id, slip_id),
             ).fetchone()
             if nxt:
                 nkind = nxt["kind"]
                 nid = int(nxt["id"])
-                nref = "sales_invoice" if nkind == "sales" else "purchase_invoice"
+                nref = _ref_type_for_kind(nkind)
                 conn.execute(
                     """UPDATE weight_slips SET reference_type=?, reference_id=?,
                        modified_by=?, modified_at=? WHERE id=?""",
@@ -561,7 +708,7 @@ def detach_weight_slip_from_invoice(slip_id, user_id=None, invoice_id=None, kind
         log_event(
             "weight_slips", slip_id, "detach_invoice", user_id=user_id, module="Weight Scale",
             document_no=att.get("invoice_no"),
-            summary=f"Detached slip from {kind} invoice {att.get('invoice_no')} ({att.get('link_role')})",
+            summary=f"Detached slip from {kind} {att.get('invoice_no')} ({att.get('link_role')})",
         )
     except Exception:
         pass
@@ -700,17 +847,47 @@ _WS_PURCHASE_INV_JOIN = """LEFT JOIN purchase_invoices pi ON (
     pi.weight_slip_id = ws.id
     OR (ws.reference_type = 'purchase_invoice' AND ws.reference_id = pi.id)
 )"""
+_WS_SALES_RET_JOIN = """LEFT JOIN sales_returns sr ON (
+    sr.weight_slip_id = ws.id
+    OR (ws.reference_type = 'sales_return' AND ws.reference_id = sr.id)
+)"""
+_WS_PURCHASE_RET_JOIN = """LEFT JOIN purchase_returns prr ON (
+    prr.weight_slip_id = ws.id
+    OR (ws.reference_type = 'purchase_return' AND ws.reference_id = prr.id)
+)"""
+_WS_ALL_DOC_JOINS = f"""{_WS_SALES_INV_JOIN}
+            {_WS_PURCHASE_INV_JOIN}
+            {_WS_SALES_RET_JOIN}
+            {_WS_PURCHASE_RET_JOIN}"""
+_WS_DOC_NO_SELECT = """si.document_no AS sales_invoice_no, pi.document_no AS purchase_invoice_no,
+                   sr.document_no AS sales_return_no, prr.document_no AS purchase_return_no"""
 
 
 def weight_slip_is_linked(row):
-    """True if slip is tied to a sales or purchase invoice (either direction)."""
+    """True if slip is tied to a sales/purchase invoice or return (either direction)."""
     if not row:
         return False
-    if row.get("sales_invoice_no") or row.get("purchase_invoice_no"):
+    if (
+        row.get("sales_invoice_no") or row.get("purchase_invoice_no")
+        or row.get("sales_return_no") or row.get("purchase_return_no")
+    ):
         return True
-    if row.get("reference_type") in ("sales_invoice", "purchase_invoice") and row.get("reference_id"):
+    if row.get("reference_type") in _WS_DOC_KINDS and row.get("reference_id"):
         return True
     return False
+
+
+def weight_slip_bill_ref(row):
+    """Best document number to show as bill/return ref on weighbridge lists."""
+    if not row:
+        return ""
+    return (
+        row.get("sales_invoice_no")
+        or row.get("purchase_invoice_no")
+        or row.get("sales_return_no")
+        or row.get("purchase_return_no")
+        or ""
+    )
 
 
 def weight_slip_is_imported(slip_or_remarks) -> bool:
@@ -755,18 +932,19 @@ def get_unlinked_slips_for_party(party_type, party_id, product_id=None, include_
     # Free for new primary: no reference and no invoice.weight_slip_id.
     q = f"""SELECT ws.*, c.name AS customer_name, c.code AS customer_code,
                    s.name AS supplier_name, s.code AS supplier_code, p.name AS product_name,
-                   si.document_no AS sales_invoice_no, pi.document_no AS purchase_invoice_no
+                   {_WS_DOC_NO_SELECT}
             FROM weight_slips ws
             LEFT JOIN customers c ON ws.customer_id=c.id
             LEFT JOIN suppliers s ON ws.supplier_id=s.id
             LEFT JOIN products p ON ws.product_id=p.id
-            {_WS_SALES_INV_JOIN}
-            {_WS_PURCHASE_INV_JOIN}
+            {_WS_ALL_DOC_JOINS}
             WHERE ws.status='completed'
               AND COALESCE(ws.net_weight, 0) > 0
               AND ws.{col}=?
               AND NOT EXISTS (SELECT 1 FROM sales_invoices x WHERE x.weight_slip_id=ws.id)
               AND NOT EXISTS (SELECT 1 FROM purchase_invoices x WHERE x.weight_slip_id=ws.id)
+              AND NOT EXISTS (SELECT 1 FROM sales_returns x WHERE x.weight_slip_id=ws.id)
+              AND NOT EXISTS (SELECT 1 FROM purchase_returns x WHERE x.weight_slip_id=ws.id)
               AND (ws.reference_type IS NULL OR ws.reference_id IS NULL)
               {_WS_EXCLUDE_IMPORTED_SQL}"""
     p = [party_id]
@@ -791,19 +969,21 @@ def get_referenceable_slips(party_type=None, party_id=None, include_slip_id=None
     from database import get_connection, rows_to_list
 
     q = f"""SELECT ws.*, c.name AS customer_name, s.name AS supplier_name, p.name AS product_name,
-                   si.document_no AS sales_invoice_no, pi.document_no AS purchase_invoice_no
+                   {_WS_DOC_NO_SELECT}
             FROM weight_slips ws
             LEFT JOIN customers c ON ws.customer_id=c.id
             LEFT JOIN suppliers s ON ws.supplier_id=s.id
             LEFT JOIN products p ON ws.product_id=p.id
-            {_WS_SALES_INV_JOIN}
-            {_WS_PURCHASE_INV_JOIN}
+            {_WS_ALL_DOC_JOINS}
             WHERE ws.status='completed'
               AND COALESCE(ws.net_weight, 0) > 0
               AND (
-                    (ws.reference_type IN ('sales_invoice','purchase_invoice') AND ws.reference_id IS NOT NULL)
+                    (ws.reference_type IN ('sales_invoice','purchase_invoice','sales_return','purchase_return')
+                     AND ws.reference_id IS NOT NULL)
                  OR EXISTS (SELECT 1 FROM sales_invoices x WHERE x.weight_slip_id=ws.id)
                  OR EXISTS (SELECT 1 FROM purchase_invoices x WHERE x.weight_slip_id=ws.id)
+                 OR EXISTS (SELECT 1 FROM sales_returns x WHERE x.weight_slip_id=ws.id)
+                 OR EXISTS (SELECT 1 FROM purchase_returns x WHERE x.weight_slip_id=ws.id)
               )
               {_WS_EXCLUDE_IMPORTED_SQL}"""
     p = []
@@ -940,6 +1120,91 @@ def create_draft_invoice_from_weight_slip(slip_id, user_id=None, product_id=None
         "amount": round(qty * float(rate), 2), "net_weight": net,
     }]
     return save_purchase(header, lines, user_id=user_id)
+
+
+def create_draft_return_from_weight_slip(slip_id, user_id=None, product_id=None):
+    """Weigh-first: create a sale/purchase return from a completed slip and link it."""
+    from datetime import date
+    from database import peek_invoice, save_purchase_return, save_sale_return
+
+    slip = get_weight_slip_pro(slip_id)
+    if not slip:
+        raise ValueError("Weight slip not found.")
+    if slip.get("status") != "completed":
+        raise ValueError("Complete second weight before creating a return.")
+    if weight_slip_is_linked(slip):
+        raise ValueError("This slip is already linked to an invoice or return.")
+    net = float(slip.get("net_weight") or 0)
+    if net <= 0:
+        raise ValueError("Slip has no net weight.")
+
+    pid = product_id or slip.get("product_id")
+    if not pid:
+        raise ValueError("No item on slip — set item on the weight slip or pick one when creating the return.")
+
+    tx = slip_transaction_type(slip)
+    is_sale_ret = tx == "SALE_RETURN" or (
+        tx != "PURCHASE_RETURN"
+        and (bool(slip.get("customer_id")) or slip.get("party_type") == "customer")
+    )
+    from db_v3 import default_tax_rate_id
+    default_tax = default_tax_rate_id()
+    ret_date = str(slip.get("slip_date") or date.today())
+    notes = f"From weight slip {slip.get('document_no', '')}"
+
+    from database import get_connection, row_to_dict
+    with get_connection() as conn:
+        prod = row_to_dict(conn.execute(
+            "SELECT id, code, name, sale_price, purchase_price, standard_weight FROM products WHERE id=?",
+            (int(pid),),
+        ).fetchone())
+    if not prod:
+        raise ValueError("Product on slip not found.")
+
+    from product_rates_legacy import resolve_product_rate
+
+    if is_sale_ret:
+        if not slip.get("customer_id"):
+            raise ValueError("Slip has no customer — edit the slip and set customer/party.")
+        rate, _ = resolve_product_rate(prod, kind="sale", party_id=int(slip["customer_id"]))
+        qty = 1.0
+        header = {
+            "return_no": peek_invoice("SR", "sales_returns"),
+            "customer_id": slip["customer_id"],
+            "return_date": ret_date,
+            "notes": notes,
+            "tax_rate_id": default_tax,
+            "discount_pct": 0,
+            "weighbridge_required": 1,
+            "weight_slip_id": slip_id,
+            "weight_slip_as_primary": True,
+        }
+        lines = [{
+            "item_id": int(pid), "quantity": qty, "rate": float(rate),
+            "amount": round(qty * float(rate), 2), "net_weight": net,
+        }]
+        return save_sale_return(header, lines, user_id=user_id)
+
+    if not slip.get("supplier_id"):
+        raise ValueError("Slip has no supplier — edit the slip and set supplier/party.")
+    rate, _ = resolve_product_rate(prod, kind="purchase", party_id=int(slip["supplier_id"]))
+    qty = 1.0
+    header = {
+        "return_no": peek_invoice("PR", "purchase_returns"),
+        "supplier_id": slip["supplier_id"],
+        "return_date": ret_date,
+        "notes": notes,
+        "tax_rate_id": default_tax,
+        "discount_pct": 0,
+        "weighbridge_required": 1,
+        "weight_slip_id": slip_id,
+        "weight_slip_as_primary": True,
+    }
+    lines = [{
+        "item_id": int(pid), "quantity": qty, "rate": float(rate),
+        "amount": round(qty * float(rate), 2), "net_weight": net,
+    }]
+    return save_purchase_return(header, lines, user_id=user_id)
 
 
 def create_multi_dispatch_sales(
@@ -1178,10 +1443,15 @@ def save_weight_slip_pro(data, slip_id=None, user_id=None):
         ref_type, ref_id = "sales_invoice", data["sales_invoice_id"]
     elif data.get("purchase_invoice_id"):
         ref_type, ref_id = "purchase_invoice", data["purchase_invoice_id"]
+    elif data.get("sales_return_id"):
+        ref_type, ref_id = "sales_return", data["sales_return_id"]
+    elif data.get("purchase_return_id"):
+        ref_type, ref_id = "purchase_return", data["purchase_return_id"]
     diff = float(data.get("weight_difference") or 0)
+    tx_kind = (data.get("transaction_kind") or "").strip().upper().replace(" ", "_") or None
     with get_connection() as conn:
-        if ref_type and ref_id:
-            kind = "sales" if ref_type == "sales_invoice" else "purchase"
+        if ref_type and ref_id and ref_type in _WS_DOC_KINDS:
+            kind = _WS_DOC_KINDS[ref_type]["kind"]
             inv_wt = invoice_lines_net_weight(conn, ref_id, kind)
             diff = round(net - inv_wt, 3)
         fields = (
@@ -1213,6 +1483,11 @@ def save_weight_slip_pro(data, slip_id=None, user_id=None):
                 (ensure_document_no("WS", data.get("document_no"), conn), *fields, user_id),
             )
             slip_id = cur.lastrowid
+        if tx_kind:
+            conn.execute(
+                "UPDATE weight_slips SET transaction_kind=? WHERE id=?",
+                (tx_kind, slip_id),
+            )
         return slip_id
 
 
@@ -1223,14 +1498,13 @@ def get_weight_slip_pro(sid):
             f"""SELECT ws.*, v.registration_no,
                        c.name AS customer_name, c.code AS customer_code,
                        s.name AS supplier_name, s.code AS supplier_code, p.name AS product_name,
-                       si.document_no AS sales_invoice_no, pi.document_no AS purchase_invoice_no
+                       {_WS_DOC_NO_SELECT}
                FROM weight_slips ws
                LEFT JOIN vehicles v ON ws.vehicle_id=v.id
                LEFT JOIN customers c ON ws.customer_id=c.id
                LEFT JOIN suppliers s ON ws.supplier_id=s.id
                LEFT JOIN products p ON ws.product_id=p.id
-               {_WS_SALES_INV_JOIN}
-               {_WS_PURCHASE_INV_JOIN}
+               {_WS_ALL_DOC_JOINS}
                WHERE ws.id=?""", (sid,)).fetchone())
 
 
@@ -1239,14 +1513,13 @@ def get_weight_slips_pro(from_date=None, to_date=None, customer_id=None, supplie
     q = f"""SELECT ws.*, v.registration_no,
                   c.name AS customer_name, c.code AS customer_code,
                   s.name AS supplier_name, s.code AS supplier_code, p.name AS product_name,
-                  si.document_no AS sales_invoice_no, pi.document_no AS purchase_invoice_no
+                  {_WS_DOC_NO_SELECT}
            FROM weight_slips ws
            LEFT JOIN vehicles v ON ws.vehicle_id=v.id
            LEFT JOIN customers c ON ws.customer_id=c.id
            LEFT JOIN suppliers s ON ws.supplier_id=s.id
            LEFT JOIN products p ON ws.product_id=p.id
-           {_WS_SALES_INV_JOIN}
-           {_WS_PURCHASE_INV_JOIN}
+           {_WS_ALL_DOC_JOINS}
            WHERE 1=1"""
     p = []
     if from_date:
@@ -1275,7 +1548,7 @@ def weight_slip_print_html(slip_id, operator_name=None):
     party_code = (s.get("customer_code") or s.get("supplier_code") or "").strip()
     if party_code and party != "—":
         party = f"{party_code} - {party}"
-    inv_ref = s.get("sales_invoice_no") or s.get("purchase_invoice_no") or ""
+    inv_ref = weight_slip_bill_ref(s) or ""
     tx_type = slip_transaction_type(s)
     status = "COMPLETED" if s.get("status") == "completed" else (
         "PENDING" if s.get("status") == "first_weigh" else (s.get("status") or "").upper()

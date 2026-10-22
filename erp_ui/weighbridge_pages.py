@@ -123,15 +123,23 @@ def _calc_net(first_w, second_w):
     return 0.0
 
 
+def _slip_bill_ref(r):
+    from db_commercial import weight_slip_bill_ref
+    return weight_slip_bill_ref(r) or ""
+
+
 def _slip_invoice_status(r):
-    from db_commercial import weight_slip_is_linked
+    from db_commercial import weight_slip_is_linked, slip_transaction_type
     if weight_slip_is_linked(r):
-        inv = r.get("sales_invoice_no") or r.get("purchase_invoice_no") or ""
-        return f"Linked — {inv}" if inv else "Linked on invoice"
-    ref = r.get("sales_invoice_no") or r.get("purchase_invoice_no")
+        inv = _slip_bill_ref(r)
+        return f"Linked — {inv}" if inv else "Linked on invoice/return"
+    ref = _slip_bill_ref(r)
     if ref:
-        return f"Completed — attach slip on invoice {ref}"
-    return "Completed — attach slip on Sales / Purchase invoice"
+        return f"Completed — attach slip on {ref}"
+    tx = slip_transaction_type(r)
+    if tx in ("SALE_RETURN", "PURCHASE_RETURN"):
+        return "Completed — attach slip on Sale / Purchase return"
+    return "Completed — attach slip on Sales / Purchase invoice or return"
 
 
 def _weight_slip_status_badge(status: str | None) -> str:
@@ -165,7 +173,7 @@ def _render_weight_slip_html_table(rows, *, mode: str = "pending") -> None:
                 escape(str(r.get("product_name") or "—")),
                 f"{float(r.get('first_weight') or 0):,.3f}",
                 escape(str(r.get("first_weight_time") or r.get("slip_time") or "")),
-                escape(str(r.get("sales_invoice_no") or r.get("purchase_invoice_no") or "—")),
+                escape(str(_slip_bill_ref(r) or "—")),
                 _weight_slip_status_badge("pending"),
             ]
         else:
@@ -184,7 +192,7 @@ def _render_weight_slip_html_table(rows, *, mode: str = "pending") -> None:
                 f"{float(r.get('first_weight') or 0):,.3f}",
                 f"{float(r.get('second_weight') or 0):,.3f}",
                 f"{float(r.get('net_weight') or 0):,.3f}",
-                escape(str(r.get("sales_invoice_no") or r.get("purchase_invoice_no") or "—")),
+                escape(str(_slip_bill_ref(r) or "—")),
                 badge,
             ]
         row_cells = []
@@ -242,8 +250,8 @@ def _second_weight_form_body(slip_id: int, *, key_prefix: str = "ws2"):
         f"First: **{float(slip.get('first_weight') or 0):,.3f} kg** at {slip.get('first_weight_time', '—')}"
     )
     st.caption(f"Current party: **{_party_label(slip)}**")
-    if slip.get("product_name") or slip.get("sales_invoice_no") or slip.get("purchase_invoice_no"):
-        inv_ref = slip.get("sales_invoice_no") or slip.get("purchase_invoice_no") or ""
+    if slip.get("product_name") or _slip_bill_ref(slip):
+        inv_ref = _slip_bill_ref(slip)
         bits = [b for b in [slip.get("product_name"), f"Bill {inv_ref}" if inv_ref else ""] if b]
         st.caption(" · ".join(bits))
 
@@ -257,8 +265,13 @@ def _second_weight_form_body(slip_id: int, *, key_prefix: str = "ws2"):
         )
         party_type_2 = st.selectbox(
             "Type",
-            ["SALE (Customer)", "PURCHASE (Supplier)"],
-            index=0 if is_sale else 1,
+            [
+                "SALE (Customer)",
+                "SALE RETURN (Customer)",
+                "PURCHASE (Supplier)",
+                "PURCHASE RETURN (Supplier)",
+            ],
+            index=0 if is_sale else 2,
             key=f"{key_prefix}_ptype",
         )
         party_type_2 = party_type_2 or ("SALE (Customer)" if is_sale else "PURCHASE (Supplier)")
@@ -307,7 +320,14 @@ def _second_weight_form_body(slip_id: int, *, key_prefix: str = "ws2"):
                     _party_fmt,
                 )
     else:
-        ptype_lbl = "SALE (Customer)" if is_sale else "PURCHASE (Supplier)"
+        from db_commercial import slip_transaction_type
+        tx = slip_transaction_type(slip)
+        ptype_lbl = {
+            "SALE": "SALE (Customer)",
+            "SALE_RETURN": "SALE RETURN (Customer)",
+            "PURCHASE": "PURCHASE (Supplier)",
+            "PURCHASE_RETURN": "PURCHASE RETURN (Supplier)",
+        }.get(tx, "SALE (Customer)" if is_sale else "PURCHASE (Supplier)")
         st.success(
             f"Party locked from 1st weight: **{_party_label(slip)}** · {ptype_lbl}"
         )
@@ -328,13 +348,21 @@ def _second_weight_form_body(slip_id: int, *, key_prefix: str = "ws2"):
                         raise ValueError("Select the customer for this dispatch.")
                     if is_unknown_party(cid2, "customer"):
                         raise ValueError("Select a real customer (not UNKNOWN) at 2nd weight.")
-                    party_update = {"party_type": "customer", "customer_id": cid2}
+                    tx2 = "SALE_RETURN" if "RETURN" in str(party_type_2).upper() else "SALE"
+                    party_update = {
+                        "party_type": "customer", "customer_id": cid2,
+                        "transaction_kind": tx2,
+                    }
                 else:
                     if not sid2:
                         raise ValueError("Select the supplier for this receipt.")
                     if is_unknown_party(sid2, "supplier"):
                         raise ValueError("Select a real supplier (not UNKNOWN) at 2nd weight.")
-                    party_update = {"party_type": "supplier", "supplier_id": sid2}
+                    tx2 = "PURCHASE_RETURN" if "RETURN" in str(party_type_2).upper() else "PURCHASE"
+                    party_update = {
+                        "party_type": "supplier", "supplier_id": sid2,
+                        "transaction_kind": tx2,
+                    }
             db.complete_weight_slip(
                 slip_id, second_w, second_t, uid(), party_update=party_update,
             )
@@ -411,12 +439,28 @@ def page_weight_entry():
         c1, c2 = st.columns(2)
         slip_date = c1.date_input("Date", value=date.today(), key=wk("date"))
         slip_time = c2.text_input("Time", value=now.strftime("%H:%M:%S"), key=wk("time"))
-        party_type = st.selectbox("Type", ["SALE (Customer)", "PURCHASE (Supplier)"], key=wk("party"))
+        party_type = st.selectbox(
+            "Type",
+            [
+                "SALE (Customer)",
+                "SALE RETURN (Customer)",
+                "PURCHASE (Supplier)",
+                "PURCHASE RETURN (Supplier)",
+            ],
+            key=wk("party"),
+        )
         party_type = party_type or "SALE (Customer)"
+        is_sale_side = str(party_type).startswith("SALE")
+        tx_kind = {
+            "SALE (Customer)": "SALE",
+            "SALE RETURN (Customer)": "SALE_RETURN",
+            "PURCHASE (Supplier)": "PURCHASE",
+            "PURCHASE RETURN (Supplier)": "PURCHASE_RETURN",
+        }.get(str(party_type), "SALE")
         st.caption(
             "At **1st weight** record vehicle and party (or mark **UNKNOWN**). "
             "At **2nd weight** the party is kept automatically; only UNKNOWN slips ask for a party again. "
-            "Items/invoice are chosen later on the invoice."
+            "Items / invoice / return are chosen later on the document."
         )
         unknown_party = st.checkbox(
             "Party unknown — use UNKNOWN (assign at 2nd weight)",
@@ -427,12 +471,12 @@ def page_weight_entry():
         cid = sid = None
         if unknown_party:
             from db_invoice_workflow import unknown_party_id
-            if str(party_type).startswith("SALE"):
+            if is_sale_side:
                 cid = unknown_party_id("customer", uid())
             else:
                 sid = unknown_party_id("supplier", uid())
             st.info("Party set to **UNKNOWN**. Select the real party when completing 2nd weight.")
-        elif str(party_type).startswith("SALE"):
+        elif is_sale_side:
             from_supplier = st.checkbox(
                 "Party is a Supplier (sell to supplier)",
                 value=False,
@@ -474,9 +518,9 @@ def page_weight_entry():
                 st.error("First weight is required.")
             elif not vehicle_no.strip():
                 st.error("Vehicle number is required.")
-            elif str(party_type).startswith("SALE") and not cid:
+            elif is_sale_side and not cid:
                 st.error("Select a customer, or tick **Party unknown**.")
-            elif str(party_type).startswith("PURCHASE") and not sid:
+            elif (not is_sale_side) and not sid:
                 st.error("Select a supplier, or tick **Party unknown**.")
             else:
                 try:
@@ -484,6 +528,7 @@ def page_weight_entry():
                         "document_no": slip_no, "slip_date": str(slip_date), "slip_time": slip_time,
                         "customer_id": cid, "supplier_id": sid, "product_id": None,
                         "party_type": "customer" if cid else "supplier",
+                        "transaction_kind": tx_kind,
                         "vehicle_no": vehicle_no.strip().upper(), "driver_name": driver,
                         "first_weight": first_w, "second_weight": 0,
                         "gross_weight": first_w, "tare_weight": 0, "net_weight": 0,
@@ -610,7 +655,7 @@ def page_weight_entry():
                 "First (kg)": f"{float(r.get('first_weight') or 0):,.3f}",
                 "Second (kg)": f"{float(r.get('second_weight') or 0):,.3f}",
                 "Net (kg)": f"{float(r.get('net_weight') or 0):,.3f}",
-                "Bill ref": r.get("sales_invoice_no") or r.get("purchase_invoice_no") or "—",
+                "Bill ref": _slip_bill_ref(r) or "—",
                 "Status": _slip_invoice_status(r),
             } for r in completed])
             export_buttons(df, "completed_weights", "Completed Weights")
@@ -715,7 +760,7 @@ def page_weight_entry():
                     st_lbl = f"cancelled → {_infer_reopen_status(r)}"
                 elif st_lbl == "first_weigh":
                     st_lbl = "pending 2nd"
-                inv_ref = r.get("sales_invoice_no") or r.get("purchase_invoice_no")
+                inv_ref = _slip_bill_ref(r)
                 if inv_ref:
                     st_lbl = f"{st_lbl} | on {inv_ref}"
                 opts[f"{r['document_no']} | {_party_label(r)} | {r.get('vehicle_no','')} | {st_lbl}"] = r
@@ -823,11 +868,22 @@ def page_weight_entry():
                 if slip_party_is_unknown(slip):
                     st.warning("Party is UNKNOWN — set the real party below or when completing 2nd weight.")
                 # Party edit outside form (smart_select uses widgets incompatible with st.form)
+                from db_commercial import slip_transaction_type
                 is_sale_ed = bool(slip.get("customer_id")) or (slip.get("party_type") or "") == "customer"
+                _tx_ed = slip_transaction_type(slip)
+                _ptype_opts = [
+                    "SALE (Customer)",
+                    "SALE RETURN (Customer)",
+                    "PURCHASE (Supplier)",
+                    "PURCHASE RETURN (Supplier)",
+                ]
+                _ptype_default = {
+                    "SALE": 0, "SALE_RETURN": 1, "PURCHASE": 2, "PURCHASE_RETURN": 3,
+                }.get(_tx_ed, 0 if is_sale_ed else 2)
                 ptype_ed = st.selectbox(
                     "Party type",
-                    ["SALE (Customer)", "PURCHASE (Supplier)"],
-                    index=0 if is_sale_ed else 1,
+                    _ptype_opts,
+                    index=_ptype_default,
                     key="ws_ed_ptype",
                 )
                 _rc = [r for r in db.get_customers(active_only=True) if str(r.get("code") or "").upper() != UNKNOWN_PARTY_CODE]
@@ -836,17 +892,40 @@ def page_weight_entry():
                 keep_unknown = st.checkbox("Keep UNKNOWN for now", value=slip_party_is_unknown(slip), key="ws_ed_keep_unk")
                 if not keep_unknown:
                     if str(ptype_ed).startswith("SALE"):
-                        _, cid_ed, _ = smart_select(
-                            "Customer account", _rc, "ws_ed_c", "id",
-                            _party_fmt,
-                            default_id=slip.get("customer_id") if is_sale_ed and not slip_party_is_unknown(slip) else None,
+                        from_sup_ed = st.checkbox(
+                            "Party is a Supplier (sell to supplier)",
+                            value=False,
+                            key="ws_ed_from_sup",
+                            help="Search Suppliers; links/creates Customer with same code.",
                         )
+                        if from_sup_ed:
+                            from erp_ui import helpers as hlp
+                            cid_ed = hlp.resolve_sale_party_id(
+                                from_supplier=True, key="ws_ed_sale_sup",
+                            )
+                        else:
+                            _, cid_ed, _ = smart_select(
+                                "Customer account", _rc, "ws_ed_c", "id",
+                                _party_fmt,
+                                default_id=slip.get("customer_id") if is_sale_ed and not slip_party_is_unknown(slip) else None,
+                            )
                     else:
-                        _, sid_ed, _ = smart_select(
-                            "Supplier account", _rs, "ws_ed_s", "id",
-                            _party_fmt,
-                            default_id=slip.get("supplier_id") if (not is_sale_ed) and not slip_party_is_unknown(slip) else None,
+                        from_cust_ed = st.checkbox(
+                            "Party is a Customer (buy from customer)",
+                            value=False,
+                            key="ws_ed_from_cust",
                         )
+                        if from_cust_ed:
+                            from erp_ui import helpers as hlp
+                            sid_ed = hlp.resolve_purchase_party_id(
+                                from_customer=True, key="ws_ed_pur_cust",
+                            )
+                        else:
+                            _, sid_ed, _ = smart_select(
+                                "Supplier account", _rs, "ws_ed_s", "id",
+                                _party_fmt,
+                                default_id=slip.get("supplier_id") if (not is_sale_ed) and not slip_party_is_unknown(slip) else None,
+                            )
                 with st.form("ws_edit_form"):
                     c1, c2 = st.columns(2)
                     vehicle = c1.text_input("Vehicle No", value=slip.get("vehicle_no") or "")
@@ -874,12 +953,18 @@ def page_weight_entry():
                                         raise ValueError("Select a customer, or tick Keep UNKNOWN.")
                                     payload.update({
                                         "customer_id": cid_ed, "supplier_id": None, "party_type": "customer",
+                                        "transaction_kind": (
+                                            "SALE_RETURN" if "RETURN" in str(ptype_ed).upper() else "SALE"
+                                        ),
                                     })
                                 else:
                                     if not sid_ed:
                                         raise ValueError("Select a supplier, or tick Keep UNKNOWN.")
                                     payload.update({
                                         "supplier_id": sid_ed, "customer_id": None, "party_type": "supplier",
+                                        "transaction_kind": (
+                                            "PURCHASE_RETURN" if "RETURN" in str(ptype_ed).upper() else "PURCHASE"
+                                        ),
                                     })
                             db.update_weight_slip(sid, payload, uid())
                             ff.action_done("Slip saved." + (" Reopened for use." if is_cancelled else ""))
@@ -892,13 +977,24 @@ def page_weight_entry():
 
             elif not is_linked and is_completed:
                 from db_invoice_workflow import UNKNOWN_PARTY_CODE, slip_party_is_unknown
+                from db_commercial import slip_transaction_type
 
                 st.caption(f"Party: **{_party_label(slip)}**")
                 is_sale_ed = bool(slip.get("customer_id")) or (slip.get("party_type") or "") == "customer"
+                _tx_edc = slip_transaction_type(slip)
+                _ptype_opts_c = [
+                    "SALE (Customer)",
+                    "SALE RETURN (Customer)",
+                    "PURCHASE (Supplier)",
+                    "PURCHASE RETURN (Supplier)",
+                ]
+                _ptype_def_c = {
+                    "SALE": 0, "SALE_RETURN": 1, "PURCHASE": 2, "PURCHASE_RETURN": 3,
+                }.get(_tx_edc, 0 if is_sale_ed else 2)
                 ptype_ed = st.selectbox(
                     "Party type",
-                    ["SALE (Customer)", "PURCHASE (Supplier)"],
-                    index=0 if is_sale_ed else 1,
+                    _ptype_opts_c,
+                    index=_ptype_def_c,
                     key="ws_edc_ptype",
                 )
                 _rc = [r for r in db.get_customers(active_only=True) if str(r.get("code") or "").upper() != UNKNOWN_PARTY_CODE]
@@ -949,12 +1045,18 @@ def page_weight_entry():
                                     raise ValueError("Select a customer.")
                                 payload.update({
                                     "customer_id": cid_ed, "supplier_id": None, "party_type": "customer",
+                                    "transaction_kind": (
+                                        "SALE_RETURN" if "RETURN" in str(ptype_ed).upper() else "SALE"
+                                    ),
                                 })
                             else:
                                 if not sid_ed:
                                     raise ValueError("Select a supplier.")
                                 payload.update({
                                     "supplier_id": sid_ed, "customer_id": None, "party_type": "supplier",
+                                    "transaction_kind": (
+                                        "PURCHASE_RETURN" if "RETURN" in str(ptype_ed).upper() else "PURCHASE"
+                                    ),
                                 })
                             db.update_weight_slip(sid, payload, uid())
                             ff.action_done("Slip saved." + (" Reopened for use." if is_cancelled else ""))
@@ -1037,7 +1139,7 @@ def page_weight_reports():
         body = []
         for r in rows:
             party = _party_label(r)
-            inv = r.get("sales_invoice_no") or r.get("purchase_invoice_no") or "—"
+            inv = _slip_bill_ref(r) or "—"
             st_key = r.get("status") or "draft"
             if st_key == "first_weigh":
                 badge = _weight_slip_status_badge("pending")

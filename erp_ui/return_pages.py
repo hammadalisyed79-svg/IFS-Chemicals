@@ -35,6 +35,8 @@ def _seed_pr_edit(ret, sup_opts, *, sup=None, ret_no=None, rdate=None, notes=Non
         "purchase_id": ret.get("purchase_id"),
         "return_date": str(rdate) if from_form else ret["return_date"],
         "notes": notes if from_form else (ret.get("notes") or ""),
+        "weight_slip_id": ret.get("weight_slip_id"),
+        "weighbridge_required": ret.get("weighbridge_required"),
     }
     st.session_state["pr_edit_lines"] = hlp._pad_line_rows([
         {"item_id": li["item_id"], "quantity": li["quantity"], "rate": li["rate"],
@@ -51,12 +53,47 @@ def _seed_sr_edit(ret, cust_opts, *, cust=None, ret_no=None, rdate=None, notes=N
         "sale_id": ret.get("sale_id"),
         "return_date": str(rdate) if from_form else ret["return_date"],
         "notes": notes if from_form else (ret.get("notes") or ""),
+        "weight_slip_id": ret.get("weight_slip_id"),
+        "weighbridge_required": ret.get("weighbridge_required"),
     }
     st.session_state["sr_edit_lines"] = hlp._pad_line_rows([
         {"item_id": li["item_id"], "quantity": li["quantity"], "rate": li["rate"],
          "amount": li["amount"], "net_weight": li.get("net_weight", 0)}
         for li in ret["items"]
     ])
+
+
+def _return_weight_slip_block(header, *, key_prefix, party_type, customer_id=None, supplier_id=None,
+                              current_return_id=None):
+    """Link weighbridge slip on sale/purchase return (same pattern as invoices)."""
+    use_wb = st.checkbox(
+        "Link weight scale slip",
+        value=bool(header.get("weight_slip_id") or header.get("weighbridge_required")),
+        key=f"{key_prefix}_use_wb",
+        help="Attach a completed weighbridge slip — same as Sales / Purchase invoices.",
+    )
+    if not use_wb:
+        header.pop("weight_slip_id", None)
+        header.pop("weight_slip_as_primary", None)
+        header["weighbridge_required"] = 0
+        return header
+    header["weighbridge_required"] = 1
+    ws_id, ws_primary = hlp.weight_slip_select(
+        key_prefix,
+        party_type=party_type,
+        current_slip_id=header.get("weight_slip_id"),
+        customer_id=customer_id,
+        supplier_id=supplier_id,
+        required=True,
+        current_invoice_id=current_return_id,
+    )
+    if ws_id:
+        header["weight_slip_id"] = ws_id
+        header["weight_slip_as_primary"] = ws_primary
+    else:
+        header.pop("weight_slip_id", None)
+        header.pop("weight_slip_as_primary", None)
+    return header
 
 
 
@@ -146,6 +183,10 @@ def page_purchase_return():
                     ff.action_done(f"Loaded {len(lines)} line(s) from **{inv['invoice_no']}**.")
                 except Exception as e:
                     st.error(str(e))
+            header = _return_weight_slip_block(
+                header, key_prefix="pr_new_ws", party_type="supplier",
+                supplier_id=header.get("supplier_id"),
+            )
             header.setdefault("tax_rate_id", db.default_tax_rate_id())
             header.setdefault("discount_pct", 0)
             lines, subtotal = hlp.smart_line_item_editor(
@@ -157,10 +198,18 @@ def page_purchase_return():
                 party_id=header.get("supplier_id"), party_kind="purchase",
             )
             header.update(tax_hdr)
+            inv_wt = sum(float(l.get("net_weight") or 0) for l in lines)
+            if header.get("weight_slip_id"):
+                hlp.show_weight_variance(
+                    inv_wt, header["weight_slip_id"],
+                    as_primary=header.get("weight_slip_as_primary", True),
+                )
             st.write(f"**Net Return:** {hlp.fmt_money(totals['total'])}")
             if st.button("Save Purchase Return", key="save_pr"):
                 if not lines:
                     st.error("Add at least one line item.")
+                elif header.get("weighbridge_required") and not header.get("weight_slip_id"):
+                    st.error("Select a weight slip, or untick **Link weight scale slip**.")
                 else:
                     try:
                         db.save_purchase_return(header, lines)
@@ -219,6 +268,11 @@ def page_purchase_return():
                     st.rerun()
                 except Exception as e:
                     st.error(str(e))
+            header = _return_weight_slip_block(
+                header, key_prefix="pr_edit_ws", party_type="supplier",
+                supplier_id=header.get("supplier_id") or ret.get("supplier_id"),
+                current_return_id=rid,
+            )
             header.setdefault("tax_rate_id", db.default_tax_rate_id())
             header.setdefault("discount_pct", 0)
             lines, subtotal = hlp.smart_line_item_editor(
@@ -232,15 +286,24 @@ def page_purchase_return():
                 party_kind="purchase",
             )
             header.update(tax_hdr)
+            inv_wt = sum(float(l.get("net_weight") or 0) for l in lines)
+            if header.get("weight_slip_id"):
+                hlp.show_weight_variance(
+                    inv_wt, header["weight_slip_id"],
+                    as_primary=header.get("weight_slip_as_primary", True),
+                )
             st.write(f"**Net Return:** {hlp.fmt_money(totals['total'])}")
             c1, c2 = st.columns(2)
             if c1.button("Update Return", key="upd_pr"):
                 if lines:
-                    try:
-                        db.save_purchase_return(header, lines, return_id=rid)
-                        ff.finish_edit_refresh("pr_edit", rid, "pr_edit", "Updated.")
-                    except Exception as e:
-                        st.error(str(e))
+                    if header.get("weighbridge_required") and not header.get("weight_slip_id"):
+                        st.error("Select a weight slip, or untick **Link weight scale slip**.")
+                    else:
+                        try:
+                            db.save_purchase_return(header, lines, return_id=rid)
+                            ff.finish_edit_refresh("pr_edit", rid, "pr_edit", "Updated.")
+                        except Exception as e:
+                            st.error(str(e))
             if c2.button("Delete Return", key="del_pr"):
                 db.delete_purchase_return(rid)
                 ff.finish_after_delete("pr_edit", "pr_edit")
@@ -335,6 +398,10 @@ def page_sale_return():
                     ff.action_done(f"Loaded {len(lines)} line(s) from **{inv['invoice_no']}**.")
                 except Exception as e:
                     st.error(str(e))
+            header = _return_weight_slip_block(
+                header, key_prefix="sr_new_ws", party_type="customer",
+                customer_id=header.get("customer_id"),
+            )
             header.setdefault("tax_rate_id", db.default_tax_rate_id())
             header.setdefault("discount_pct", 0)
             lines, subtotal = hlp.smart_line_item_editor(
@@ -346,10 +413,18 @@ def page_sale_return():
                 party_id=header.get("customer_id"), party_kind="sale",
             )
             header.update(tax_hdr)
+            inv_wt = sum(float(l.get("net_weight") or 0) for l in lines)
+            if header.get("weight_slip_id"):
+                hlp.show_weight_variance(
+                    inv_wt, header["weight_slip_id"],
+                    as_primary=header.get("weight_slip_as_primary", True),
+                )
             st.write(f"**Net Return:** {hlp.fmt_money(totals['total'])}")
             if st.button("Save Sale Return", key="save_sr"):
                 if not lines:
                     st.error("Add at least one line item.")
+                elif header.get("weighbridge_required") and not header.get("weight_slip_id"):
+                    st.error("Select a weight slip, or untick **Link weight scale slip**.")
                 else:
                     try:
                         db.save_sale_return(header, lines)
@@ -411,6 +486,11 @@ def page_sale_return():
                     st.rerun()
                 except Exception as e:
                     st.error(str(e))
+            header = _return_weight_slip_block(
+                header, key_prefix="sr_edit_ws", party_type="customer",
+                customer_id=header.get("customer_id") or ret.get("customer_id"),
+                current_return_id=rid,
+            )
             header.setdefault("tax_rate_id", db.default_tax_rate_id())
             header.setdefault("discount_pct", 0)
             lines, subtotal = hlp.smart_line_item_editor(
@@ -424,15 +504,24 @@ def page_sale_return():
                 party_kind="sale",
             )
             header.update(tax_hdr)
+            inv_wt = sum(float(l.get("net_weight") or 0) for l in lines)
+            if header.get("weight_slip_id"):
+                hlp.show_weight_variance(
+                    inv_wt, header["weight_slip_id"],
+                    as_primary=header.get("weight_slip_as_primary", True),
+                )
             st.write(f"**Net Return:** {hlp.fmt_money(totals['total'])}")
             c1, c2 = st.columns(2)
             if c1.button("Update Return", key="upd_sr"):
                 if lines:
-                    try:
-                        db.save_sale_return(header, lines, return_id=rid)
-                        ff.finish_edit_refresh("sr_edit", rid, "sr_edit", "Updated.")
-                    except Exception as e:
-                        st.error(str(e))
+                    if header.get("weighbridge_required") and not header.get("weight_slip_id"):
+                        st.error("Select a weight slip, or untick **Link weight scale slip**.")
+                    else:
+                        try:
+                            db.save_sale_return(header, lines, return_id=rid)
+                            ff.finish_edit_refresh("sr_edit", rid, "sr_edit", "Updated.")
+                        except Exception as e:
+                            st.error(str(e))
             if c2.button("Delete Return", key="del_sr"):
                 db.delete_sale_return(rid)
                 ff.finish_after_delete("sr_edit", "sr_edit")

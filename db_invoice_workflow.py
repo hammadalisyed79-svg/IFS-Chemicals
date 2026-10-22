@@ -143,23 +143,26 @@ def _validate_weight_slip_unique(conn, slip_id, invoice_id, table):
 
 
 def _is_primary_weight_slip_for_invoice(conn, slip_id, invoice_id, kind="sales") -> bool:
-    """True when this invoice owns the slip's weight/variance (slip.reference_*)."""
+    """True when this invoice/return owns the slip's weight/variance (slip.reference_*)."""
     if not slip_id or not invoice_id:
         return False
-    ref_type = "sales_invoice" if kind == "sales" else "purchase_invoice"
-    table = "sales_invoices" if kind == "sales" else "purchase_invoices"
+    from db_commercial import _ws_meta, _ref_type_for_kind, _WS_DOC_KINDS
+    meta = _ws_meta(kind)
+    if not meta:
+        return False
+    ref_type = _ref_type_for_kind(kind)
+    table = meta["table"]
     slip = conn.execute(
         "SELECT reference_type, reference_id FROM weight_slips WHERE id=?",
         (slip_id,),
     ).fetchone()
     if not slip:
         return False
-    if slip["reference_type"] in ("sales_invoice", "purchase_invoice") and slip["reference_id"] is not None:
+    if slip["reference_type"] in _WS_DOC_KINDS and slip["reference_id"] is not None:
         return (
             slip["reference_type"] == ref_type
             and int(slip["reference_id"]) == int(invoice_id)
         )
-    # No primary claimed yet — earliest invoice with this slip owns weight
     row = conn.execute(
         f"SELECT id FROM {table} WHERE weight_slip_id=? ORDER BY id LIMIT 1",
         (slip_id,),
@@ -170,14 +173,17 @@ def _is_primary_weight_slip_for_invoice(conn, slip_id, invoice_id, kind="sales")
 
 
 def refresh_invoice_weight_match(conn, invoice_id, kind="sales"):
-    from db_commercial import invoice_lines_net_weight
-    table = "sales_invoices" if kind == "sales" else "purchase_invoices"
+    from db_commercial import invoice_lines_net_weight, _ws_meta
+    meta = _ws_meta(kind)
+    if not meta:
+        return
+    table = meta["table"]
     inv = conn.execute(f"SELECT weight_slip_id, total_net_weight FROM {table} WHERE id=?", (invoice_id,)).fetchone()
     if not inv:
         return
     inv_wt = float(inv["total_net_weight"] or invoice_lines_net_weight(conn, invoice_id, kind))
     slip_id = inv["weight_slip_id"]
-    # Reference-only link: show slip number on invoice, no variance vs full slip net
+    # Reference-only link: show slip number on document, no variance vs full slip net
     if slip_id and not _is_primary_weight_slip_for_invoice(conn, slip_id, invoice_id, kind):
         match = {
             "physical_weight_kg": 0.0,
@@ -308,6 +314,8 @@ def complete_weight_slip(slip_id, second_weight, second_time, user_id=None, *, p
                 data["supplier_id"] = sid
                 data["customer_id"] = None
                 data["party_type"] = "supplier"
+            if party_update.get("transaction_kind"):
+                data["transaction_kind"] = party_update["transaction_kind"]
         data.update({
             "second_weight": second_w,
             "second_weight_time": second_time or pts,
@@ -324,18 +332,17 @@ def complete_weight_slip(slip_id, second_weight, second_time, user_id=None, *, p
 def get_all_pending_weight_slips():
     """Slips with first weight done, second weight pending."""
     from database import get_connection, rows_to_list
-    from db_commercial import _WS_SALES_INV_JOIN, _WS_PURCHASE_INV_JOIN
+    from db_commercial import _WS_ALL_DOC_JOINS, _WS_DOC_NO_SELECT
     with get_connection() as conn:
         return rows_to_list(conn.execute(
             f"""SELECT ws.*, c.name AS customer_name, c.code AS customer_code,
                        s.name AS supplier_name, s.code AS supplier_code, p.name AS product_name,
-                       si.document_no AS sales_invoice_no, pi.document_no AS purchase_invoice_no
+                       {_WS_DOC_NO_SELECT}
                FROM weight_slips ws
                LEFT JOIN customers c ON ws.customer_id=c.id
                LEFT JOIN suppliers s ON ws.supplier_id=s.id
                LEFT JOIN products p ON ws.product_id=p.id
-               {_WS_SALES_INV_JOIN}
-               {_WS_PURCHASE_INV_JOIN}
+               {_WS_ALL_DOC_JOINS}
                WHERE ws.status=?
                ORDER BY ws.slip_date DESC, ws.first_weight_time DESC, ws.id DESC""",
             (WEIGHT_SLIP_FIRST,),
@@ -343,22 +350,22 @@ def get_all_pending_weight_slips():
 
 
 def get_completed_unlinked_slips():
-    """Completed IFS weighbridge slips not yet linked to any invoice (imports excluded)."""
+    """Completed IFS weighbridge slips not yet linked to any invoice/return (imports excluded)."""
     from database import get_connection, rows_to_list
-    from db_commercial import _WS_SALES_INV_JOIN, _WS_PURCHASE_INV_JOIN, _WS_EXCLUDE_IMPORTED_SQL
+    from db_commercial import _WS_ALL_DOC_JOINS, _WS_DOC_NO_SELECT, _WS_EXCLUDE_IMPORTED_SQL
     with get_connection() as conn:
         return rows_to_list(conn.execute(
             f"""SELECT ws.*, c.name AS customer_name, c.code AS customer_code,
                        s.name AS supplier_name, s.code AS supplier_code, p.name AS product_name,
-                       si.document_no AS sales_invoice_no, pi.document_no AS purchase_invoice_no
+                       {_WS_DOC_NO_SELECT}
                FROM weight_slips ws
                LEFT JOIN customers c ON ws.customer_id=c.id
                LEFT JOIN suppliers s ON ws.supplier_id=s.id
                LEFT JOIN products p ON ws.product_id=p.id
-               {_WS_SALES_INV_JOIN}
-               {_WS_PURCHASE_INV_JOIN}
+               {_WS_ALL_DOC_JOINS}
                WHERE ws.status=?
                  AND si.id IS NULL AND pi.id IS NULL
+                 AND sr.id IS NULL AND prr.id IS NULL
                  AND (ws.reference_type IS NULL OR ws.reference_id IS NULL)
                  {_WS_EXCLUDE_IMPORTED_SQL}
                ORDER BY ws.slip_date DESC, ws.id DESC""",
@@ -386,7 +393,9 @@ def get_pending_weight_slips(party_type="customer"):
 def _slip_is_linked(conn, slip_id):
     si = conn.execute("SELECT id FROM sales_invoices WHERE weight_slip_id=?", (slip_id,)).fetchone()
     pi = conn.execute("SELECT id FROM purchase_invoices WHERE weight_slip_id=?", (slip_id,)).fetchone()
-    return bool(si or pi)
+    sr = conn.execute("SELECT id FROM sales_returns WHERE weight_slip_id=?", (slip_id,)).fetchone()
+    pr = conn.execute("SELECT id FROM purchase_returns WHERE weight_slip_id=?", (slip_id,)).fetchone()
+    return bool(si or pi or sr or pr)
 
 
 def cancel_weight_slip(slip_id, user_id, reason=""):

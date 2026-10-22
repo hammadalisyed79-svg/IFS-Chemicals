@@ -47,6 +47,26 @@ def open_purchase_from_register(row: dict) -> None:
     go_purchase_edit()
 
 
+def go_sale_return_edit() -> None:
+    st.session_state["sr_page_tab"] = "Edit"
+    st.session_state["sr_open_tab"] = "Edit"
+
+
+def go_purchase_return_edit() -> None:
+    st.session_state["pr_page_tab"] = "Edit"
+    st.session_state["pr_open_tab"] = "Edit"
+
+
+def open_sale_return_from_register(row: dict) -> None:
+    txn.reselect_transaction_picker("sr_edit", row["id"])
+    go_sale_return_edit()
+
+
+def open_purchase_return_from_register(row: dict) -> None:
+    txn.reselect_transaction_picker("pr_edit", row["id"])
+    go_purchase_return_edit()
+
+
 def open_recent_document(entry: dict) -> None:
     """Navigate to screen and open a recently viewed document when possible."""
     group = (entry.get("group") or "").strip()
