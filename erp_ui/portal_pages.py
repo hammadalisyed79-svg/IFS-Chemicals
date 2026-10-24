@@ -862,11 +862,16 @@ def _page_dashboard(user: dict):
         "<p>Check balance, place orders, and track deliveries from your phone.</p></div>",
         unsafe_allow_html=True,
     )
-    c1, c2, c3 = st.columns(3)
-    c1.metric("Outstanding", f"Rs. {float(prof.get('current_balance') or 0):,.2f}")
-    c2.metric("Credit limit", f"Rs. {float(prof.get('credit_limit') or 0):,.2f}")
+    credit = ps.credit_headroom(user)
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Outstanding", f"Rs. {credit['outstanding']:,.2f}")
+    c2.metric("Credit limit", f"Rs. {credit['credit_limit']:,.2f}")
+    if credit["available"] is None:
+        c3.metric("Available credit", "No limit")
+    else:
+        c3.metric("Available credit", f"Rs. {credit['available']:,.2f}")
     orders = ps.list_portal_orders(user)
-    c3.metric("Orders", len(orders))
+    c4.metric("Orders", len(orders))
     recent = orders[:5]
     if recent:
         st.subheader("Recent orders")
@@ -937,7 +942,7 @@ def _page_catalogue(user: dict):
     else:
         st.info("Cart empty — enter qty and **Save to cart**. You will stay on this page.")
 
-    q = st.text_input("Search products", placeholder="Type code or name…")
+    q = st.text_input("Search products", placeholder="IFS code, party code, or name…")
     all_items = ps.get_catalog(user, search=q or None) or []
     if not all_items and not q:
         st.info(
@@ -1147,17 +1152,31 @@ def _page_cart(user: dict):
     }))
     qty_total = float(pd.to_numeric(df["quantity"], errors="coerce").fillna(0).sum()) if "quantity" in df.columns else 0.0
     amt_total = float(df["line_total"].sum())
-    m1, m2, m3 = st.columns(3)
+    credit = ps.credit_headroom(user)
+    m1, m2, m3, m4 = st.columns(4)
     m1.metric("Products", f"{len(df):,}")
     m2.metric("Total quantity", f"{qty_total:,.0f}" if abs(qty_total - round(qty_total)) < 1e-9 else f"{qty_total:,.3f}")
     m3.metric("Estimated total", f"Rs. {amt_total:,.2f}")
+    if credit["available"] is None:
+        m4.metric("Available credit", "No limit")
+    else:
+        m4.metric("Available credit", f"Rs. {credit['available']:,.2f}")
+        if amt_total > float(credit["available"]):
+            st.warning(
+                f"This cart (Rs. {amt_total:,.2f}) exceeds available credit "
+                f"(Rs. {credit['available']:,.2f}). You can still submit — "
+                "sales will review the credit position before dispatch."
+            )
 
     # Allow removing / changing qty while editing or before submit
     with st.expander("Adjust quantities / remove lines", expanded=editing):
         new_cart = []
         for i, line in enumerate(cart):
             c1, c2, c3 = st.columns([3, 1, 1])
-            c1.write(f"**{line.get('code')}** — {line.get('name')}")
+            c1.write(
+                f"**{(line.get('party_item_code') or line.get('code') or '')}** — {line.get('name')}"
+                + (f"  \n`{line.get('code')}`" if line.get("party_item_code") else "")
+            )
             qty = c2.number_input(
                 "Qty",
                 min_value=0.0,
@@ -1245,6 +1264,12 @@ def _page_cart(user: dict):
                 st.session_state[_cart_key()] = []
                 st.session_state.pop("portal_cart_town", None)
                 ps.clear_portal_cart(user)
+                within, credit_msg = ps.check_credit_limit(user, amt_total)
+                if not within and credit_msg:
+                    st.warning(
+                        "Order submitted for sales review with a credit warning. "
+                        + credit_msg
+                    )
                 st.success(f"Order submitted successfully. Reference #{oid}")
                 st.balloons()
         except Exception as e:

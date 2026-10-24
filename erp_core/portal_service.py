@@ -304,18 +304,39 @@ def get_customer_outstanding(customer_id: int) -> float:
 
 
 def check_credit_limit(user: dict, order_total: float) -> tuple[bool, str]:
+    """Return (within_limit, message).
+
+    Portal submit uses this as a soft warning (orders still go to sales review).
+    Message is empty when within limit or when no credit limit is set.
+    """
     prof = get_distributor_profile(user) or {}
     limit = float(prof.get("credit_limit") or 0)
     if limit <= 0:
         return True, ""
     cid = get_distributor_customer_id(user)
     outstanding = get_customer_outstanding(cid)
-    if outstanding + order_total > limit:
+    available = limit - outstanding
+    if outstanding + float(order_total or 0) > limit:
         return False, (
             f"Credit limit exceeded. Limit Rs. {limit:,.2f}, "
-            f"outstanding Rs. {outstanding:,.2f}, order Rs. {order_total:,.2f}."
+            f"outstanding Rs. {outstanding:,.2f}, available Rs. {available:,.2f}, "
+            f"order Rs. {float(order_total or 0):,.2f}."
         )
     return True, ""
+
+
+def credit_headroom(user: dict) -> dict:
+    """Credit limit / outstanding / available for portal UI."""
+    prof = get_distributor_profile(user) or {}
+    limit = float(prof.get("credit_limit") or 0)
+    cid = get_distributor_customer_id(user)
+    outstanding = get_customer_outstanding(cid) if cid else float(prof.get("current_balance") or 0)
+    available = (limit - outstanding) if limit > 0 else None
+    return {
+        "credit_limit": limit,
+        "outstanding": outstanding,
+        "available": available,
+    }
 
 
 def list_portal_orders(user: dict, *, status: str | None = None):
@@ -484,9 +505,12 @@ def create_portal_order(
     if not cid:
         raise PermissionError("Distributor account not linked to a customer.")
     lines, subtotal, total = _calc_lines(cart, cid)
-    ok, msg = check_credit_limit(user, total)
-    if not ok:
-        raise ValueError(msg)
+    within_limit, credit_msg = check_credit_limit(user, total)
+    # Soft credit check: still accept the order for sales review (do not block submit).
+    notes_out = (notes or "").strip()
+    if submit and not within_limit and credit_msg:
+        flag = f"[CREDIT WARNING] {credit_msg}"
+        notes_out = f"{notes_out}\n{flag}".strip() if notes_out else flag
 
     town = (dispatch_town or "").strip()
     if submit and not town:
@@ -510,7 +534,7 @@ def create_portal_order(
                VALUES(?,?,?,?,?,?,?,?,0,0,?,?,?,'portal')""",
             (
                 order_no, cid, user["id"], od, dd, town, status,
-                subtotal, total, notes,
+                subtotal, total, notes_out,
                 _now() if submit else None,
             ),
         )
@@ -531,16 +555,23 @@ def create_portal_order(
         order["customer_name"] = (
             f"{prof.get('customer_code') or ''} — {prof.get('customer_name') or prof.get('business_name') or ''}"
         ).strip(" —")
+        if not within_limit:
+            order["credit_warning"] = credit_msg
         so_id = _create_sales_order_draft(user, order, lines)
         _link_sales_order(poid, so_id)
         order = get_portal_order(user, poid)
         order["customer_name"] = (
             f"{prof.get('customer_code') or ''} — {prof.get('customer_name') or ''}"
         ).strip(" —")
+        if not within_limit:
+            order["credit_warning"] = credit_msg
         notify.notify_internal_sales_order(order)
+        dist_msg = "Your order was received and is under review."
+        if not within_limit:
+            dist_msg += " Note: this order exceeds your available credit — sales will confirm."
         notify.notify_distributor(
             cid, "order_submitted", f"Order {order['order_no']} submitted",
-            "Your order was received and is under review.", "portal_order", poid,
+            dist_msg, "portal_order", poid,
         )
     return poid
 
@@ -748,9 +779,17 @@ def update_portal_order(
 
     cid = order["customer_id"]
     lines, subtotal, total = _calc_lines(cart, cid)
-    ok, msg = check_credit_limit(user, total)
-    if not ok:
-        raise ValueError(msg)
+    within_limit, credit_msg = check_credit_limit(user, total)
+    notes_out = (notes or "").strip()
+    # Drop a previous credit warning line then re-apply if still over limit.
+    if notes_out:
+        notes_out = "\n".join(
+            ln for ln in notes_out.splitlines()
+            if not ln.strip().startswith("[CREDIT WARNING]")
+        ).strip()
+    if not within_limit and credit_msg:
+        flag = f"[CREDIT WARNING] {credit_msg}"
+        notes_out = f"{notes_out}\n{flag}".strip() if notes_out else flag
 
     town = (dispatch_town or "").strip()
     if not town:
@@ -777,7 +816,7 @@ def update_portal_order(
                    submitted_at=COALESCE(submitted_at, ?)
                WHERE id=? AND customer_id=?""",
             (
-                od, dd, town, notes or "",
+                od, dd, town, notes_out,
                 subtotal, total,
                 new_status, _now(), _now(),
                 int(order_id), cid,
@@ -794,6 +833,8 @@ def update_portal_order(
             )
 
     order = get_portal_order(user, int(order_id))
+    if not within_limit:
+        order["credit_warning"] = credit_msg
     so_id = order.get("sales_order_id")
     so_ok = False
     if so_id:
@@ -815,6 +856,8 @@ def update_portal_order(
     order["customer_name"] = (
         f"{prof.get('customer_code') or ''} — {prof.get('customer_name') or ''}"
     ).strip(" —")
+    if not within_limit:
+        order["credit_warning"] = credit_msg
     notify.notify_internal_sales_order(order)
     notify.notify_distributor(
         cid, "order_updated", f"Order {order['order_no']} updated",

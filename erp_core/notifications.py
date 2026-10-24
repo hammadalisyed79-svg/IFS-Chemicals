@@ -93,7 +93,12 @@ def notify_internal_sales_order(portal_order: dict) -> None:
             if row:
                 cust_name = f"{row['code']} — {row['name']}"
     ono = portal_order.get("order_no") or "#"
-    title = f"New distributor order {ono}"
+    credit_warn = (portal_order.get("credit_warning") or "").strip()
+    title = (
+        f"CREDIT OVER — distributor order {ono}"
+        if credit_warn
+        else f"New distributor order {ono}"
+    )
     bits = [
         f"From {cust_name or 'distributor'}",
         f"total Rs. {float(portal_order.get('total') or 0):,.2f}",
@@ -104,6 +109,8 @@ def notify_internal_sales_order(portal_order: dict) -> None:
         bits.append(f"delivery {portal_order['delivery_date']}")
     if portal_order.get("dispatch_town"):
         bits.append(f"dispatch to {portal_order['dispatch_town']}")
+    if credit_warn:
+        bits.append(credit_warn)
     msg = " — ".join(bits)
     for u in users:
         create_notification(
