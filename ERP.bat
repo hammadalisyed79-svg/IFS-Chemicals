@@ -40,9 +40,10 @@ echo  %CD%
 echo ============================================================
 echo.
 
-echo [1/4] Repair auto-start tasks (boot + watchdog + 5-min keepalive)...
+echo [1/4] Repair auto-start tasks (boot + watchdog + keepalive + DB backup)...
 powershell -NoProfile -ExecutionPolicy Bypass -File "%CD%\tools\_install_erp_autostart.ps1" > "%CD%\logs\erp_autostart_install.log" 2>&1
 powershell -NoProfile -ExecutionPolicy Bypass -File "%CD%\tools\_install_erp_keepalive_task.ps1" > "%CD%\logs\erp_keepalive_install.log" 2>&1
+powershell -NoProfile -ExecutionPolicy Bypass -File "%CD%\tools\_install_erp_backup_task.ps1" > "%CD%\logs\erp_backup_install.log" 2>&1
 
 echo [2/4] Stop old ERP processes...
 powershell -NoProfile -Command ^
