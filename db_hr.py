@@ -555,6 +555,14 @@ def update_employee_hr(eid, data, user_id=None):
                 data.get("is_active", 1), user_id, now(), eid,
             ),
         )
+        # Keep active salary-structure Basic aligned with Employee Edit
+        # so generate/sync payroll both see the same scale.
+        if "basic_salary" in data:
+            conn.execute(
+                """UPDATE salary_structures SET basic_salary=?
+                   WHERE employee_id=? AND is_active=1""",
+                (data.get("basic_salary", 0), eid),
+            )
 
 
 def delete_employee_hr(eid, user_id=None):
@@ -1382,23 +1390,53 @@ def _attendance_days_for_period(conn, employee_id, period_start, period_end):
     }
 
 
+def _current_employee_pay_scale(conn, employee_id):
+    """Live Basic + allowances from employee master (edit) and salary structure.
+
+    Employee Edit is the source of truth for Basic when it is set; an active
+    salary structure supplies allowances (and Basic only if the master is blank).
+    """
+    emp = conn.execute(
+        "SELECT basic_salary FROM employees WHERE id=?", (employee_id,),
+    ).fetchone()
+    emp_basic = float(emp[0] or 0) if emp else 0.0
+    struct = conn.execute(
+        """SELECT * FROM salary_structures
+           WHERE employee_id=? AND is_active=1
+           ORDER BY effective_from DESC LIMIT 1""",
+        (employee_id,),
+    ).fetchone()
+    struct_basic = 0.0
+    allowances = 0.0
+    has_struct = bool(struct)
+    if struct:
+        s = dict(struct)
+        struct_basic = float(s.get("basic_salary") or 0)
+        allowances = float(
+            (s.get("housing_allowance") or 0)
+            + (s.get("transport_allowance") or 0)
+            + (s.get("medical_allowance") or 0)
+            + (s.get("other_allowance") or 0)
+        )
+    basic = emp_basic if emp_basic > 0 else struct_basic
+    return {
+        "basic_salary": round(float(basic or 0), 2),
+        "allowances": round(float(allowances or 0), 2),
+        "has_structure": has_struct,
+        "employee_basic": round(emp_basic, 2),
+        "structure_basic": round(struct_basic, 2),
+    }
+
+
 def _calc_payroll_line(conn, employee_id, month, year, payroll_id):
     period_start, period_end = _period_bounds(month, year)
     emp_start, emp_end, partial = _employment_bounds_in_period(
         conn, employee_id, period_start, period_end,
     )
 
-    struct = conn.execute(
-        "SELECT * FROM salary_structures WHERE employee_id=? AND is_active=1 ORDER BY effective_from DESC LIMIT 1",
-        (employee_id,),
-    ).fetchone()
-    emp = conn.execute("SELECT basic_salary FROM employees WHERE id=?", (employee_id,)).fetchone()
-    basic = (dict(struct)["basic_salary"] if struct else 0) or (emp[0] if emp else 0)
-    allowances = 0
-    if struct:
-        s = dict(struct)
-        allowances = (s.get("housing_allowance") or 0) + (s.get("transport_allowance") or 0) + \
-                     (s.get("medical_allowance") or 0) + (s.get("other_allowance") or 0)
+    scale = _current_employee_pay_scale(conn, employee_id)
+    basic = scale["basic_salary"]
+    allowances = scale["allowances"]
 
     if emp_start > emp_end:
         att = {"days_present": 0.0, "days_absent": 0.0, "days_leave": 0.0, "overtime_hrs": 0.0}
@@ -2962,6 +3000,157 @@ def refresh_payroll_loan_advance_recoveries(payroll_id, user_id=None):
         return n
 
 
+def list_payroll_salary_drifts(payroll_id):
+    """Unpaid draft lines whose Basic/Allowances differ from the employee master."""
+    from database import get_connection
+
+    with get_connection() as conn:
+        pr = conn.execute(
+            "SELECT id, status FROM payroll_runs WHERE id=?",
+            (payroll_id,),
+        ).fetchone()
+        if not pr:
+            return {"drifts": [], "skipped_paid": 0}
+        if dict(pr).get("status") != "draft":
+            return {"drifts": [], "skipped_paid": 0}
+        lines = conn.execute(
+            """SELECT pl.id, pl.employee_id, pl.basic_salary, pl.allowances,
+                      COALESCE(pl.paid_status, 'unpaid') AS paid_status,
+                      e.code, e.full_name
+               FROM payroll_lines pl
+               JOIN employees e ON e.id=pl.employee_id
+               WHERE pl.payroll_id=?""",
+            (payroll_id,),
+        ).fetchall()
+        drifts = []
+        skipped_paid = 0
+        for row in lines:
+            ln = dict(row)
+            if (ln.get("paid_status") or "") == "paid":
+                skipped_paid += 1
+                continue
+            scale = _current_employee_pay_scale(conn, int(ln["employee_id"]))
+            new_basic = scale["basic_salary"]
+            new_allow = (
+                scale["allowances"] if scale["has_structure"]
+                else float(ln.get("allowances") or 0)
+            )
+            old_basic = float(ln.get("basic_salary") or 0)
+            old_allow = float(ln.get("allowances") or 0)
+            if abs(new_basic - old_basic) > 0.009 or abs(new_allow - old_allow) > 0.009:
+                drifts.append({
+                    "line_id": int(ln["id"]),
+                    "employee_id": int(ln["employee_id"]),
+                    "code": ln.get("code") or "",
+                    "name": ln.get("full_name") or "",
+                    "old_basic": round(old_basic, 2),
+                    "new_basic": round(new_basic, 2),
+                    "old_allowances": round(old_allow, 2),
+                    "new_allowances": round(new_allow, 2),
+                })
+        return {"drifts": drifts, "skipped_paid": skipped_paid}
+
+
+def refresh_payroll_salaries(payroll_id, user_id=None):
+    """Draft only: pull current master Basic/Allowances onto unpaid lines.
+
+    Use after Employee Edit increases or decreases salary mid-month.
+    Recalculates OT (from hours), absent deduction, gross and net.
+    Paid lines are left unchanged. Loan/advance recoveries stay as-is.
+    """
+    from database import get_connection
+
+    with get_connection() as conn:
+        pr = conn.execute(
+            "SELECT id, status, payroll_year, payroll_month FROM payroll_runs WHERE id=?",
+            (payroll_id,),
+        ).fetchone()
+        if not pr:
+            raise ValueError("Payroll run not found.")
+        pr = dict(pr)
+        if pr["status"] != "draft":
+            raise ValueError("Only draft payroll can sync salaries from employee master.")
+        year, month = int(pr["payroll_year"]), int(pr["payroll_month"])
+        period_start, period_end = _period_bounds(month, year)
+
+        lines = conn.execute(
+            """SELECT id, employee_id, basic_salary, allowances, overtime, bonus,
+                      tax_deduction, eobi, social_security, other_deductions,
+                      advance_recovery, loan_recovery, net_salary,
+                      days_present, days_absent, overtime_hrs,
+                      COALESCE(paid_status, 'unpaid') AS paid_status
+               FROM payroll_lines WHERE payroll_id=?""",
+            (payroll_id,),
+        ).fetchall()
+        updated = []
+        skipped_paid = 0
+        for row in lines:
+            ln = dict(row)
+            if (ln.get("paid_status") or "") == "paid":
+                skipped_paid += 1
+                continue
+            eid = int(ln["employee_id"])
+            scale = _current_employee_pay_scale(conn, eid)
+            new_basic = scale["basic_salary"]
+            new_allow = (
+                scale["allowances"] if scale["has_structure"]
+                else float(ln.get("allowances") or 0)
+            )
+            old_basic = float(ln.get("basic_salary") or 0)
+            old_allow = float(ln.get("allowances") or 0)
+            if abs(new_basic - old_basic) <= 0.009 and abs(new_allow - old_allow) <= 0.009:
+                continue
+
+            emp_start, emp_end, partial = _employment_bounds_in_period(
+                conn, eid, period_start, period_end,
+            )
+            days_leave = 0.0
+            if partial and emp_start <= emp_end:
+                att = _attendance_days_for_period(conn, eid, emp_start, emp_end)
+                days_leave = float(att.get("days_leave") or 0)
+
+            merged = {
+                **ln,
+                "basic_salary": new_basic,
+                "allowances": new_allow,
+            }
+            calc = _recalc_payroll_line_fields(
+                merged, year=year, month=month, sync_ot=None,
+                partial_month=partial, days_leave=days_leave,
+            )
+            conn.execute(
+                """UPDATE payroll_lines SET
+                   basic_salary=?, allowances=?, overtime=?, overtime_hrs=?,
+                   absent_deduction=?, gross_salary=?, total_deductions=?, net_salary=?
+                   WHERE id=?""",
+                (
+                    calc["basic_salary"], calc["allowances"],
+                    calc["overtime"], calc["overtime_hrs"],
+                    calc.get("absent_deduction", 0),
+                    calc["gross_salary"], calc["total_deductions"], calc["net_salary"],
+                    ln["id"],
+                ),
+            )
+            emp = conn.execute(
+                "SELECT code, full_name FROM employees WHERE id=?", (eid,),
+            ).fetchone()
+            updated.append({
+                "code": (emp[0] if emp else "") or "",
+                "name": (emp[1] if emp else "") or "",
+                "old_basic": round(old_basic, 2),
+                "new_basic": round(new_basic, 2),
+                "old_net": round(float(ln.get("net_salary") or 0), 2) if "net_salary" in ln else None,
+                "new_net": round(float(calc["net_salary"]), 2),
+            })
+        if updated:
+            _refresh_payroll_run_totals(conn, payroll_id)
+        return {
+            "updated": len(updated),
+            "skipped_paid": skipped_paid,
+            "employees": updated,
+        }
+
+
 def _sync_employee_recoveries_on_draft_payroll(conn, employee_id, salary_month):
     """Pull newly issued advances/loans onto matching draft payroll (one employee).
 
@@ -3981,15 +4170,7 @@ def get_employee_advance_context(employee_id: int) -> dict | None:
         apply_hr(conn, __import__("database"))
         adv_out = _effective_advance_outstanding(conn, int(employee_id))
         loan_out = _effective_loan_outstanding(conn, int(employee_id))
-        basic = float(emp.get("basic_salary") or 0)
-        struct = conn.execute(
-            """SELECT basic_salary FROM salary_structures
-               WHERE employee_id=? AND is_active=1
-               ORDER BY effective_from DESC LIMIT 1""",
-            (int(employee_id),),
-        ).fetchone()
-        if struct and float(struct[0] or 0) > 0:
-            basic = float(struct[0] or 0)
+        basic = _current_employee_pay_scale(conn, int(employee_id))["basic_salary"]
     return {
         "employee_id": int(employee_id),
         "code": emp.get("code"),

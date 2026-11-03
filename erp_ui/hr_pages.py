@@ -2919,12 +2919,21 @@ def page_payroll():
                             )
                         except Exception as e:
                             st.error(str(e))
-                    if st.button(
+                    salary_drift_n = 0
+                    try:
+                        salary_drift_n = len(
+                            (db.list_payroll_salary_drifts(pid).get("drifts") or [])
+                        )
+                    except Exception:
+                        salary_drift_n = 0
+                    la1, la2 = st.columns(2)
+                    if la1.button(
                         "Reset Loan/Advance to monthly installments",
                         key=f"pr_refresh_loan_adv_{pid}",
                         help="Undo full-balance recoveries on this draft and re-apply one installment "
                              "per loan/advance (from HR → Employee Loans / Advances).",
                         type="primary",
+                        use_container_width=True,
                     ):
                         try:
                             n = db.refresh_payroll_loan_advance_recoveries(pid, user_id=uid())
@@ -2934,11 +2943,68 @@ def page_payroll():
                             )
                         except Exception as e:
                             st.error(str(e))
+                    salary_btn_label = (
+                        f"Sync salaries from employee master ({salary_drift_n})"
+                        if salary_drift_n
+                        else "Sync salaries from employee master"
+                    )
+                    if la2.button(
+                        salary_btn_label,
+                        key=f"pr_sync_salaries_{pid}",
+                        help="Pull latest Basic / Allowances from HR → Employees (Edit) onto unpaid "
+                             "lines. Recalculates OT and absent deduction. Paid employees are skipped.",
+                        type="primary" if salary_drift_n else "secondary",
+                        use_container_width=True,
+                        disabled=salary_drift_n == 0,
+                    ):
+                        try:
+                            res = db.refresh_payroll_salaries(pid, user_id=uid())
+                            n = int(res.get("updated") or 0)
+                            names = []
+                            for e in (res.get("employees") or [])[:8]:
+                                old_b = e.get("old_basic")
+                                new_b = e.get("new_basic")
+                                names.append(
+                                    f"{e.get('code')} {e.get('name')} "
+                                    f"({fmt(old_b)} → {fmt(new_b)})"
+                                )
+                            sample = ", ".join(names)
+                            more = (
+                                f" (+{n - 8} more)"
+                                if n > 8 else ""
+                            )
+                            skipped = int(res.get("skipped_paid") or 0)
+                            msg = (
+                                f"Synced **{n}** salary change(s) from employee master "
+                                f"onto this month's payroll: {sample}{more}."
+                            )
+                            if skipped:
+                                msg += f" **{skipped}** already-paid line(s) left unchanged."
+                            salary_form_prefixes = (
+                                f"pr_sep_basic_{pid}",
+                                f"pr_sep_allw_{pid}",
+                                f"pr_sep_ot_{pid}",
+                                f"pr_sep_bonus_{pid}",
+                                f"pr_sep_adv_{pid}",
+                                f"pr_sep_loan_{pid}",
+                                f"pr_sep_other_{pid}",
+                                f"pr_sep_dp_{pid}",
+                                f"pr_sep_da_{pid}",
+                                f"pr_sep_oth_{pid}",
+                                f"pr_sep_derive_{pid}",
+                            )
+                            _payroll_clear_edit_live_state(pid)
+                            ff.action_done(msg, prefixes=salary_form_prefixes)
+                        except Exception as e:
+                            st.error(str(e))
                     st.caption(
                         "**Loan / Advance columns = this month's deduction only** (installment), "
                         "not the full outstanding. Full balance lives under **HR → Employee Loans**. "
                         "At the counter you can still lower the amount before Pay & voucher. "
-                        "**Add missing employees** pulls new Active joiners into this draft."
+                        "**Add missing employees** pulls new Active joiners into this draft. "
+                        "**Sync salaries** updates Basic (increase or decrease) after "
+                        "**HR → Employees → Edit**, then recalculates OT / absent / net. "
+                        "Already-paid employees are skipped."
                     )
                 edit_rows = [_payroll_edit_row(l) for l in pr["lines"]]
                 edit_df = pd.DataFrame(edit_rows)
