@@ -158,10 +158,28 @@ def ensure_streamlit() -> bool:
     return False
 
 
+def _port_listening(port: int) -> bool:
+    import socket
+    sock = socket.socket()
+    sock.settimeout(1)
+    try:
+        return sock.connect_ex(("127.0.0.1", int(port))) == 0
+    except OSError:
+        return False
+    finally:
+        sock.close()
+
+
 def ensure_proxy(public_fail_streak: int) -> int:
     if not health_ok(LOCAL_HEALTH):
         return public_fail_streak
     if health_ok(PUBLIC_HEALTH, timeout=5.0):
+        return 0
+    if _port_listening(80) and _port_listening(443):
+        log(
+            "Public HTTPS health fail but ports 80/443 are listening "
+            "(certificate expired or DNS?) — not restarting proxy"
+        )
         return 0
     streak = public_fail_streak + 1
     log(f"Public HTTPS health fail ({streak}/{PUBLIC_FAIL_BEFORE_PROXY_RESTART})")
