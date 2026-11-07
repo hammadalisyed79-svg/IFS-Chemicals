@@ -704,10 +704,26 @@ ATTENDANCE_STATUSES = [
 ]
 
 
+def _employee_joining_day(conn, employee_id):
+    row = conn.execute(
+        "SELECT joining_date FROM employees WHERE id=?", (employee_id,),
+    ).fetchone()
+    return _iso_day(row[0] if row else None)
+
+
 def save_attendance(data, user_id=None):
     from database import get_connection
     ts = now()
+    att_d = str(data.get("att_date") or "")[:10]
     with get_connection() as conn:
+        join_d = _employee_joining_day(conn, data["employee_id"])
+        if join_d and att_d and att_d < join_d:
+            # Not employed yet — never store absent/present before joining.
+            conn.execute(
+                "DELETE FROM attendance WHERE employee_id=? AND att_date=?",
+                (data["employee_id"], att_d),
+            )
+            return None
         existing = conn.execute(
             "SELECT id FROM attendance WHERE employee_id=? AND att_date=?",
             (data["employee_id"], data["att_date"]),
@@ -851,6 +867,14 @@ def bulk_save_attendance(att_date, records, user_id=None):
         for rec in records:
             eid = rec.get("employee_id")
             if not eid:
+                continue
+            join_d = _employee_joining_day(conn, eid)
+            day = str(att_date or "")[:10]
+            if join_d and day and day < join_d:
+                conn.execute(
+                    "DELETE FROM attendance WHERE employee_id=? AND att_date=?",
+                    (eid, day),
+                )
                 continue
             status = rec.get("status") or "present"
             existing = conn.execute(
@@ -1405,51 +1429,22 @@ def _attendance_days_for_period(conn, employee_id, period_start, period_end):
 
 
 def _payroll_attendance_snapshot(conn, employee_id, month, year):
-    """Present / absent / OT for one payroll line.
+    """Present / absent / OT from joining_date through month-end (or last day).
 
-    Saved marks for the **whole calendar month** are counted so a mid-month
-    joiner still shows absents HR marked before joining_date. Pro-rata pay
-    uses presents inside the employment window, unless the month is fully
-    classified (present + leave + absent covers every calendar day) — then
-    full basic minus LWP is used so Absent days and Absent Deduction both show.
+    Days before joining are not employment and never count as absent.
+    Mid-month joiners are paid pro-rata on days from join onwards only.
     """
     period_start, period_end = _period_bounds(month, year)
     emp_start, emp_end, partial = _employment_bounds_in_period(
         conn, employee_id, period_start, period_end,
     )
-    att_month = _attendance_days_for_period(conn, employee_id, period_start, period_end)
-    month_days = float(days_in_month(year, month))
-
+    empty = {
+        "days_present": 0.0, "days_absent": 0.0, "days_leave": 0.0, "overtime_hrs": 0.0,
+    }
     if emp_start > emp_end:
-        return att_month, True, emp_start, emp_end
-
-    att_emp = _attendance_days_for_period(conn, employee_id, emp_start, emp_end)
-    days_present = float(att_emp["days_present"] or 0)
-    days_leave = float(att_emp.get("days_leave") or 0)
-    days_absent = float(att_month["days_absent"] or 0)
-    overtime_hrs = float(att_month["overtime_hrs"] or 0)
-
-    classified = days_present + days_leave + days_absent
-    if partial and classified + 0.05 >= month_days:
-        # Whole month is marked (typical: days before joining saved as absent).
-        # Use full-month LWP so Absent days appear with matching deduction.
-        partial = False
-        days_present = float(att_month["days_present"] or 0)
-        days_leave = float(att_month.get("days_leave") or 0)
-        days_absent = float(att_month["days_absent"] or 0)
-        overtime_hrs = float(att_month["overtime_hrs"] or 0)
-
-    return (
-        {
-            "days_present": round(days_present, 1),
-            "days_absent": round(days_absent, 1),
-            "days_leave": round(days_leave, 1),
-            "overtime_hrs": round(overtime_hrs, 2),
-        },
-        partial,
-        emp_start,
-        emp_end,
-    )
+        return empty, True, emp_start, emp_end
+    att = _attendance_days_for_period(conn, employee_id, emp_start, emp_end)
+    return att, partial, emp_start, emp_end
 
 
 def _current_employee_pay_scale(conn, employee_id):

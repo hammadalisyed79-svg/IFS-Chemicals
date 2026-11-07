@@ -527,6 +527,14 @@ def _render_single_employee_edit_pay(
             f"({period_start}–{period_end}). Attendance refresh still pulls saved marks, "
             "but fix **Joining Date** on the employee master so pro-rata is correct."
         )
+    elif join_d_chk and period_start < join_d_chk <= period_end:
+        payable = (period_end - join_d_chk).days + 1
+        st.info(
+            f"Joined **{join_show}**. This month's salary is **{join_show} → {period_end}** "
+            f"({payable} days from join, not the full {mdays}). "
+            "Days before joining are not absent and are not paid. "
+            f"Pay = Basic ÷ {mdays} × Present."
+        )
     leaving_pick = lw2.date_input(
         "Last working day (resign / final pay)",
         value=leave_ui_default,
@@ -3004,7 +3012,9 @@ def page_payroll():
                         "**Add missing employees** pulls new Active joiners into this draft. "
                         "**Sync salaries** updates Basic (increase or decrease) after "
                         "**HR → Employees → Edit**, then recalculates OT / absent / net. "
-                        "Already-paid employees are skipped."
+                        "Already-paid employees are skipped. "
+                        "**Mid-month joiners:** Present / Absent count from joining date only "
+                        "(not the full 28–31 days). Days before join are not marked absent."
                     )
                 edit_rows = [_payroll_edit_row(l) for l in pr["lines"]]
                 edit_df = pd.DataFrame(edit_rows)

@@ -82,14 +82,14 @@ def _build_sheet(emps, existing_map, force_status=None, default_status="present"
     rows = []
     ds = str(sheet_date or "")[:10]
     for e in emps:
-        ex = existing_map.get(e["id"], {})
         join_raw = str(e.get("joining_date") or "").strip()[:10]
+        if ds and join_raw and ds < join_raw:
+            continue  # not joined yet — not on this day's sheet
+        ex = existing_map.get(e["id"], {})
         if force_status:
             status = force_status
         elif ex.get("status"):
             status = ex.get("status")
-        elif ds and join_raw and ds < join_raw:
-            status = "absent"
         else:
             status = default_status
         notes = ex.get("notes") or ""
@@ -500,8 +500,9 @@ def _employee_wise_tab():
     """One employee × date range calendar, with mark/edit for any day."""
     st.markdown(
         "**Employee-wise attendance** — pick an employee and period. "
-        "Unsaved rows show suggested defaults (Present / holiday; **Absent** before joining date). "
-        "**Payroll Present uses saved rows only** — click **Save period** to write them."
+        "The grid starts from **joining date** (days before join are not attendance). "
+        "Unsaved rows show suggested Present / holiday. "
+        "**Payroll uses saved rows only** — click **Save period** to write them."
     )
     all_emps = _load_employees()
     if not all_emps:
@@ -547,6 +548,26 @@ def _employee_wise_tab():
     if fd > td:
         st.error("From date must be on or before To date.")
         return
+
+    join_raw = str((emp or {}).get("joining_date") or "").strip()[:10]
+    join_d = None
+    if join_raw:
+        try:
+            join_d = date.fromisoformat(join_raw)
+        except ValueError:
+            join_d = None
+    if join_d and td < join_d:
+        st.info(
+            f"Joining date is **{join_d}**. Attendance and salary start from that day — "
+            "nothing to mark in this range."
+        )
+        return
+    if join_d and fd < join_d:
+        st.info(
+            f"Joined **{join_d}**. Days before joining are not attendance and are not paid. "
+            f"Sheet starts from joining date."
+        )
+        fd = join_d
 
     fd_s, td_s = str(fd), str(td)
     existing = db.get_attendance(fd_s, td_s, eid)
@@ -618,29 +639,13 @@ def _employee_wise_tab():
 
     # ----- Range calendar grid -----
     st.subheader("Period overview")
-    join_raw = str((emp or {}).get("joining_date") or "").strip()[:10]
-    join_d = None
-    if join_raw:
-        try:
-            join_d = date.fromisoformat(join_raw)
-        except ValueError:
-            join_d = None
     days = []
     d = fd
     while d <= td:
         ds = str(d)
         ex = by_date.get(ds, {})
         hol = hol_map.get(ds)
-        if ex.get("status"):
-            status = ex.get("status")
-        elif hol:
-            status = hol["status"]
-        elif join_d and d < join_d:
-            # Days before joining default to Absent so payroll shows them
-            # when HR saves the month (new joiners).
-            status = "absent"
-        else:
-            status = "present"
+        status = ex.get("status") or (hol["status"] if hol else "present")
         days.append({
             "att_date": ds,
             "weekday": d.strftime("%a"),

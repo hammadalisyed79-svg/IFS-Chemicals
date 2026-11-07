@@ -1,4 +1,4 @@
-"""Mid-month joiners must show saved absents on payroll."""
+"""Mid-month joiners: salary starts on joining date, not the 1st of the month."""
 from __future__ import annotations
 
 import os
@@ -34,8 +34,8 @@ def _oct_days():
         d += timedelta(days=1)
 
 
-def test_mid_month_joiner_absents_show_on_payroll():
-    path = Path(tempfile.gettempdir()) / f"erp_join_abs_{uuid.uuid4().hex}.db"
+def test_mid_month_joiner_salary_starts_from_joining_date():
+    path = Path(tempfile.gettempdir()) / f"erp_join_from_{uuid.uuid4().hex}.db"
     os.environ["IFS_DB_PATH"] = str(path)
     db.DB_PATH = path
     db.reset_runtime_state()
@@ -46,14 +46,14 @@ def test_mid_month_joiner_absents_show_on_payroll():
             cur = conn.execute(
                 """INSERT INTO employees(
                        code, full_name, basic_salary, is_active, employment_status,
-                       joining_date, leaving_date
-                   ) VALUES('EMP565','Amir Joiner',25000,1,'active','2026-10-15','2026-10-31')"""
+                       joining_date
+                   ) VALUES('EMP565','Amir Joiner',25000,1,'active','2026-10-15')"""
             )
             eid = int(cur.lastrowid)
             for d in _oct_days():
                 iso = d.isoformat()
                 if iso < "2026-10-15":
-                    status = "absent"
+                    status = "absent"  # leftover marks must be ignored
                 elif d.weekday() == 4:
                     status = "weekly_holiday"
                 else:
@@ -71,14 +71,13 @@ def test_mid_month_joiner_absents_show_on_payroll():
             )
             pid = int(cur.lastrowid)
             line = hr._calc_payroll_line(conn, eid, 10, 2026, pid)
-            assert abs(float(line["days_absent"]) - 14) < 0.05, line
-            assert float(line["days_present"]) >= 17, line
-            assert float(line["absent_deduction"]) > 0, line
-            # Active + month-end leaving_date must not exclude later months
-            es, ee, partial = hr._employment_bounds_in_period(
-                conn, eid, "2026-11-01", "2026-11-30",
-            )
-            assert es == "2026-11-01" and ee == "2026-11-30" and partial is False, (es, ee, partial)
+            # 15–31 Oct = 17 payable days; 1–14 must not be absent
+            assert abs(float(line["days_absent"]) - 0) < 0.05, line
+            assert abs(float(line["days_present"]) - 17) < 0.05, line
+            assert float(line["absent_deduction"] or 0) == 0, line
+            assert line.get("partial_month") is True, line
+            expect_net = hr.calc_earned_basic(25000, 2026, 10, 17)
+            assert abs(float(line["net_salary"]) - expect_net) < 0.05, (line, expect_net)
 
             conn.execute(
                 """INSERT INTO payroll_lines(
@@ -100,9 +99,19 @@ def test_mid_month_joiner_absents_show_on_payroll():
                    FROM payroll_lines WHERE payroll_id=?""",
                 (pid,),
             ).fetchone())
-        assert abs(float(ln["days_absent"]) - 14) < 0.05, ln
-        assert float(ln["days_present"]) >= 17, ln
-        assert float(ln["absent_deduction"]) > 0, ln
+        assert abs(float(ln["days_absent"]) - 0) < 0.05, ln
+        assert abs(float(ln["days_present"]) - 17) < 0.05, ln
+
+        # Saving a pre-join date must drop it, not keep absent
+        hr.save_attendance({
+            "employee_id": eid, "att_date": "2026-10-10", "status": "absent",
+        }, user_id=1)
+        with db.get_connection() as conn:
+            leftover = conn.execute(
+                "SELECT COUNT(*) FROM attendance WHERE employee_id=? AND att_date='2026-10-10'",
+                (eid,),
+            ).fetchone()[0]
+        assert leftover == 0
     finally:
         _cleanup(path)
 
