@@ -477,7 +477,8 @@ def _render_single_employee_edit_pay(
         f"Loan recovery {fmt(line.get('loan_recovery'))}."
     )
 
-    # Mid-month resign / final settlement
+    # Mid-month resign / final settlement — only when they actually left.
+    # Month-end leaving_date on a still-active joiner is leftover picker default, not an exit.
     leave_raw = str(line.get("leaving_date") or "").strip()[:10]
     leave_default = None
     if leave_raw:
@@ -487,6 +488,11 @@ def _render_single_employee_edit_pay(
             leave_default = None
     period_end = date(py, pm, mdays) if py and pm else date.today()
     period_start = date(py, pm, 1) if py and pm else date.today()
+    emp_status = str(line.get("employment_status") or "").strip().lower()
+    status_left = emp_status in ("left", "resigned", "terminated")
+    if leave_default == period_end and not status_left:
+        leave_default = None
+        leave_raw = ""
     is_partial = bool(leave_default and leave_default < period_end)
 
     settle = {}
@@ -496,11 +502,6 @@ def _render_single_employee_edit_pay(
         except Exception:
             settle = {}
     settle_clear = bool(settle.get("clear"))
-    if settle:
-        if settle_clear:
-            st.success(settle.get("message") or "Final settlement clear — ledger NIL.")
-        else:
-            st.warning(settle.get("message") or "Final settlement not done until ledger balance is NIL.")
 
     def _clamp_in_month(d: date) -> date:
         if d < period_start:
@@ -509,8 +510,6 @@ def _render_single_employee_edit_pay(
             return period_end
         return d
 
-    # Default must stay inside payroll month (today may be next month).
-    leave_ui_default = _clamp_in_month(leave_default or min(date.today(), period_end))
     lw1, lw2, lw3, lw4 = st.columns([1.3, 1.1, 1.0, 1.2])
     lw1.markdown(
         f"<div style='padding-top:4px'><p style='margin:0;font-size:0.8rem;color:#64748b'>Date of joining</p>"
@@ -530,30 +529,48 @@ def _render_single_employee_edit_pay(
     elif join_d_chk and period_start < join_d_chk <= period_end:
         payable = (period_end - join_d_chk).days + 1
         st.info(
-            f"Joined **{join_show}**. This month's salary is **{join_show} → {period_end}** "
+            f"Joined **{join_show}**. This month's salary is **{join_show} to {period_end}** "
             f"({payable} days from join, not the full {mdays}). "
             "Days before joining are not absent and are not paid. "
-            f"Pay = Basic ÷ {mdays} × Present."
+            f"Pay = Basic / {mdays} x Present."
         )
-    leaving_pick = lw2.date_input(
-        "Last working day (resign / final pay)",
-        value=leave_ui_default,
-        min_value=period_start,
-        max_value=period_end,
-        key=f"pr_sep_leaving_{pid}_{sel_id}",
-        help="Set when the employee leaves mid-month. Salary becomes Basic ÷ days × Present (paid leave included).",
+    set_leaving = lw2.checkbox(
+        "Set last working day",
+        value=bool(leave_default) or status_left,
+        key=f"pr_sep_set_leave_v2_{pid}_{sel_id}",
+        help="Only for resign / final pay. Do not set this for a new joiner.",
     )
+    leaving_pick = None
+    if set_leaving:
+        leave_ui_default = _clamp_in_month(leave_default or min(date.today(), period_end))
+        leaving_pick = lw2.date_input(
+            "Last working day (resign / final pay)",
+            value=leave_ui_default,
+            min_value=period_start,
+            max_value=period_end,
+            key=f"pr_sep_leaving_v2_{pid}_{sel_id}",
+            help="Set when the employee leaves mid-month. Salary becomes Basic / days x Present (paid leave included).",
+        )
     mark_left = lw3.checkbox(
         "Mark employment as left",
-        value=(str(line.get("employment_status") or "").lower() in ("left", "resigned", "terminated")),
-        key=f"pr_sep_mark_left_{pid}_{sel_id}",
+        value=status_left,
+        key=f"pr_sep_mark_left_v2_{pid}_{sel_id}",
         help="Blocked until employee ledger balance is NIL (final settlement clear).",
         disabled=not settle_clear,
     )
+    if set_leaving and settle:
+        if settle_clear:
+            st.success(settle.get("message") or "Final settlement clear — ledger NIL.")
+        else:
+            st.warning(settle.get("message") or "Final settlement not done until ledger balance is NIL.")
     if mark_left and not settle_clear:
         st.caption("Clear ledger to NIL before marking left (recover advance/loan and pay final salary).")
     if lw4.button("Apply final settlement", key=f"pr_sep_apply_leave_{pid}_{sel_id}", use_container_width=True):
         try:
+            if not set_leaving:
+                raise ValueError("Tick **Set last working day** only when the employee is actually leaving.")
+            if not leaving_pick:
+                raise ValueError("Pick the last working day.")
             # Close employment only when ledger is NIL; leaving date may still be set for pro-rata
             do_mark_left = bool(mark_left) and settle_clear
             if do_mark_left and hasattr(db, "assert_final_settlement_clear"):
@@ -611,10 +628,10 @@ def _render_single_employee_edit_pay(
                 ff.action_done(msg, retain=keep_sel)
         except Exception as e:
             st.error(str(e))
-    if is_partial or leave_default:
+    if set_leaving and (is_partial or leave_default or leaving_pick):
         st.info(
             f"Final pay through **{leave_raw or leaving_pick}**: "
-            "Basic is pro-rated as Basic ÷ month days × (Present + paid leave). "
+            "Basic is pro-rated as Basic / month days x (Present + paid leave). "
             "Future weekly offs after the last working day are not counted."
         )
 
@@ -771,9 +788,14 @@ def _render_single_employee_edit_pay(
         partial_now = False
         if leave_raw_now and py and pm:
             try:
-                partial_now = date.fromisoformat(leave_raw_now) < date(py, pm, mdays)
+                leave_d_now = date.fromisoformat(leave_raw_now)
+                month_end_now = date(py, pm, mdays)
+                if leave_d_now < month_end_now or status_left:
+                    partial_now = True
             except ValueError:
                 partial_now = False
+        if join_d_chk and py and pm and date(py, pm, 1) < join_d_chk <= date(py, pm, mdays):
+            partial_now = True
         try:
             if partial_now and hasattr(db, "calc_earned_basic"):
                 earned = float(
