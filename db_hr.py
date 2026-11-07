@@ -56,6 +56,8 @@ HR_AC = {
     "tax_payable_payroll": "2170",
 }
 
+_FINAL_EXIT_STATUSES = frozenset({"left", "resigned", "terminated"})
+
 
 def now():
     return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -1221,9 +1223,15 @@ def _iso_day(raw):
 
 
 def _employment_bounds_in_period(conn, employee_id, period_start, period_end):
-    """Clip payroll period to joining_date … leaving_date (when set)."""
+    """Clip payroll period to joining_date … leaving_date (when employment ended).
+
+    leaving_date is ignored while the employee is still active — operators often
+    stamp month-end as last working day without marking Left, which would otherwise
+    drop them from later months.
+    """
     emp = conn.execute(
-        "SELECT joining_date, leaving_date, employment_status FROM employees WHERE id=?",
+        """SELECT joining_date, leaving_date, employment_status, is_active
+           FROM employees WHERE id=?""",
         (employee_id,),
     ).fetchone()
     start = _iso_day(period_start)
@@ -1232,9 +1240,15 @@ def _employment_bounds_in_period(conn, employee_id, period_start, period_end):
         return start, end, False
     join_d = _iso_day(emp["joining_date"])
     leave_d = _iso_day(emp["leaving_date"])
+    status = str(emp["employment_status"] or "").strip().lower()
+    try:
+        is_active = int(emp["is_active"] or 0)
+    except (KeyError, TypeError, ValueError):
+        is_active = 1
+    really_left = status in _FINAL_EXIT_STATUSES or (is_active == 0 and bool(leave_d))
     if join_d and join_d > start:
         start = join_d
-    if leave_d and leave_d < end:
+    if really_left and leave_d and leave_d < end:
         end = leave_d
     if start > end:
         # Not employed in this month
@@ -1390,6 +1404,54 @@ def _attendance_days_for_period(conn, employee_id, period_start, period_end):
     }
 
 
+def _payroll_attendance_snapshot(conn, employee_id, month, year):
+    """Present / absent / OT for one payroll line.
+
+    Saved marks for the **whole calendar month** are counted so a mid-month
+    joiner still shows absents HR marked before joining_date. Pro-rata pay
+    uses presents inside the employment window, unless the month is fully
+    classified (present + leave + absent covers every calendar day) — then
+    full basic minus LWP is used so Absent days and Absent Deduction both show.
+    """
+    period_start, period_end = _period_bounds(month, year)
+    emp_start, emp_end, partial = _employment_bounds_in_period(
+        conn, employee_id, period_start, period_end,
+    )
+    att_month = _attendance_days_for_period(conn, employee_id, period_start, period_end)
+    month_days = float(days_in_month(year, month))
+
+    if emp_start > emp_end:
+        return att_month, True, emp_start, emp_end
+
+    att_emp = _attendance_days_for_period(conn, employee_id, emp_start, emp_end)
+    days_present = float(att_emp["days_present"] or 0)
+    days_leave = float(att_emp.get("days_leave") or 0)
+    days_absent = float(att_month["days_absent"] or 0)
+    overtime_hrs = float(att_month["overtime_hrs"] or 0)
+
+    classified = days_present + days_leave + days_absent
+    if partial and classified + 0.05 >= month_days:
+        # Whole month is marked (typical: days before joining saved as absent).
+        # Use full-month LWP so Absent days appear with matching deduction.
+        partial = False
+        days_present = float(att_month["days_present"] or 0)
+        days_leave = float(att_month.get("days_leave") or 0)
+        days_absent = float(att_month["days_absent"] or 0)
+        overtime_hrs = float(att_month["overtime_hrs"] or 0)
+
+    return (
+        {
+            "days_present": round(days_present, 1),
+            "days_absent": round(days_absent, 1),
+            "days_leave": round(days_leave, 1),
+            "overtime_hrs": round(overtime_hrs, 2),
+        },
+        partial,
+        emp_start,
+        emp_end,
+    )
+
+
 def _current_employee_pay_scale(conn, employee_id):
     """Live Basic + allowances from employee master (edit) and salary structure.
 
@@ -1430,18 +1492,14 @@ def _current_employee_pay_scale(conn, employee_id):
 
 def _calc_payroll_line(conn, employee_id, month, year, payroll_id):
     period_start, period_end = _period_bounds(month, year)
-    emp_start, emp_end, partial = _employment_bounds_in_period(
-        conn, employee_id, period_start, period_end,
+    att, partial, _, _ = _payroll_attendance_snapshot(
+        conn, employee_id, month, year,
     )
 
     scale = _current_employee_pay_scale(conn, employee_id)
     basic = scale["basic_salary"]
     allowances = scale["allowances"]
 
-    if emp_start > emp_end:
-        att = {"days_present": 0.0, "days_absent": 0.0, "days_leave": 0.0, "overtime_hrs": 0.0}
-    else:
-        att = _attendance_days_for_period(conn, employee_id, emp_start, emp_end)
     days_present = att["days_present"]
     days_absent = att["days_absent"]
     days_leave = float(att.get("days_leave") or 0)
@@ -2801,91 +2859,43 @@ def refresh_payroll_attendance_days(payroll_id, user_id=None):
         period_start, period_end = _period_bounds(month, year)
         lines = conn.execute(
             "SELECT id, employee_id, basic_salary, allowances, bonus, tax_deduction, eobi, "
-            "social_security, advance_recovery, loan_recovery, other_deductions "
+            "social_security, advance_recovery, loan_recovery, other_deductions, "
+            "COALESCE(paid_status,'unpaid') AS paid_status "
             "FROM payroll_lines WHERE payroll_id=?",
             (payroll_id,),
         ).fetchall()
         n = 0
         no_att = []
         date_skipped_with_att = []
+        skipped_paid = 0
         for row in lines:
             ln = dict(row)
+            if (ln.get("paid_status") or "") == "paid":
+                skipped_paid += 1
+                continue
             eid = int(ln["employee_id"])
-            emp_start, emp_end, partial = _employment_bounds_in_period(
-                conn, eid, period_start, period_end,
+            att, partial, emp_start, emp_end = _payroll_attendance_snapshot(
+                conn, eid, month, year,
             )
-            att_lo, att_hi = emp_start, emp_end
-            # Master joining/leaving may exclude the month, but attendance was saved —
-            # still pull those marks so "Refresh Present from attendance" works.
-            if emp_start > emp_end:
-                att_n_full = conn.execute(
-                    "SELECT COUNT(*) FROM attendance WHERE employee_id=? AND att_date>=? AND att_date<=?",
-                    (eid, period_start, period_end),
-                ).fetchone()[0]
-                if att_n_full:
-                    att_lo, att_hi = period_start, period_end
-                    partial = True
-                    emp = conn.execute(
-                        "SELECT code, full_name, joining_date FROM employees WHERE id=?",
-                        (eid,),
-                    ).fetchone()
-                    if emp:
-                        date_skipped_with_att.append(
-                            f"{emp[0]} {emp[1]} (join {emp[2] or '—'})"
-                        )
-                else:
-                    att = {
-                        "days_present": 0.0,
-                        "days_absent": 0.0,
-                        "days_leave": 0.0,
-                        "overtime_hrs": 0.0,
-                    }
-                    att_n = 0
-                    emp = conn.execute(
-                        "SELECT code, full_name FROM employees WHERE id=?", (eid,)
-                    ).fetchone()
-                    if emp:
-                        no_att.append(f"{emp[0]} {emp[1]}")
-                    basic = float(ln.get("basic_salary") or 0)
-                    overtime = calc_overtime_amount(basic, year, month, 0)
-                    merged = {
-                        **ln,
-                        "days_present": 0.0,
-                        "days_absent": 0.0,
-                        "days_leave": 0.0,
-                        "overtime_hrs": 0.0,
-                        "overtime": overtime,
-                    }
-                    calc = _recalc_payroll_line_fields(
-                        merged, year=year, month=month, sync_ot=None, partial_month=True,
-                        days_leave=0.0,
-                    )
-                    conn.execute(
-                        """UPDATE payroll_lines SET
-                           days_present=?, days_absent=?, overtime_hrs=?, overtime=?,
-                           absent_deduction=?, gross_salary=?, total_deductions=?, net_salary=?
-                           WHERE id=?""",
-                        (
-                            0.0, 0.0, 0.0, overtime,
-                            calc.get("absent_deduction", 0),
-                            calc["gross_salary"], calc["total_deductions"], calc["net_salary"],
-                            ln["id"],
-                        ),
-                    )
-                    n += 1
-                    continue
-
             att_n = conn.execute(
                 "SELECT COUNT(*) FROM attendance WHERE employee_id=? AND att_date>=? AND att_date<=?",
-                (eid, att_lo, att_hi),
+                (eid, period_start, period_end),
             ).fetchone()[0]
-            att = _attendance_days_for_period(conn, eid, att_lo, att_hi)
             if not att_n:
                 emp = conn.execute(
                     "SELECT code, full_name FROM employees WHERE id=?", (eid,)
                 ).fetchone()
                 if emp:
                     no_att.append(f"{emp[0]} {emp[1]}")
+            elif emp_start > emp_end:
+                emp = conn.execute(
+                    "SELECT code, full_name, joining_date FROM employees WHERE id=?",
+                    (eid,),
+                ).fetchone()
+                if emp:
+                    date_skipped_with_att.append(
+                        f"{emp[0]} {emp[1]} (join {emp[2] or '—'})"
+                    )
             basic = float(ln.get("basic_salary") or 0)
             overtime = calc_overtime_amount(basic, year, month, att["overtime_hrs"])
             merged = {
@@ -2920,6 +2930,7 @@ def refresh_payroll_attendance_days(payroll_id, user_id=None):
             "no_attendance_names": no_att[:15],
             "date_skipped_with_att": len(date_skipped_with_att),
             "date_skipped_with_att_names": date_skipped_with_att[:10],
+            "skipped_paid": skipped_paid,
             "period_start": period_start,
             "period_end": period_end,
         }
@@ -4183,7 +4194,6 @@ def get_employee_advance_context(employee_id: int) -> dict | None:
 
 
 _LEDGER_NIL_TOL = 0.01
-_FINAL_EXIT_STATUSES = frozenset({"left", "resigned", "terminated"})
 
 
 def employee_final_settlement_status(employee_id: int) -> dict:

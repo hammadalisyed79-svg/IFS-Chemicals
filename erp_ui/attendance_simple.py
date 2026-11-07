@@ -78,14 +78,20 @@ def _dept_options(emps, *, include_all=True):
     return depts
 
 
-def _build_sheet(emps, existing_map, force_status=None, default_status="present"):
+def _build_sheet(emps, existing_map, force_status=None, default_status="present", sheet_date=None):
     rows = []
+    ds = str(sheet_date or "")[:10]
     for e in emps:
         ex = existing_map.get(e["id"], {})
+        join_raw = str(e.get("joining_date") or "").strip()[:10]
         if force_status:
             status = force_status
+        elif ex.get("status"):
+            status = ex.get("status")
+        elif ds and join_raw and ds < join_raw:
+            status = "absent"
         else:
-            status = ex.get("status") or default_status
+            status = default_status
         notes = ex.get("notes") or ""
         rows.append({
             "employee_id": e["id"],
@@ -260,7 +266,9 @@ def _daily_sheet_tab():
         )
 
     preset = st.session_state.pop("att_preset", None)
-    df = _build_sheet(emps, existing_map, force_status=preset, default_status=default_status)
+    df = _build_sheet(
+        emps, existing_map, force_status=preset, default_status=default_status, sheet_date=ds,
+    )
 
     counts = _summary_counts(df)
     scoped = all_emps if dept == "All departments" else [e for e in all_emps if _emp_dept(e) == dept]
@@ -492,7 +500,7 @@ def _employee_wise_tab():
     """One employee × date range calendar, with mark/edit for any day."""
     st.markdown(
         "**Employee-wise attendance** — pick an employee and period. "
-        "Unsaved rows show suggested defaults (Present / holiday) for editing only. "
+        "Unsaved rows show suggested defaults (Present / holiday; **Absent** before joining date). "
         "**Payroll Present uses saved rows only** — click **Save period** to write them."
     )
     all_emps = _load_employees()
@@ -610,13 +618,29 @@ def _employee_wise_tab():
 
     # ----- Range calendar grid -----
     st.subheader("Period overview")
+    join_raw = str((emp or {}).get("joining_date") or "").strip()[:10]
+    join_d = None
+    if join_raw:
+        try:
+            join_d = date.fromisoformat(join_raw)
+        except ValueError:
+            join_d = None
     days = []
     d = fd
     while d <= td:
         ds = str(d)
         ex = by_date.get(ds, {})
         hol = hol_map.get(ds)
-        status = ex.get("status") or (hol["status"] if hol else "present")
+        if ex.get("status"):
+            status = ex.get("status")
+        elif hol:
+            status = hol["status"]
+        elif join_d and d < join_d:
+            # Days before joining default to Absent so payroll shows them
+            # when HR saves the month (new joiners).
+            status = "absent"
+        else:
+            status = "present"
         days.append({
             "att_date": ds,
             "weekday": d.strftime("%a"),
