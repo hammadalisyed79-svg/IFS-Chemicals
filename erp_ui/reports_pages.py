@@ -186,6 +186,11 @@ REPORT_CATALOG = {
         _r("Department Salary Cost", "Salary cost by department for one payroll.", payroll_period=True, date=False),
         _r("Outstanding Advances", "Employee advances not fully recovered.", date=False),
         _r("Outstanding Loans", "Employee loans outstanding.", date=False),
+        _r(
+            "Left / No Attendance Outstanding",
+            "Staff who have left, or have no attendance in the period, but still have "
+            "advance, loan, or unpaid-salary outstanding.",
+        ),
     ],
     "Weight Scale": [
         _r("Daily Weight Report", "Weighbridge slips for the period.", customer=True, supplier=True, product=True,
@@ -1472,6 +1477,8 @@ def _run_report(report, fd, td, cid, sid, pid, wid, eid, payroll_id=None, gf=Non
         return pd.DataFrame(db.report_outstanding_advances())
     if report == "Outstanding Loans":
         return pd.DataFrame(db.report_outstanding_loans())
+    if report == "Left / No Attendance Outstanding":
+        return pd.DataFrame(db.report_left_or_no_attendance_outstanding(fd, td))
 
     if report == "Daily Weight Report":
         return pd.DataFrame(db.get_weight_slips_pro(fd, td, cid, sid, pid))

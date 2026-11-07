@@ -4925,7 +4925,7 @@ def page_hr_reports():
     report = st.selectbox("Report", [
         "Employee List", "Employee Service Report", "Employee Ledger", "Attendance Report", "Leave Report", "Overtime Report",
         "Payroll Register", "Department Salary Cost", "Outstanding Advances",
-        "Outstanding Loans", "Employee History",
+        "Outstanding Loans", "Left / No Attendance Outstanding", "Employee History",
     ])
     if report == "Employee Ledger":
         page_employee_ledger()
@@ -5007,6 +5007,66 @@ def page_hr_reports():
     elif report == "Outstanding Loans":
         df = pd.DataFrame(db.report_outstanding_loans())
         render_dataframe_html_table(df)
+    elif report == "Left / No Attendance Outstanding":
+        today = date.today()
+        prev_m = 12 if today.month == 1 else today.month - 1
+        prev_y = today.year - 1 if today.month == 1 else today.year
+        prev_start = date(prev_y, prev_m, 1)
+        prev_end = date(prev_y, prev_m, db.days_in_month(prev_y, prev_m))
+        c1, c2, c3, c4 = st.columns([1.1, 1.1, 1.1, 1.1])
+        fd = c1.date_input("Attendance from", value=prev_start, key="hr_rpt_left_fd")
+        td = c2.date_input("Attendance to", value=prev_end, key="hr_rpt_left_td")
+        include_left = c3.checkbox("Include left / inactive", value=True, key="hr_rpt_left_left")
+        include_no_att = c4.checkbox("Include no attendance", value=True, key="hr_rpt_left_noatt")
+        st.caption(
+            "Staff who have left, or have no attendance in this period, but still show "
+            "advance, loan, or unpaid salary. Balance + means the employee owes the company."
+        )
+        rows = db.report_left_or_no_attendance_outstanding(
+            str(fd), str(td),
+            include_left=include_left,
+            include_no_attendance=include_no_att,
+        )
+        df = pd.DataFrame(rows)
+        if df.empty:
+            st.info("No staff match — either they attended, or their ledger is already NIL.")
+        else:
+            emp_owes = float(df.loc[df["ledger_balance"] > 0, "ledger_balance"].sum()) if "ledger_balance" in df.columns else 0
+            co_owes = float((-df.loc[df["ledger_balance"] < 0, "ledger_balance"]).sum()) if "ledger_balance" in df.columns else 0
+            k1, k2, k3, k4 = st.columns(4)
+            k1.metric("Staff", len(df))
+            k2.metric("Employee owes", f"{emp_owes:,.2f}")
+            k3.metric("Company owes", f"{co_owes:,.2f}")
+            k4.metric(
+                "Advance + loan",
+                f"{float(df['advance_outstanding'].sum() + df['loan_outstanding'].sum()):,.2f}",
+            )
+            show_cols = [
+                c for c in (
+                    "code", "full_name", "department_name", "employment_status",
+                    "joining_date", "leaving_date", "last_attendance", "attendance_days",
+                    "reason", "advance_outstanding", "loan_outstanding", "unpaid_salary",
+                    "ledger_balance", "who_owes",
+                ) if c in df.columns
+            ]
+            view = df[show_cols].rename(columns={
+                "code": "Code",
+                "full_name": "Name",
+                "department_name": "Department",
+                "employment_status": "Status",
+                "joining_date": "Joined",
+                "leaving_date": "Left date",
+                "last_attendance": "Last attendance",
+                "attendance_days": "Days marked",
+                "reason": "Reason",
+                "advance_outstanding": "Advance",
+                "loan_outstanding": "Loan",
+                "unpaid_salary": "Unpaid salary",
+                "ledger_balance": "Balance",
+                "who_owes": "Who owes",
+            })
+            render_dataframe_html_table(view)
+            export_df(df, "left_no_attendance_outstanding", "Left / No Attendance Outstanding")
     elif report == "Employee History":
         emps = _emp_opts()
         if emps:

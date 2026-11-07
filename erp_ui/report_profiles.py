@@ -131,6 +131,12 @@ REPORT_COLUMNS: dict[str, list[str]] = {
     ],
     "Leave Report": ["from_date", "to_date", "employee_name", "leave_type_name", "days", "status"],
     "Overtime Report": ["code", "full_name", "total_overtime_hrs", "days"],
+    "Left / No Attendance Outstanding": [
+        "code", "full_name", "department_name", "employment_status",
+        "joining_date", "leaving_date", "last_attendance", "attendance_days",
+        "reason", "advance_outstanding", "loan_outstanding", "unpaid_salary",
+        "ledger_balance", "who_owes",
+    ],
     "Gate Pass Register": [
         "document_no", "pass_date", "pass_type", "party_name", "vehicle_no", "driver_name",
         "material_desc", "quantity", "weight", "status",
@@ -185,6 +191,7 @@ REPORT_LAYOUT = {
     "Customer Ledger": "portrait_full",
     "Supplier Ledger": "portrait_full",
     "Employee Ledger": "portrait_full",
+    "Left / No Attendance Outstanding": "landscape",
     "Customer Ledger (Detailed)": "landscape",
     "Supplier Ledger (Detailed)": "landscape",
     "Profit & Loss": "portrait_full",

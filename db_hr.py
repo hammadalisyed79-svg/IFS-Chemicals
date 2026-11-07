@@ -5377,6 +5377,205 @@ def report_outstanding_loans():
     return out
 
 
+def _date_range_bounds(from_date=None, to_date=None):
+    today = date.today()
+    fd = str(from_date)[:10] if from_date else today.replace(day=1).isoformat()
+    if to_date:
+        td = str(to_date)[:10]
+    else:
+        last = days_in_month(today.year, today.month)
+        td = today.replace(day=last).isoformat()
+    if fd > td:
+        fd, td = td, fd
+    return fd, td
+
+
+def _is_left_employee(status, is_active) -> bool:
+    st = str(status or "").strip().lower()
+    if st in _FINAL_EXIT_STATUSES:
+        return True
+    try:
+        active = int(is_active if is_active is not None else 1)
+    except (TypeError, ValueError):
+        active = 1
+    return active == 0
+
+
+def _employed_in_period(joining, leaving, fd, td) -> bool:
+    j = str(joining or "").strip()[:10]
+    l = str(leaving or "").strip()[:10]
+    if j and j > td:
+        return False
+    if l and l < fd:
+        return False
+    return True
+
+
+def report_left_or_no_attendance_outstanding(
+    from_date=None,
+    to_date=None,
+    include_left=True,
+    include_no_attendance=True,
+):
+    """Staff who left, or have no attendance in the period, with leftover balance.
+
+    Outstanding matches the employee ledger: effective advance + loan minus unpaid
+    posted salary. Positive ledger = employee owes; negative = company owes.
+    """
+    from database import get_connection, rows_to_list
+
+    fd, td = _date_range_bounds(from_date, to_date)
+    if not include_left and not include_no_attendance:
+        return []
+
+    q = """
+    SELECT
+      e.id AS employee_id,
+      e.code,
+      e.full_name,
+      COALESCE(d.name, e.department, 'Unassigned') AS department_name,
+      e.joining_date,
+      e.leaving_date,
+      LOWER(TRIM(COALESCE(
+          e.employment_status,
+          CASE WHEN COALESCE(e.is_active,1)=1 THEN 'active' ELSE 'inactive' END
+      ))) AS employment_status,
+      COALESCE(e.is_active, 1) AS is_active,
+      att.last_attendance,
+      COALESCE(att_p.att_days, 0) AS attendance_days,
+      ROUND(COALESCE(adv.stored, 0) + COALESCE(adv_b.bump, 0), 2) AS advance_outstanding,
+      ROUND(COALESCE(ln.stored, 0) + COALESCE(ln_b.bump, 0), 2) AS loan_outstanding,
+      ROUND(COALESCE(pay.unpaid, 0), 2) AS unpaid_salary
+    FROM employees e
+    LEFT JOIN departments d ON d.id = e.department_id
+    LEFT JOIN (
+      SELECT employee_id, MAX(att_date) AS last_attendance
+      FROM attendance GROUP BY employee_id
+    ) att ON att.employee_id = e.id
+    LEFT JOIN (
+      SELECT employee_id, COUNT(*) AS att_days
+      FROM attendance
+      WHERE att_date >= ? AND att_date <= ?
+      GROUP BY employee_id
+    ) att_p ON att_p.employee_id = e.id
+    LEFT JOIN (
+      SELECT employee_id, SUM(outstanding_amount) AS stored
+      FROM employee_advances
+      WHERE status IN ('issued','closed')
+      GROUP BY employee_id
+    ) adv ON adv.employee_id = e.id
+    LEFT JOIN (
+      SELECT a.employee_id, SUM(s.amount) AS bump
+      FROM advance_recovery_schedule s
+      JOIN employee_advances a ON a.id = s.advance_id
+      JOIN payroll_runs pr ON pr.id = s.payroll_id
+      WHERE COALESCE(s.recovered,0)=1
+        AND LOWER(COALESCE(pr.status,'')) NOT IN ('posted','paid')
+        AND NOT EXISTS (
+          SELECT 1 FROM payroll_lines pl
+          WHERE pl.payroll_id=s.payroll_id
+            AND pl.employee_id=a.employee_id
+            AND COALESCE(pl.paid_status,'')='paid'
+        )
+      GROUP BY a.employee_id
+    ) adv_b ON adv_b.employee_id = e.id
+    LEFT JOIN (
+      SELECT employee_id, SUM(outstanding_amount) AS stored
+      FROM employee_loans
+      WHERE status IN ('issued','closed')
+      GROUP BY employee_id
+    ) ln ON ln.employee_id = e.id
+    LEFT JOIN (
+      SELECT l.employee_id, SUM(i.amount) AS bump
+      FROM loan_installments i
+      JOIN employee_loans l ON l.id = i.loan_id
+      JOIN payroll_runs pr ON pr.id = i.payroll_id
+      WHERE COALESCE(i.recovered,0)=1
+        AND LOWER(COALESCE(pr.status,'')) NOT IN ('posted','paid')
+        AND NOT EXISTS (
+          SELECT 1 FROM payroll_lines pl
+          WHERE pl.payroll_id=i.payroll_id
+            AND pl.employee_id=l.employee_id
+            AND COALESCE(pl.paid_status,'')='paid'
+        )
+      GROUP BY l.employee_id
+    ) ln_b ON ln_b.employee_id = e.id
+    LEFT JOIN (
+      SELECT pl.employee_id,
+             SUM(CASE
+               WHEN pr.status IN ('posted','paid','approved')
+                 THEN MAX(0, COALESCE(pl.net_salary,0) - COALESCE(pl.paid_amount,0))
+               ELSE 0
+             END) AS unpaid
+      FROM payroll_lines pl
+      JOIN payroll_runs pr ON pr.id = pl.payroll_id
+      GROUP BY pl.employee_id
+    ) pay ON pay.employee_id = e.id
+    ORDER BY e.full_name COLLATE NOCASE
+    """
+
+    with get_connection() as conn:
+        apply_hr(conn, __import__("database"))
+        rows = rows_to_list(conn.execute(q, (fd, td)).fetchall())
+
+    out = []
+    for r in rows:
+        left = _is_left_employee(r.get("employment_status"), r.get("is_active"))
+        att_days = int(r.get("attendance_days") or 0)
+        no_att = att_days == 0 and _employed_in_period(
+            r.get("joining_date"), r.get("leaving_date"), fd, td,
+        )
+        reasons = []
+        if include_left and left:
+            reasons.append("Left")
+        if include_no_attendance and no_att:
+            reasons.append("No attendance")
+        if not reasons:
+            continue
+        adv = round(float(r.get("advance_outstanding") or 0), 2)
+        loan = round(float(r.get("loan_outstanding") or 0), 2)
+        unpaid = round(float(r.get("unpaid_salary") or 0), 2)
+        ledger = round(adv + loan - unpaid, 2)
+        if (
+            abs(ledger) < _LEDGER_NIL_TOL
+            and adv < _LEDGER_NIL_TOL
+            and loan < _LEDGER_NIL_TOL
+            and unpaid < _LEDGER_NIL_TOL
+        ):
+            continue
+        if ledger > _LEDGER_NIL_TOL:
+            who = "Employee owes"
+        elif ledger < -_LEDGER_NIL_TOL:
+            who = "Company owes"
+        else:
+            who = "—"
+        raw_status = str(r.get("employment_status") or "").strip().lower()
+        if left and raw_status not in _FINAL_EXIT_STATUSES:
+            status_label = "Inactive"
+        else:
+            status_label = (raw_status or "active").title()
+        out.append({
+            "employee_id": r.get("employee_id"),
+            "code": r.get("code"),
+            "full_name": r.get("full_name"),
+            "department_name": r.get("department_name"),
+            "joining_date": r.get("joining_date") or "",
+            "leaving_date": r.get("leaving_date") or "",
+            "employment_status": status_label,
+            "last_attendance": r.get("last_attendance") or "",
+            "attendance_days": att_days,
+            "reason": " + ".join(reasons),
+            "advance_outstanding": adv,
+            "loan_outstanding": loan,
+            "unpaid_salary": unpaid,
+            "ledger_balance": ledger,
+            "who_owes": who,
+            "from_date": fd,
+            "to_date": td,
+        })
+    return out
+
+
 def report_dept_salary_cost(payroll_id):
     from database import get_connection, rows_to_list
     with get_connection() as conn:
