@@ -5416,8 +5416,9 @@ def report_left_or_no_attendance_outstanding(
     to_date=None,
     include_left=True,
     include_no_attendance=True,
+    include_unpaid_salary=False,
 ):
-    """Staff who left, or have no attendance in the period, with leftover balance.
+    """Staff who left, missed attendance, or have uncredited salary, with leftover balance.
 
     Outstanding matches the employee ledger: effective advance + loan minus unpaid
     posted salary. Positive ledger = employee owes; negative = company owes.
@@ -5425,7 +5426,7 @@ def report_left_or_no_attendance_outstanding(
     from database import get_connection, rows_to_list
 
     fd, td = _date_range_bounds(from_date, to_date)
-    if not include_left and not include_no_attendance:
+    if not include_left and not include_no_attendance and not include_unpaid_salary:
         return []
 
     q = """
@@ -5436,6 +5437,7 @@ def report_left_or_no_attendance_outstanding(
       COALESCE(d.name, e.department, 'Unassigned') AS department_name,
       e.joining_date,
       e.leaving_date,
+      e.bank_account,
       LOWER(TRIM(COALESCE(
           e.employment_status,
           CASE WHEN COALESCE(e.is_active,1)=1 THEN 'active' ELSE 'inactive' END
@@ -5445,7 +5447,9 @@ def report_left_or_no_attendance_outstanding(
       COALESCE(att_p.att_days, 0) AS attendance_days,
       ROUND(COALESCE(adv.stored, 0) + COALESCE(adv_b.bump, 0), 2) AS advance_outstanding,
       ROUND(COALESCE(ln.stored, 0) + COALESCE(ln_b.bump, 0), 2) AS loan_outstanding,
-      ROUND(COALESCE(pay.unpaid, 0), 2) AS unpaid_salary
+      ROUND(COALESCE(pay.unpaid, 0), 2) AS unpaid_salary,
+      ROUND(COALESCE(pay.unpaid_in_period, 0), 2) AS unpaid_in_period,
+      COALESCE(pay.unpaid_periods, '') AS unpaid_periods
     FROM employees e
     LEFT JOIN departments d ON d.id = e.department_id
     LEFT JOIN (
@@ -5502,13 +5506,22 @@ def report_left_or_no_attendance_outstanding(
     ) ln_b ON ln_b.employee_id = e.id
     LEFT JOIN (
       SELECT pl.employee_id,
+             SUM(MAX(0, COALESCE(pl.net_salary,0) - COALESCE(pl.paid_amount,0))) AS unpaid,
              SUM(CASE
-               WHEN pr.status IN ('posted','paid','approved')
+               WHEN date(printf('%04d-%02d-01', pr.payroll_year, pr.payroll_month)) <= ?
+                AND date(printf('%04d-%02d-01', pr.payroll_year, pr.payroll_month), '+1 month', '-1 day') >= ?
                  THEN MAX(0, COALESCE(pl.net_salary,0) - COALESCE(pl.paid_amount,0))
                ELSE 0
-             END) AS unpaid
+             END) AS unpaid_in_period,
+             GROUP_CONCAT(
+               CASE
+                 WHEN MAX(0, COALESCE(pl.net_salary,0) - COALESCE(pl.paid_amount,0)) > 0.009
+                 THEN printf('%02d/%d', pr.payroll_month, pr.payroll_year)
+               END, ', '
+             ) AS unpaid_periods
       FROM payroll_lines pl
       JOIN payroll_runs pr ON pr.id = pl.payroll_id
+      WHERE COALESCE(pl.paid_status,'unpaid') != 'paid'
       GROUP BY pl.employee_id
     ) pay ON pay.employee_id = e.id
     ORDER BY e.full_name COLLATE NOCASE
@@ -5516,7 +5529,7 @@ def report_left_or_no_attendance_outstanding(
 
     with get_connection() as conn:
         apply_hr(conn, __import__("database"))
-        rows = rows_to_list(conn.execute(q, (fd, td)).fetchall())
+        rows = rows_to_list(conn.execute(q, (fd, td, td, fd)).fetchall())
 
     out = []
     for r in rows:
@@ -5530,6 +5543,9 @@ def report_left_or_no_attendance_outstanding(
             reasons.append("Left")
         if include_no_attendance and no_att:
             reasons.append("No attendance")
+        unpaid_period = round(float(r.get("unpaid_in_period") or 0), 2)
+        if include_unpaid_salary and unpaid_period > _LEDGER_NIL_TOL:
+            reasons.append("Salary not credited")
         if not reasons:
             continue
         adv = round(float(r.get("advance_outstanding") or 0), 2)
@@ -5564,16 +5580,35 @@ def report_left_or_no_attendance_outstanding(
             "employment_status": status_label,
             "last_attendance": r.get("last_attendance") or "",
             "attendance_days": att_days,
+            "bank_account": r.get("bank_account") or "",
             "reason": " + ".join(reasons),
             "advance_outstanding": adv,
             "loan_outstanding": loan,
             "unpaid_salary": unpaid,
+            "unpaid_in_period": unpaid_period,
+            "unpaid_periods": (r.get("unpaid_periods") or "").strip(" ,"),
             "ledger_balance": ledger,
             "who_owes": who,
             "from_date": fd,
             "to_date": td,
         })
     return out
+
+
+def report_left_or_unpaid_salary_outstanding(
+    from_date=None,
+    to_date=None,
+    include_left=True,
+    include_unpaid_salary=True,
+):
+    """Staff who left, or whose salary was not credited, with leftover balance."""
+    return report_left_or_no_attendance_outstanding(
+        from_date,
+        to_date,
+        include_left=include_left,
+        include_no_attendance=False,
+        include_unpaid_salary=include_unpaid_salary,
+    )
 
 
 def report_dept_salary_cost(payroll_id):

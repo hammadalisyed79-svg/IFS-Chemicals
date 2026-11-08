@@ -191,6 +191,11 @@ REPORT_CATALOG = {
             "Staff who have left, or have no attendance in the period, but still have "
             "advance, loan, or unpaid-salary outstanding.",
         ),
+        _r(
+            "Left / Unpaid Salary Outstanding",
+            "Staff who have left, or whose salary was not credited to their account, "
+            "but still have advance, loan, or unpaid-salary outstanding.",
+        ),
     ],
     "Weight Scale": [
         _r("Daily Weight Report", "Weighbridge slips for the period.", customer=True, supplier=True, product=True,
@@ -1479,6 +1484,8 @@ def _run_report(report, fd, td, cid, sid, pid, wid, eid, payroll_id=None, gf=Non
         return pd.DataFrame(db.report_outstanding_loans())
     if report == "Left / No Attendance Outstanding":
         return pd.DataFrame(db.report_left_or_no_attendance_outstanding(fd, td))
+    if report == "Left / Unpaid Salary Outstanding":
+        return pd.DataFrame(db.report_left_or_unpaid_salary_outstanding(fd, td))
 
     if report == "Daily Weight Report":
         return pd.DataFrame(db.get_weight_slips_pro(fd, td, cid, sid, pid))

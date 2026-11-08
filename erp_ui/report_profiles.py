@@ -137,6 +137,12 @@ REPORT_COLUMNS: dict[str, list[str]] = {
         "reason", "advance_outstanding", "loan_outstanding", "unpaid_salary",
         "ledger_balance", "who_owes",
     ],
+    "Left / Unpaid Salary Outstanding": [
+        "code", "full_name", "department_name", "employment_status",
+        "joining_date", "leaving_date", "bank_account", "reason",
+        "advance_outstanding", "loan_outstanding", "unpaid_in_period",
+        "unpaid_salary", "unpaid_periods", "ledger_balance", "who_owes",
+    ],
     "Gate Pass Register": [
         "document_no", "pass_date", "pass_type", "party_name", "vehicle_no", "driver_name",
         "material_desc", "quantity", "weight", "status",
@@ -192,6 +198,7 @@ REPORT_LAYOUT = {
     "Supplier Ledger": "portrait_full",
     "Employee Ledger": "portrait_full",
     "Left / No Attendance Outstanding": "landscape",
+    "Left / Unpaid Salary Outstanding": "landscape",
     "Customer Ledger (Detailed)": "landscape",
     "Supplier Ledger (Detailed)": "landscape",
     "Profit & Loss": "portrait_full",

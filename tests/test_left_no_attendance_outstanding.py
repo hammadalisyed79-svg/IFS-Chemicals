@@ -65,13 +65,13 @@ def _att(conn, eid, day, status="present"):
     )
 
 
-def _posted_unpaid_salary(conn, eid, net, doc="PAY-LNA"):
+def _posted_salary(conn, eid, net, *, month=9, year=2026, doc="PAY-LNA", paid=False):
     cur = conn.execute(
         """INSERT INTO payroll_runs(
                document_no, payroll_month, payroll_year, run_date, status,
                total_gross, total_deductions, total_net
            ) VALUES(?,?,?,?,?,?,?,?)""",
-        (doc, 9, 2026, "2026-09-30", "posted", net, 0, net),
+        (doc, month, year, f"{year:04d}-{month:02d}-28", "posted", net, 0, net),
     )
     pid = int(cur.lastrowid)
     conn.execute(
@@ -84,9 +84,13 @@ def _posted_unpaid_salary(conn, eid, net, doc="PAY-LNA"):
            ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
         (
             pid, eid, net, 0, 0, 0, net, 0, 0, 0, 0, 0, 0, 0,
-            0, net, 30, 0, 0, "unpaid", 0,
+            0, net, 30, 0, 0, "paid" if paid else "unpaid", net if paid else 0,
         ),
     )
+
+
+def _posted_unpaid_salary(conn, eid, net, doc="PAY-LNA"):
+    _posted_salary(conn, eid, net, month=9, year=2026, doc=doc, paid=False)
 
 
 def test_left_or_no_attendance_outstanding_filters():
@@ -150,5 +154,51 @@ def test_left_or_no_attendance_outstanding_filters():
         )
         assert "EMP-A01" in {r["code"] for r in no_att_only}
         assert "EMP-L01" not in {r["code"] for r in no_att_only}
+    finally:
+        _cleanup(path)
+
+
+def test_left_or_unpaid_salary_outstanding_filters():
+    path = Path(tempfile.gettempdir()) / f"erp_lus_{uuid.uuid4().hex}.db"
+    os.environ["IFS_DB_PATH"] = str(path)
+    db.DB_PATH = path
+    db.reset_runtime_state()
+    db.init_db()
+    try:
+        with db.get_connection() as conn:
+            hr.apply_hr(conn, db)
+            left_adv = _emp(conn, "EMP-L10", "Left With Loan", status="left", active=0, leave="2026-09-20")
+            _loan(conn, left_adv, 9000, "LN-L10")
+
+            uncredited = _emp(conn, "EMP-U10", "Active Uncredited")
+            _posted_salary(conn, uncredited, 40000, month=10, year=2026, doc="PAY-OCT", paid=False)
+
+            old_unpaid = _emp(conn, "EMP-U11", "Old Unpaid Only")
+            _posted_salary(conn, old_unpaid, 18000, month=9, year=2026, doc="PAY-SEP", paid=False)
+
+            paid_adv = _emp(conn, "EMP-P10", "Paid With Advance")
+            _advance(conn, paid_adv, 7000, "ADV-P10")
+            _posted_salary(conn, paid_adv, 35000, month=8, year=2026, doc="PAY-AUG", paid=True)
+            conn.commit()
+
+        rows = hr.report_left_or_unpaid_salary_outstanding("2026-10-01", "2026-10-31")
+        by_code = {r["code"]: r for r in rows}
+
+        assert "EMP-L10" in by_code
+        assert by_code["EMP-L10"]["reason"] == "Left"
+        assert by_code["EMP-L10"]["loan_outstanding"] == 9000
+
+        assert "EMP-U10" in by_code
+        assert by_code["EMP-U10"]["reason"] == "Salary not credited"
+        assert by_code["EMP-U10"]["unpaid_in_period"] == 40000
+        assert by_code["EMP-U10"]["who_owes"] == "Company owes"
+
+        assert "EMP-U11" not in by_code
+        assert "EMP-P10" not in by_code
+
+        unpaid_only = hr.report_left_or_unpaid_salary_outstanding(
+            "2026-10-01", "2026-10-31", include_left=False, include_unpaid_salary=True,
+        )
+        assert {r["code"] for r in unpaid_only} == {"EMP-U10"}
     finally:
         _cleanup(path)
