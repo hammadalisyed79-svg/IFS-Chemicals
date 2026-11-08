@@ -87,6 +87,65 @@ def _ensure_billing_basis_column(conn):
         )
 
 
+def _normalize_year_month(year_month: str) -> str:
+    ym = str(year_month or "").strip()[:7]
+    if len(ym) < 7 or ym[4] != "-":
+        raise ValueError("year_month must be YYYY-MM.")
+    return ym
+
+
+def _ensure_product_rate_hist(conn):
+    """Per-month rate history so a later rate change cannot rewrite paid months."""
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS contract_labour_product_rate_hist (
+            id               INTEGER PRIMARY KEY AUTOINCREMENT,
+            contractor_id    INTEGER NOT NULL
+                REFERENCES contract_labourers(id) ON DELETE CASCADE,
+            product_id       INTEGER NOT NULL REFERENCES products(id),
+            effective_month  TEXT NOT NULL,
+            rate             REAL NOT NULL DEFAULT 0,
+            created_by       INTEGER REFERENCES users(id),
+            created_at       TEXT DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(contractor_id, product_id, effective_month)
+        )
+        """
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_cl_rate_hist_lookup "
+        "ON contract_labour_product_rate_hist(contractor_id, product_id, effective_month)"
+    )
+    n = conn.execute(
+        "SELECT COUNT(*) FROM contract_labour_product_rate_hist"
+    ).fetchone()[0]
+    if n:
+        return
+    rows = conn.execute(
+        """
+        SELECT r.contractor_id, l.product_id, r.year_month, l.rate
+        FROM contract_labour_month_lines l
+        JOIN contract_labour_month_runs r ON r.id = l.run_id
+        WHERE l.product_id IS NOT NULL
+        ORDER BY r.contractor_id, l.product_id, r.year_month, l.id
+        """
+    ).fetchall()
+    last: dict[tuple[int, int], float] = {}
+    for row in rows:
+        cid = int(row["contractor_id"])
+        pid = int(row["product_id"])
+        rate = round(float(row["rate"] or 0), 4)
+        key = (cid, pid)
+        if key in last and abs(last[key] - rate) < 1e-9:
+            continue
+        conn.execute(
+            """INSERT OR IGNORE INTO contract_labour_product_rate_hist(
+                   contractor_id, product_id, effective_month, rate
+               ) VALUES (?,?,?,?)""",
+            (cid, pid, str(row["year_month"])[:7], rate),
+        )
+        last[key] = rate
+
+
 def _ensure_loading_unloading_schema(conn):
     """Rates columns + allow loading_unloading payment_type + nullable month-line product_id."""
     cols = {r[1] for r in conn.execute("PRAGMA table_info(contract_labourers)")}
@@ -412,6 +471,7 @@ def apply_contract_labour(conn, db_module=None):
     )
     _ensure_billing_basis_column(conn)
     _ensure_loading_unloading_schema(conn)
+    _ensure_product_rate_hist(conn)
 
 
 def list_contractors(active_only: bool = True, payment_type: str | None = None):
@@ -617,6 +677,79 @@ def get_contractor_product_rates(contractor_id: int) -> dict[int, float]:
     return out
 
 
+def _upsert_product_rate_hist(conn, contractor_id: int, product_id: int, year_month: str,
+                              rate: float, user_id=None):
+    from database import _now
+
+    ym = _normalize_year_month(year_month)
+    conn.execute(
+        """INSERT INTO contract_labour_product_rate_hist(
+               contractor_id, product_id, effective_month, rate, created_by, created_at
+           ) VALUES (?,?,?,?,?,?)
+           ON CONFLICT(contractor_id, product_id, effective_month) DO UPDATE SET
+               rate=excluded.rate,
+               created_by=COALESCE(excluded.created_by, created_by),
+               created_at=excluded.created_at""",
+        (int(contractor_id), int(product_id), ym, round(float(rate or 0), 4),
+         user_id, _now()),
+    )
+
+
+def get_contractor_product_rates_for_month(contractor_id: int, year_month: str) -> dict[int, float]:
+    """Rates in force for ``year_month``.
+
+    Lookup order:
+    1. Current assignment rates (fallback).
+    2. Latest history row with effective_month <= this month.
+    3. If a month worksheet is already saved and this month has **no** explicit
+       history row, keep the saved line rate (already-paid months stay frozen).
+    """
+    from database import get_connection
+
+    ym = _normalize_year_month(year_month)
+    out = get_contractor_product_rates(contractor_id)
+    cid = int(contractor_id)
+    with get_connection() as conn:
+        apply_contract_labour(conn)
+        hist = conn.execute(
+            """
+            SELECT h.product_id, h.rate
+            FROM contract_labour_product_rate_hist h
+            JOIN (
+                SELECT product_id, MAX(effective_month) AS em
+                FROM contract_labour_product_rate_hist
+                WHERE contractor_id=? AND effective_month<=?
+                GROUP BY product_id
+            ) x ON x.product_id=h.product_id AND x.em=h.effective_month
+            WHERE h.contractor_id=?
+            """,
+            (cid, ym, cid),
+        ).fetchall()
+        for r in hist:
+            out[int(r["product_id"])] = float(r["rate"] or 0)
+        explicit = {
+            int(r["product_id"])
+            for r in conn.execute(
+                """SELECT product_id FROM contract_labour_product_rate_hist
+                   WHERE contractor_id=? AND effective_month=?""",
+                (cid, ym),
+            ).fetchall()
+        }
+        saved = conn.execute(
+            """SELECT l.product_id, l.rate
+               FROM contract_labour_month_lines l
+               JOIN contract_labour_month_runs r ON r.id=l.run_id
+               WHERE r.contractor_id=? AND r.year_month=?
+                 AND l.product_id IS NOT NULL""",
+            (cid, ym),
+        ).fetchall()
+        for r in saved:
+            pid = int(r["product_id"])
+            if pid not in explicit:
+                out[pid] = float(r["rate"] or 0)
+    return out
+
+
 def get_contractor_product_billing(contractor_id: int) -> dict[int, str]:
     """product_id → billing_basis for saved assignments."""
     c = get_contractor(contractor_id)
@@ -640,9 +773,19 @@ def save_contractor_products(
     rates: dict | None = None,
     billing_basis: dict | None = None,
     user_id=None,
+    effective_month: str | None = None,
 ) -> int:
-    """Replace product assignment for a contractor (remember selection)."""
+    """Replace product assignment for a contractor (remember selection).
+
+    ``effective_month`` (YYYY-MM) is when these rates start. Earlier saved
+    worksheets keep their own rates.
+    """
+    from datetime import date as _date
     from database import get_connection, _now
+
+    apply_ym = _normalize_year_month(
+        effective_month or _date.today().strftime("%Y-%m")
+    )
 
     rates = rates or {}
     billing_basis = billing_basis or {}
@@ -694,6 +837,9 @@ def save_contractor_products(
                        contractor_id, product_id, rate, billing_basis, sort_order
                    ) VALUES(?,?,?,?,?)""",
                 (contractor_id, pid, float(rate or 0), basis, i),
+            )
+            _upsert_product_rate_hist(
+                conn, contractor_id, pid, apply_ym, float(rate or 0), user_id,
             )
         conn.execute(
             "UPDATE contract_labourers SET modified_by=?, modified_at=? WHERE id=?",
@@ -931,6 +1077,10 @@ def calculate_contractor_month(
     pids = [int(p["product_id"]) for p in products]
     is_prod = pay_type == PAYMENT_PRODUCTION_QTY
     is_purchase = pay_type == PAYMENT_PURCHASE_QTY
+    ym = str(from_date or "")[:7]
+    month_rates = (
+        get_contractor_product_rates_for_month(contractor_id, ym) if ym else {}
+    )
 
     bases = {}
     needs_prod = needs_sold = needs_closing = needs_purchased = False
@@ -1007,7 +1157,12 @@ def calculate_contractor_month(
             billable = purchased
         else:
             billable = closing
-        rate = float(p["rate"] if p.get("rate") is not None else default_rate)
+        rate = float(
+            month_rates.get(
+                pid,
+                p["rate"] if p.get("rate") is not None else default_rate,
+            )
+        )
         amount = round(billable * rate, 2)
         total += amount
         total_sold += sold
@@ -1589,6 +1744,23 @@ def save_contractor_month_run(
                     ln["closing_stock"], ln["rate"], ln["amount"], ln["sort_order"],
                 ),
             )
+            if ln.get("product_id"):
+                exists = conn.execute(
+                    """SELECT 1 FROM contract_labour_product_rate_hist
+                       WHERE contractor_id=? AND product_id=? AND effective_month=?""",
+                    (int(contractor_id), int(ln["product_id"]), ym),
+                ).fetchone()
+                if not exists:
+                    conn.execute(
+                        """INSERT INTO contract_labour_product_rate_hist(
+                               contractor_id, product_id, effective_month, rate,
+                               created_by, created_at
+                           ) VALUES (?,?,?,?,?,?)""",
+                        (
+                            int(contractor_id), int(ln["product_id"]), ym,
+                            round(float(ln["rate"] or 0), 4), user_id, ts,
+                        ),
+                    )
 
     # Outside the write transaction — sync shared physical (avoids nested connections)
     if pay_type == "sku_carton":

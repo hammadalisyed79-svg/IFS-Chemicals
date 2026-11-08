@@ -370,6 +370,32 @@ def _tab_products():
         )
     )
 
+    import calendar as _cal
+
+    today = date.today()
+    rf1, rf2 = st.columns([1, 1])
+    apply_year = int(rf1.number_input(
+        "Rates apply from — year",
+        min_value=2020,
+        max_value=2035,
+        value=today.year,
+        step=1,
+        key=f"cl_rate_from_year_{cid}",
+    ))
+    apply_month = int(rf2.selectbox(
+        "Month",
+        list(range(1, 13)),
+        index=today.month - 1,
+        format_func=lambda m: f"{m:02d} — {_cal.month_name[m]}",
+        key=f"cl_rate_from_month_{cid}",
+    ))
+    apply_ym = f"{apply_year:04d}-{apply_month:02d}"
+    st.info(
+        f"Rates saved here start from **{apply_ym}**. "
+        "Already saved / paid worksheets for **earlier months keep their own rates** "
+        "and will not change."
+    )
+
     # --- Bulk add by code prefix ---
     st.markdown("**Bulk add SKUs**")
     prefix_key = f"cl_bulk_prefix_{cid}"
@@ -566,12 +592,16 @@ def _tab_products():
     if a1.button("Update selection", type="primary", key="cl_prod_save"):
         try:
             n = save_contractor_products(
-                cid, new_ids, rates=rate_map, billing_basis=basis_map, user_id=hlp.uid(),
+                cid, new_ids, rates=rate_map, billing_basis=basis_map,
+                user_id=hlp.uid(), effective_month=apply_ym,
             )
             st.session_state[sk] = list(new_ids)
             st.session_state[rk] = dict(rate_map)
             st.session_state[bk] = dict(basis_map)
-            ff.action_done(f"Saved **{n}** SKU(s) with rates and billing basis.")
+            ff.action_done(
+                f"Saved **{n}** SKU(s) with rates from **{apply_ym}**. "
+                "Earlier saved months are unchanged."
+            )
         except Exception as e:
             st.error(str(e))
     if a2.button("Reset selection", key="cl_prod_reset", help="Restore last saved products and rates"):
