@@ -44,6 +44,162 @@ POSTING_ROLE_LABELS = {
 }
 
 
+_SKIP_PARTY_COA_CODES = frozenset({"UNKNOWN", "UNKNOWN PARTY"})
+
+
+def _party_account_group_id(conn, kind: str):
+    gtype = "liability" if str(kind).lower() == "supplier" else "asset"
+    row = conn.execute(
+        "SELECT id FROM account_groups WHERE group_type=? ORDER BY id LIMIT 1",
+        (gtype,),
+    ).fetchone()
+    return int(row["id"] if hasattr(row, "keys") else row[0]) if row else None
+
+
+def _recast_coa_current_balance(conn, account_id):
+    row = conn.execute(
+        """SELECT a.opening_balance,
+                  COALESCE(SUM(g.debit),0) AS dr,
+                  COALESCE(SUM(g.credit),0) AS cr
+           FROM chart_of_accounts a
+           LEFT JOIN general_ledger g ON g.account_id=a.id
+           WHERE a.id=?
+           GROUP BY a.id""",
+        (account_id,),
+    ).fetchone()
+    if not row:
+        return
+    bal = round(float(row["opening_balance"] or 0) + float(row["dr"] or 0) - float(row["cr"] or 0), 2)
+    conn.execute("UPDATE chart_of_accounts SET current_balance=? WHERE id=?", (bal, account_id))
+
+
+def ensure_party_chart_account(
+    conn, code, name, *, kind="customer", opening_balance=0, created_by=None, is_active=1,
+):
+    """Create a same-code chart account for a customer/supplier if missing.
+
+    Cash Book / Journal / Trial Balance search COA, not the party master. Walk-in
+    CUS* (and SUP*) codes never came from FMYE chart import, so they were invisible
+    on those screens until a matching receivable/payable head exists.
+    """
+    code = str(code or "").strip()
+    name = str(name or "").strip() or code
+    if not code or code.upper() in _SKIP_PARTY_COA_CODES:
+        return None
+    existing = conn.execute(
+        "SELECT id FROM chart_of_accounts WHERE TRIM(code)=TRIM(?)",
+        (code,),
+    ).fetchone()
+    if existing:
+        return int(existing["id"] if hasattr(existing, "keys") else existing[0])
+    gid = _party_account_group_id(conn, kind)
+    if not gid:
+        return None
+    ob = round(float(opening_balance or 0), 2)
+    cur = conn.execute(
+        """INSERT INTO chart_of_accounts(
+               code, name, account_group_id, opening_balance, current_balance, is_active, created_by
+           ) VALUES (?,?,?,?,?,?,?)""",
+        (code, name, gid, ob, ob, 1 if is_active else 0, created_by),
+    )
+    return int(cur.lastrowid)
+
+
+def _reclass_control_gl_to_party(conn, *, kind, party_id, party_account_id):
+    """Move AR/AP control-account GL that belongs to this party onto the party head."""
+    kind = str(kind or "").lower()
+    control_code = gl_account_code("ap" if kind == "supplier" else "ar")
+    control_id = _acct_id(conn, control_code)
+    if not control_id or int(control_id) == int(party_account_id):
+        return 0
+    pid = int(party_id)
+    clauses = []
+    params = [party_account_id, control_id]
+    if kind == "supplier":
+        clauses.append(
+            "(reference_type='purchase_invoice' AND reference_id IN "
+            "(SELECT id FROM purchase_invoices WHERE supplier_id=?))"
+        )
+        params.append(pid)
+        clauses.append("(reference_type='supplier_payment' AND reference_id=?)")
+        params.append(pid)
+        if _table_exists(conn, "purchase_returns"):
+            clauses.append(
+                "(reference_type='purchase_return' AND reference_id IN "
+                "(SELECT id FROM purchase_returns WHERE supplier_id=?))"
+            )
+            params.append(pid)
+    else:
+        clauses.append(
+            "(reference_type='sales_invoice' AND reference_id IN "
+            "(SELECT id FROM sales_invoices WHERE customer_id=?))"
+        )
+        params.append(pid)
+        clauses.append("(reference_type='customer_receipt' AND reference_id=?)")
+        params.append(pid)
+        if _table_exists(conn, "sales_returns"):
+            clauses.append(
+                "(reference_type='sales_return' AND reference_id IN "
+                "(SELECT id FROM sales_returns WHERE customer_id=?))"
+            )
+            params.append(pid)
+    if not clauses:
+        return 0
+    conn.execute(
+        f"UPDATE general_ledger SET account_id=? WHERE account_id=? AND ({' OR '.join(clauses)})",
+        params,
+    )
+    moved = conn.execute("SELECT changes()").fetchone()[0]
+    if moved:
+        _recast_coa_current_balance(conn, party_account_id)
+        _recast_coa_current_balance(conn, control_id)
+    return int(moved or 0)
+
+
+def backfill_missing_party_chart_accounts(conn, created_by=None) -> dict:
+    """Idempotent: give every customer/supplier a matching COA (except UNKNOWN)."""
+    created = moved = 0
+    customers = conn.execute(
+        """SELECT c.id, c.code, c.name, c.opening_balance, c.is_active
+           FROM customers c
+           LEFT JOIN chart_of_accounts a ON TRIM(a.code)=TRIM(c.code)
+           WHERE a.id IS NULL"""
+    ).fetchall()
+    for row in customers:
+        aid = ensure_party_chart_account(
+            conn, row["code"], row["name"], kind="customer",
+            opening_balance=row["opening_balance"], created_by=created_by,
+            is_active=row["is_active"],
+        )
+        if aid:
+            created += 1
+            moved += _reclass_control_gl_to_party(
+                conn, kind="customer", party_id=row["id"], party_account_id=aid,
+            )
+    suppliers = conn.execute(
+        """SELECT s.id, s.code, s.name, s.opening_balance, s.is_active
+           FROM suppliers s
+           LEFT JOIN chart_of_accounts a ON TRIM(a.code)=TRIM(s.code)
+           WHERE a.id IS NULL"""
+    ).fetchall()
+    for row in suppliers:
+        aid = ensure_party_chart_account(
+            conn, row["code"], row["name"], kind="supplier",
+            opening_balance=row["opening_balance"], created_by=created_by,
+            is_active=row["is_active"],
+        )
+        if aid:
+            created += 1
+            moved += _reclass_control_gl_to_party(
+                conn, kind="supplier", party_id=row["id"], party_account_id=aid,
+            )
+    return {"created": created, "gl_moved": moved}
+
+
+def _ensure_party_chart_accounts(conn):
+    backfill_missing_party_chart_accounts(conn)
+
+
 def _party_subledger_code(conn, party_type, party_id):
     """Party chart account when code matches COA; else AR/AP control account."""
     party_type = str(party_type or "").strip().lower()
@@ -289,6 +445,7 @@ def apply_v3(conn, db_module):
     db_contractors.apply_contract_labour(conn, db_module)
     db_cpc = _safe_import("db_customer_product_codes")
     db_cpc.apply_customer_product_codes(conn, db_module)
+    _ensure_party_chart_accounts(conn)
 
 
 def _ensure_expense_bills_schema(conn):

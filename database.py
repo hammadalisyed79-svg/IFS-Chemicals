@@ -1590,6 +1590,14 @@ def add_customer(data, created_by=None):
             )
         except Exception:
             pass
+        try:
+            from db_v3 import ensure_party_chart_account
+            ensure_party_chart_account(
+                conn, data["code"], data["name"], kind="customer",
+                opening_balance=ob, created_by=created_by,
+            )
+        except Exception:
+            pass
         invalidate("customers")
         return rid
 
@@ -1652,6 +1660,15 @@ def update_customer(customer_id, data, modified_by=None):
             log_event(
                 "customers", customer_id, "update", user_id=modified_by, module="Masters",
                 document_no=data.get("code"), summary=f"Customer {data.get('name')}",
+            )
+        except Exception:
+            pass
+        try:
+            from db_v3 import ensure_party_chart_account
+            ensure_party_chart_account(
+                conn, data["code"], data["name"], kind="customer",
+                opening_balance=data.get("opening_balance", 0), created_by=modified_by,
+                is_active=data.get("is_active", 1),
             )
         except Exception:
             pass
@@ -1720,6 +1737,14 @@ def add_supplier(data, created_by=None):
             )
         except Exception:
             pass
+        try:
+            from db_v3 import ensure_party_chart_account
+            ensure_party_chart_account(
+                conn, data["code"], data["name"], kind="supplier",
+                opening_balance=ob, created_by=created_by,
+            )
+        except Exception:
+            pass
         invalidate("suppliers")
         return rid
 
@@ -1742,6 +1767,15 @@ def update_supplier(supplier_id, data, modified_by=None):
             log_event(
                 "suppliers", supplier_id, "update", user_id=modified_by, module="Masters",
                 document_no=data.get("code"), summary=f"Supplier {data.get('name')}",
+            )
+        except Exception:
+            pass
+        try:
+            from db_v3 import ensure_party_chart_account
+            ensure_party_chart_account(
+                conn, data["code"], data["name"], kind="supplier",
+                opening_balance=data.get("opening_balance", 0), created_by=modified_by,
+                is_active=data.get("is_active", 1),
             )
         except Exception:
             pass

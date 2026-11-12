@@ -651,8 +651,9 @@ def _entry_form(book, sel_date, bank_account_id=None, key_prefix="cb"):
         )
         is_payment = "Payment" in vtype
         st.caption(
-            "Optional: pick **any GL account** (expense, salary, liability, etc.) so the voucher "
-            "updates Cash/Bank Book **and** General Ledger. Leave blank for cash/bank-only entry."
+            "Optional: pick **any GL account** (customer, supplier, expense, salary, liability, etc.) "
+            "so the voucher updates Cash/Bank Book **and** General Ledger. "
+            "Walk-in **CUS** / **SUP** codes are included. Leave blank for cash/bank-only entry."
         )
         exclude = [bank_account_id] if book == "bank" and bank_account_id else []
         gl_rows = _gl_accounts_for_cash_bank(exclude)
