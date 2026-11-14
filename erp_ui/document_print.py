@@ -653,8 +653,11 @@ def _finance_voucher_body(v: dict) -> tuple[str, str, str, str]:
     amt_label = "Amount Received" if side == "receipt" else "Amount Paid"
     body += _voucher_amount_box(amt_label, v.get("amount", 0), v.get("payment_mode", ""))
     if v.get("party_balance") is not None and pt in ("customer", "supplier"):
+        disp = (v.get("party_balance_display") or "").strip()
+        if not disp:
+            disp = f"{float(v.get('party_balance', 0)):,.2f}"
         body += _totals_block([
-            f"<b>Party ledger balance (after posting):</b> Rs. {float(v.get('party_balance', 0)):,.2f}",
+            f"<b>Ledger balance after this voucher:</b> {escape(disp)}",
         ])
     return body, title, prepared_name, party_name
 

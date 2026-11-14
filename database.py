@@ -4011,6 +4011,20 @@ def _running_balance_before_ref(entries, ref, txn_date=None) -> float:
     return float(entries[-1].get("balance") or prev)
 
 
+def _running_balance_after_ref(entries, ref, txn_date=None) -> float:
+    """Running balance on the matching voucher row (after that posting)."""
+    if not entries:
+        return 0.0
+    closing = float(entries[-1].get("balance") or 0)
+    ref_s = str(ref or "").strip()
+    if not ref_s:
+        return closing
+    for e in entries[1:]:
+        if str(e.get("ref") or "").strip() == ref_s and _ledger_dates_match(e.get("date"), txn_date):
+            return float(e.get("balance") or 0)
+    return closing
+
+
 def get_customer_balance_before_ref(customer_id, ref, txn_date=None):
     """Previous balance printed on a sales invoice — same figure as Customer Ledger.
 
@@ -4021,10 +4035,22 @@ def get_customer_balance_before_ref(customer_id, ref, txn_date=None):
     return _running_balance_before_ref(entries, ref, txn_date)
 
 
+def get_customer_balance_after_ref(customer_id, ref, txn_date=None):
+    """Ledger running balance after this voucher — same figure as Customer Ledger."""
+    _, entries = get_customer_ledger(customer_id, include_linked=True)
+    return _running_balance_after_ref(entries, ref, txn_date)
+
+
 def get_supplier_balance_before_ref(supplier_id, ref, txn_date=None):
     """Previous balance printed on a purchase invoice — same figure as Supplier Ledger."""
     _, entries = get_supplier_ledger(supplier_id, include_linked=True)
     return _running_balance_before_ref(entries, ref, txn_date)
+
+
+def get_supplier_balance_after_ref(supplier_id, ref, txn_date=None):
+    """Ledger running balance after this voucher — same figure as Supplier Ledger."""
+    _, entries = get_supplier_ledger(supplier_id, include_linked=True)
+    return _running_balance_after_ref(entries, ref, txn_date)
 
 
 def _ensure_fmye_party_entries_table(conn):

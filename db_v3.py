@@ -4326,8 +4326,10 @@ def record_customer_receipt(customer_id, receipt_date, amount, reference_no="", 
             conn, receipt_date, _party_subledger_code(conn, "customer", customer_id), 0, amount,
             label, "customer_receipt", customer_id, gl_ref, user_id,
         )
-        return {"id": entry_id, "document_no": doc_no, "payment_mode": mode,
-                "vch_source": "cash_receipt" if mode == "cash" else "bank_receipt"}
+        result = {"id": entry_id, "document_no": doc_no, "payment_mode": mode,
+                  "vch_source": "cash_receipt" if mode == "cash" else "bank_receipt"}
+    db.sync_party_current_balance("customer", customer_id)
+    return result
 
 
 def record_supplier_payment(supplier_id, payment_date, amount, reference_no="", description="", user_id=None,
@@ -7049,6 +7051,29 @@ def search_party_transfers(q=None, from_date=None, to_date=None, page=1, page_si
     return result
 
 
+def _set_finance_voucher_party_ledger_balance(v):
+    """Cash/bank slip balance must match Customer/Supplier Ledger, not stored current_balance."""
+    from database import (
+        _fmt_ledger_balance,
+        get_customer_balance_after_ref,
+        get_supplier_balance_after_ref,
+    )
+    pt = (v.get("party_type") or "").strip().lower()
+    pid = v.get("party_id")
+    if not pid or pt not in ("customer", "supplier"):
+        return
+    doc = v.get("document_no")
+    dt = v.get("txn_date")
+    if pt == "customer":
+        bal = get_customer_balance_after_ref(int(pid), doc, dt)
+        kind = "customer"
+    else:
+        bal = get_supplier_balance_after_ref(int(pid), doc, dt)
+        kind = "supplier"
+    v["party_balance"] = bal
+    v["party_balance_display"] = _fmt_ledger_balance(bal, kind=kind)
+
+
 def get_finance_voucher(vch_source, entry_id):
     """Load cash/bank voucher with party and account details for printing."""
     from database import get_connection, row_to_dict
@@ -7073,16 +7098,14 @@ def get_finance_voucher(vch_source, entry_id):
         pt = v.get("party_type")
         pid = v.get("party_id")
         if pt == "customer" and pid:
-            p = conn.execute("SELECT code, name, current_balance FROM customers WHERE id=?", (pid,)).fetchone()
+            p = conn.execute("SELECT code, name FROM customers WHERE id=?", (pid,)).fetchone()
             v["party_code"] = p["code"] if p else ""
             v["party_name"] = p["name"] if p else ""
-            v["party_balance"] = float(p["current_balance"] or 0) if p else 0
             v["party_kind"] = "Received From" if v["side"] == "receipt" else "Customer"
         elif pt == "supplier" and pid:
-            p = conn.execute("SELECT code, name, current_balance FROM suppliers WHERE id=?", (pid,)).fetchone()
+            p = conn.execute("SELECT code, name FROM suppliers WHERE id=?", (pid,)).fetchone()
             v["party_code"] = p["code"] if p else ""
             v["party_name"] = p["name"] if p else ""
-            v["party_balance"] = float(p["current_balance"] or 0) if p else 0
             v["party_kind"] = "Paid To" if v["side"] == "payment" else "Supplier"
         elif pt in ("expense", "account") and pid:
             p = conn.execute("SELECT code, name FROM chart_of_accounts WHERE id=?", (pid,)).fetchone()
@@ -7111,7 +7134,8 @@ def get_finance_voucher(vch_source, entry_id):
             v["payment_mode"] = "Cash"
         else:
             v["payment_mode"] = "Bank"
-        return v
+    _set_finance_voucher_party_ledger_balance(v)
+    return v
 
 
 def _finance_voucher_gl_party(conn, document_no, exclude_account_id=None) -> dict | None:
